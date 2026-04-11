@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Extensions\Packages\ServerInfo\Http\Controllers;
+namespace Everest\Extensions\Packages\server_info\Http\Controllers;
 
 use Everest\Models\Server;
 use Illuminate\Http\JsonResponse;

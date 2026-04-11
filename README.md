@@ -12,6 +12,10 @@ Repository source descriptor for a package version.
 `extensions/<extension-id>/files/`
 The exact files that should be installed into the panel when the package is installed.
 
+Backend package files must live under `app/Extensions/Packages/<extension-id>/...`.
+
+Frontend package files must live under `resources/scripts/extensions/packages/<extension-id>/...`.
+
 `packages/<extension-id>/<version>/package.zip`
 Generated archive that the panel downloads and verifies.
 
@@ -33,6 +37,14 @@ The publish script will:
 3. Generate `m12labs-extension.json` inside a staging directory.
 4. Build `packages/<extension-id>/<version>/package.zip`.
 5. Update `registry.json` with the latest metadata and archive checksum.
+
+## Package Layout Rules
+
+Packages are intentionally scoped so extension files stay grouped by extension instead of being written into shared roots.
+
+- PHP code, package-local routes, and backend helpers go under `app/Extensions/Packages/<extension-id>/...`
+- The client extension UI and any frontend helper files go under `resources/scripts/extensions/packages/<extension-id>/...`
+- Client routes should be defined in `app/Extensions/Packages/<extension-id>/routes/client.php`
 
 ## Security Model
 

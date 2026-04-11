@@ -1,0 +1,24 @@
+{
+  "package": {
+    "id": "minecraft_player_manager",
+    "version": "1.0.1"
+  },
+  "extension": {
+    "id": "minecraft_player_manager",
+    "name": "Minecraft Player Manager",
+    "description": "Manage Minecraft Java Edition players directly from M12Labs with whitelist, operator, ban, kick, inventory, and attribute tools.",
+    "author": "M12Labs",
+    "icon": "users",
+    "route": "minecraft_player_manager",
+    "settingsSchema": [],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-Rc2.6"
+  ]
+}

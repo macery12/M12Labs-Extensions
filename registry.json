@@ -6,13 +6,61 @@
   },
   "packages": [
     {
+      "id": "discordsrv_helper",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/discordsrv_helper/1.0.0/package.zip",
+          "sha256": "557e8c2f55b31d12c8f6a79e3db7d947de86fe83c0726f1533b7e65d1ccd0a35",
+          "publishedAt": "2026-04-11T18:17:30Z",
+          "compatiblePanelVersions": [
+            "2.0.0-Rc2.6"
+          ]
+        }
+      ],
+      "name": "DiscordSRV Helper",
+      "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls.",
+      "author": "M12Labs",
+      "icon": "server",
+      "route": "discordsrv_helper",
+      "settingsSchema": [
+        {
+          "key": "jar_url",
+          "label": "DiscordSRV Jar URL",
+          "type": "text",
+          "placeholder": "https://github.com/DiscordSRV/DiscordSRV/releases/download/.../DiscordSRV.jar",
+          "help": "Optional. If set, the install action uses this URL instead of auto-detecting the latest release."
+        }
+      ]
+    },
+    {
+      "id": "minecraft_player_manager",
+      "versions": [
+        {
+          "version": "1.0.1",
+          "archive": "packages/minecraft_player_manager/1.0.1/package.zip",
+          "sha256": "80bdc681b501a24e40c8c98d1c961c1ef6cd7c751e484ce0e7b122a6d73ec375",
+          "publishedAt": "2026-04-11T18:17:30Z",
+          "compatiblePanelVersions": [
+            "2.0.0-Rc2.6"
+          ]
+        }
+      ],
+      "name": "Minecraft Player Manager",
+      "description": "Manage Minecraft Java Edition players directly from M12Labs with whitelist, operator, ban, kick, inventory, and attribute tools.",
+      "author": "M12Labs",
+      "icon": "users",
+      "route": "minecraft_player_manager",
+      "settingsSchema": []
+    },
+    {
       "id": "server_info",
       "versions": [
         {
           "version": "1.0.0",
           "archive": "packages/server_info/1.0.0/package.zip",
-          "sha256": "b46213630de04822c104ecfd484412c4b36fbd487ac9dc879d7b760f6c7ea725",
-          "publishedAt": "2026-04-11T17:54:34Z",
+          "sha256": "75c686c2c857937890ed0d7bf0b5c0fd70cbfbdc23586dc3a39689b6a4e0b834",
+          "publishedAt": "2026-04-11T18:17:30Z",
           "compatiblePanelVersions": [
             "2.0.0-Rc2.6"
           ]

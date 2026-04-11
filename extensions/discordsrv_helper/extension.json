@@ -1,0 +1,32 @@
+{
+  "package": {
+    "id": "discordsrv_helper",
+    "version": "1.0.0"
+  },
+  "extension": {
+    "id": "discordsrv_helper",
+    "name": "DiscordSRV Helper",
+    "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls.",
+    "author": "M12Labs",
+    "icon": "server",
+    "route": "discordsrv_helper",
+    "settingsSchema": [
+      {
+        "key": "jar_url",
+        "label": "DiscordSRV Jar URL",
+        "type": "text",
+        "placeholder": "https://github.com/DiscordSRV/DiscordSRV/releases/download/.../DiscordSRV.jar",
+        "help": "Optional. If set, the install action uses this URL instead of auto-detecting the latest release."
+      }
+    ],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-Rc2.6"
+  ]
+}
