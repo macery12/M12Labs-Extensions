@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "name": "M12Labs Official Repository",
+    "homepage": "https://github.com/macery12/M12Labs-Extensions"
+  },
+  "packages": [
+    {
+      "id": "server_info",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/server_info/1.0.0/package.zip",
+          "sha256": "b46213630de04822c104ecfd484412c4b36fbd487ac9dc879d7b760f6c7ea725",
+          "publishedAt": "2026-04-11T17:54:34Z",
+          "compatiblePanelVersions": [
+            "2.0.0-Rc2.6"
+          ]
+        }
+      ],
+      "name": "Server Info",
+      "description": "Adds a lightweight M12Labs extension page with server, node, egg, and panel version details.",
+      "author": "M12Labs",
+      "icon": "server",
+      "route": "server_info",
+      "settingsSchema": []
+    }
+  ]
+}

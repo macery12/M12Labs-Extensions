@@ -1,0 +1,24 @@
+{
+  "package": {
+    "id": "server_info",
+    "version": "1.0.0"
+  },
+  "extension": {
+    "id": "server_info",
+    "name": "Server Info",
+    "description": "Adds a lightweight M12Labs extension page with server, node, egg, and panel version details.",
+    "author": "M12Labs",
+    "icon": "server",
+    "route": "server_info",
+    "settingsSchema": [],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-Rc2.6"
+  ]
+}
