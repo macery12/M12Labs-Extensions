@@ -14,7 +14,7 @@
           "sha256": "141f8c12ff39d2f7c5affa3927acaee9597419bc9950afc5301ce5a63c8e47db",
           "publishedAt": "2026-04-11T20:12:40Z",
           "compatiblePanelVersions": [
-            "2.0.0-Rc2.6"
+            "2.0.0-m12-alpha-2.7"
           ]
         }
       ],
@@ -42,7 +42,7 @@
           "sha256": "2059833232c06ae905c4f032bb73dfc00a5b0858d70800de9ce00a0c1a4ac7f4",
           "publishedAt": "2026-04-11T20:12:40Z",
           "compatiblePanelVersions": [
-            "2.0.0-Rc2.6"
+            "2.0.0-m12-alpha-2.7"
           ]
         }
       ],
