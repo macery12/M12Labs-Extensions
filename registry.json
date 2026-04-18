@@ -11,8 +11,8 @@
         {
           "version": "1.0.0",
           "archive": "packages/discordsrv_helper/1.0.0/discordsrv_helper.M12LabsExtension",
-          "sha256": "141f8c12ff39d2f7c5affa3927acaee9597419bc9950afc5301ce5a63c8e47db",
-          "publishedAt": "2026-04-11T20:12:40Z",
+          "sha256": "7252b1f3618334368ed48efc33830caca9d79e0a3cc6baf05f0f3be86d328f07",
+          "publishedAt": "2026-04-18T15:27:39Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]
@@ -39,8 +39,8 @@
         {
           "version": "1.0.1",
           "archive": "packages/minecraft_player_manager/1.0.1/minecraft_player_manager.M12LabsExtension",
-          "sha256": "2059833232c06ae905c4f032bb73dfc00a5b0858d70800de9ce00a0c1a4ac7f4",
-          "publishedAt": "2026-04-11T20:12:40Z",
+          "sha256": "a564b3a086273001453bbf2cc915fbb2bf5bc6e55572140e45182f3853386622",
+          "publishedAt": "2026-04-18T15:27:14Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]
