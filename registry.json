@@ -79,8 +79,8 @@
         {
           "version": "1.0.0",
           "archive": "packages/startup_editor/1.0.0/startup_editor.M12LabsExtension",
-          "sha256": "1fcc8d78fc82afbd9bdefef9d29ee5292e1cefec38a3f852ec9c8beedf14c8b3",
-          "publishedAt": "2026-04-19T02:33:23Z",
+          "sha256": "057bc9afae4575a9dc604fbd73fa17cc05ea1edc6c86ed17bb368ce0d9c8da23",
+          "publishedAt": "2026-04-19T02:49:27Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]
