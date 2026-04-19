@@ -39,8 +39,8 @@
         {
           "version": "1.0.0",
           "archive": "packages/minecraft_icon_builder/1.0.0/minecraft_icon_builder.M12LabsExtension",
-          "sha256": "6a4995369a98bf7a1a52b3bd3531e8723a19de26c3e8484244d569ebf390763d",
-          "publishedAt": "2026-04-19T00:47:12Z",
+          "sha256": "337654991268177c87e0722b564c964c28df2ebb2e0b3d7531b028734d3c888c",
+          "publishedAt": "2026-04-19T01:01:43Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]
