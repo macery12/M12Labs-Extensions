@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 const GRID_SIZE = 64;
-const CELL_SIZE = 7; // 64 * 7 = 448px display size
+const CELL_SIZE = 10; // 64 * 10 = 640px intrinsic size
 
 const MINECRAFT_PALETTE = [
     '#FFFFFF', '#999999', '#4C4C4C', '#191919',
@@ -22,6 +22,7 @@ interface Props {
 
 const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const gridCanvasRef = useRef<HTMLCanvasElement>(null);
     const [selectedColor, setSelectedColor] = useState('#4CAF50');
     const [isDrawing, setIsDrawing] = useState(false);
     const [tool, setTool] = useState<'paint' | 'erase' | 'fill'>('paint');
@@ -34,6 +35,22 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
         if (!ctx) return;
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, GRID_SIZE * CELL_SIZE, GRID_SIZE * CELL_SIZE);
+    }, []);
+
+    // Draw grid overlay (never exported)
+    useEffect(() => {
+        const grid = gridCanvasRef.current;
+        if (!grid) return;
+        const ctx = grid.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, grid.width, grid.height);
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= GRID_SIZE; i++) {
+            const pos = i * CELL_SIZE;
+            ctx.beginPath(); ctx.moveTo(pos, 0); ctx.lineTo(pos, grid.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, pos); ctx.lineTo(grid.width, pos); ctx.stroke();
+        }
     }, []);
 
     const getCellFromEvent = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -203,24 +220,40 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
             </div>
 
             {/* Canvas */}
-            <div className={'rounded border border-zinc-600'}>
-                <canvas
-                    ref={canvasRef}
-                    width={GRID_SIZE * CELL_SIZE}
-                    height={GRID_SIZE * CELL_SIZE}
-                    style={{
-                        cursor: disabled ? 'not-allowed' : tool === 'erase' ? 'cell' : 'crosshair',
-                        imageRendering: 'pixelated',
-                        display: 'block',
-                        width: '100%',
-                        aspectRatio: '1 / 1',
-                    }}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onContextMenu={e => e.preventDefault()}
-                />
+            <div className={'flex justify-center'}>
+                <div className={'relative w-full max-w-xl rounded border border-zinc-600'}>
+                    <canvas
+                        ref={canvasRef}
+                        width={GRID_SIZE * CELL_SIZE}
+                        height={GRID_SIZE * CELL_SIZE}
+                        style={{
+                            cursor: disabled ? 'not-allowed' : tool === 'erase' ? 'cell' : 'crosshair',
+                            imageRendering: 'pixelated',
+                            display: 'block',
+                            width: '100%',
+                            aspectRatio: '1 / 1',
+                        }}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                        onContextMenu={e => e.preventDefault()}
+                    />
+                    {/* Grid overlay — visual only, never exported */}
+                    <canvas
+                        ref={gridCanvasRef}
+                        width={GRID_SIZE * CELL_SIZE}
+                        height={GRID_SIZE * CELL_SIZE}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            pointerEvents: 'none',
+                            imageRendering: 'pixelated',
+                        }}
+                    />
+                </div>
             </div>
         </div>
     );
