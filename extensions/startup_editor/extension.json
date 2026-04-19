@@ -1,15 +1,15 @@
 {
   "package": {
-    "id": "minecraft_startup_editor",
+    "id": "startup_editor",
     "version": "1.0.0"
   },
   "extension": {
-    "id": "minecraft_startup_editor",
+    "id": "startup_editor",
     "name": "Startup Command Editor",
     "description": "Edit the raw startup command override directly from the server panel. Supports resetting to egg default and previewing the rendered command.",
     "author": "M12Labs",
     "icon": "terminal",
-    "route": "minecraft_startup_editor",
+    "route": "startup_editor",
     "settingsSchema": [],
     "defaults": {
       "enabled": false,
@@ -19,6 +19,6 @@
     }
   },
   "compatiblePanelVersions": [
-    "2.0.0-Rc2.6"
+    "2.0.0-m12-alpha-2.7"
   ]
 }

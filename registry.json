@@ -74,15 +74,15 @@
       "settingsSchema": []
     },
     {
-      "id": "minecraft_startup_editor",
+      "id": "startup_editor",
       "versions": [
         {
           "version": "1.0.0",
-          "archive": "packages/minecraft_startup_editor/1.0.0/minecraft_startup_editor.M12LabsExtension",
-          "sha256": "65fb234718bfc4f5eddb53daea29ea7ab66cb983ec81268c6473d6664cbdd544",
-          "publishedAt": "2026-04-19T02:11:26Z",
+          "archive": "packages/startup_editor/1.0.0/startup_editor.M12LabsExtension",
+          "sha256": "1100c8d68cc5d68010947ea2c34d565d79c61b01ce63b4a9235e9af6bd6a039e",
+          "publishedAt": "2026-04-19T02:21:04Z",
           "compatiblePanelVersions": [
-            "2.0.0-Rc2.6"
+            "2.0.0-m12-alpha-2.7"
           ]
         }
       ],
@@ -90,7 +90,7 @@
       "description": "Edit the raw startup command override directly from the server panel. Supports resetting to egg default and previewing the rendered command.",
       "author": "M12Labs",
       "icon": "terminal",
-      "route": "minecraft_startup_editor",
+      "route": "startup_editor",
       "settingsSchema": []
     }
   ]

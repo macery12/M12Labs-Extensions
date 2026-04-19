@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests;
+namespace Everest\Extensions\Packages\startup_editor\Http\Requests;
 
 use Everest\Models\Permission;
 use Everest\Contracts\Http\ClientPermissionsRequest;

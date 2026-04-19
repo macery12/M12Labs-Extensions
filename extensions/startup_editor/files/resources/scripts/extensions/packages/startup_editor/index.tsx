@@ -13,7 +13,7 @@ import {
     resetStartupCommand,
 } from './api';
 
-const FLASH_KEY = 'server:extensions:minecraft_startup_editor';
+const FLASH_KEY = 'server:extensions:startup_editor';
 
 export default () => {
     const uuid = ServerContext.useStoreState(state => state.server.data?.uuid);
