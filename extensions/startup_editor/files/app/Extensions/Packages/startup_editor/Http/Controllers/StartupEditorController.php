@@ -10,6 +10,7 @@ use Everest\Http\Controllers\Api\Client\ClientApiController;
 use Everest\Extensions\Packages\startup_editor\Http\Requests\GetStartupEditorRequest;
 use Everest\Extensions\Packages\startup_editor\Http\Requests\ResetStartupEditorRequest;
 use Everest\Extensions\Packages\startup_editor\Http\Requests\SaveStartupEditorRequest;
+use Everest\Extensions\Packages\startup_editor\MinecraftStartupOptions;
 
 class StartupEditorController extends ClientApiController
 {
@@ -21,47 +22,45 @@ class StartupEditorController extends ClientApiController
 
     public function index(GetStartupEditorRequest $request, Server $server): JsonResponse
     {
-        $rawStartup = $server->startup;
-        $eggDefault = $server->egg->startup;
+        $rawStartup       = $server->startup;
+        $eggDefault       = $server->egg->startup;
         $isUsingEggDefault = is_null($rawStartup) || $rawStartup === '';
 
         return new JsonResponse([
             'object' => 'extension_startup_editor',
             'attributes' => [
-                'raw_startup' => $rawStartup,
-                'egg_default' => $eggDefault,
-                'rendered_command' => $this->startupCommandService->handle($server),
+                'raw_startup'        => $rawStartup,
+                'egg_default'        => $eggDefault,
+                'rendered_command'   => $this->startupCommandService->handle($server),
                 'is_using_egg_default' => $isUsingEggDefault,
-                'egg_name' => $server->egg->name,
+                'egg_name'           => $server->egg->name,
+                'detected_loader'    => MinecraftStartupOptions::detectLoader($server->egg->name),
             ],
         ]);
     }
 
     public function save(SaveStartupEditorRequest $request, Server $server): JsonResponse
     {
-        $original = $server->startup;
+        $original        = $server->startup;
+        $selectedOptions = $request->input('selected_options', []);
+        $jarVar          = MinecraftStartupOptions::extractJarVariable($server->egg->startup);
+        $startup         = MinecraftStartupOptions::buildStartupCommand($selectedOptions, $jarVar);
 
-        $sanitized = preg_replace('/  +/', ' ', trim($request->input('startup')));
-
-        if ($sanitized === '') {
-            abort(422, 'Startup command cannot be empty after sanitization.');
-        }
-
-        $server->startup = $sanitized;
+        $server->startup = $startup;
         $server->save();
 
         Activity::event('server:startup.command')
             ->property([
                 'old' => $original,
-                'new' => $sanitized,
+                'new' => $startup,
             ])
             ->log();
 
         return new JsonResponse([
             'object' => 'extension_startup_editor_save',
             'attributes' => [
-                'rendered_command' => $this->startupCommandService->handle($server),
-                'raw_startup' => $sanitized,
+                'rendered_command'  => $this->startupCommandService->handle($server),
+                'raw_startup'       => $startup,
                 'is_using_egg_default' => false,
             ],
         ]);
@@ -84,10 +83,10 @@ class StartupEditorController extends ClientApiController
         return new JsonResponse([
             'object' => 'extension_startup_editor_save',
             'attributes' => [
-                'rendered_command' => $this->startupCommandService->handle($server),
-                'raw_startup' => null,
+                'rendered_command'    => $this->startupCommandService->handle($server),
+                'raw_startup'         => null,
                 'is_using_egg_default' => true,
-                'egg_default' => $server->egg->startup,
+                'egg_default'         => $server->egg->startup,
             ],
         ]);
     }

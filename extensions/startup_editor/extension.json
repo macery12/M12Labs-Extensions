@@ -1,12 +1,12 @@
 {
   "package": {
     "id": "startup_editor",
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "extension": {
     "id": "startup_editor",
-    "name": "Startup Command Editor",
-    "description": "Edit the raw startup command override directly from the server panel. Supports resetting to egg default and previewing the rendered command.",
+    "name": "Minecraft Startup Editor",
+    "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input — all options are validated against a secure server-side allowlist.",
     "author": "M12Labs",
     "icon": "terminal",
     "route": "startup_editor",

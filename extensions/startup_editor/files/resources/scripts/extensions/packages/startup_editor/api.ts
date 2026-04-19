@@ -6,6 +6,7 @@ export interface StartupEditorData {
     renderedCommand: string;
     isUsingEggDefault: boolean;
     eggName: string;
+    detectedLoader: string | null;
 }
 
 export interface StartupSaveResult {
@@ -19,20 +20,28 @@ export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> =
     return http
         .get(`/api/client/servers/${uuid}/extensions/startup_editor`)
         .then(({ data }) => ({
-            rawStartup: data.attributes.raw_startup,
-            eggDefault: data.attributes.egg_default,
-            renderedCommand: data.attributes.rendered_command,
+            rawStartup:        data.attributes.raw_startup,
+            eggDefault:        data.attributes.egg_default,
+            renderedCommand:   data.attributes.rendered_command,
             isUsingEggDefault: data.attributes.is_using_egg_default,
-            eggName: data.attributes.egg_name,
+            eggName:           data.attributes.egg_name,
+            detectedLoader:    data.attributes.detected_loader ?? null,
         }));
 };
 
-export const saveStartupCommand = (uuid: string, startup: string): Promise<StartupSaveResult> => {
+/**
+ * Save a startup configuration built from a curated list of option IDs.
+ * No raw command text is accepted by the server; all command text is
+ * generated server-side from the validated allowlist.
+ */
+export const saveStartupOptions = (uuid: string, selectedOptions: string[]): Promise<StartupSaveResult> => {
     return http
-        .post(`/api/client/servers/${uuid}/extensions/startup_editor/save`, { startup })
+        .post(`/api/client/servers/${uuid}/extensions/startup_editor/save`, {
+            selected_options: selectedOptions,
+        })
         .then(({ data }) => ({
-            renderedCommand: data.attributes.rendered_command,
-            rawStartup: data.attributes.raw_startup,
+            renderedCommand:   data.attributes.rendered_command,
+            rawStartup:        data.attributes.raw_startup,
             isUsingEggDefault: data.attributes.is_using_egg_default,
         }));
 };
@@ -41,9 +50,9 @@ export const resetStartupCommand = (uuid: string): Promise<StartupSaveResult> =>
     return http
         .post(`/api/client/servers/${uuid}/extensions/startup_editor/reset`, {})
         .then(({ data }) => ({
-            renderedCommand: data.attributes.rendered_command,
-            rawStartup: data.attributes.raw_startup,
+            renderedCommand:   data.attributes.rendered_command,
+            rawStartup:        data.attributes.raw_startup,
             isUsingEggDefault: data.attributes.is_using_egg_default,
-            eggDefault: data.attributes.egg_default,
+            eggDefault:        data.attributes.egg_default,
         }));
 };
