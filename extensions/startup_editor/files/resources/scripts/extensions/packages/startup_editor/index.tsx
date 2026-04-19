@@ -98,7 +98,7 @@ export default () => {
                     <div className={'mt-6 rounded-lg bg-zinc-800 p-6'}>
                         <h3 className={'text-lg font-semibold text-white'}>Custom Override</h3>
                         <p className={'mt-2 text-sm text-neutral-400'}>
-                            Override the startup command for this server. Leave blank and reset to use the egg default.
+                            Enter the full startup command override. Use {'{{VARIABLE}}'} syntax to reference egg variables. Leave blank to use the egg default.
                         </p>
                         <textarea
                             className={
@@ -108,7 +108,7 @@ export default () => {
                             disabled={!canStartupUpdate || saving}
                             value={overrideValue}
                             onChange={e => setOverrideValue(e.target.value)}
-                            placeholder={'Enter custom startup command override...'}
+                            placeholder={'e.g. java -Xms128M -jar {{SERVER_JARFILE}} --port {{SERVER_PORT}}'}
                         />
                         {UNSAFE_CHARS_PATTERN.test(overrideValue) && (
                             <p className={'mt-2 text-sm text-yellow-400'}>

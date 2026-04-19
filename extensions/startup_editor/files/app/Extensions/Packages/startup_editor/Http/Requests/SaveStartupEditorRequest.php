@@ -44,11 +44,6 @@ class SaveStartupEditorRequest extends ClientApiRequest implements ClientPermiss
                 $v->errors()->add('startup', 'Startup command references a disallowed system path.');
                 return;
             }
-
-            $trimmed = trim($startup);
-            if ($trimmed !== '' && !str_starts_with($trimmed, 'java') && !str_starts_with($trimmed, '{{')) {
-                $v->errors()->add('startup', "Startup command must begin with 'java' or a valid egg variable reference.");
-            }
         });
     }
 }
