@@ -203,7 +203,7 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
             </div>
 
             {/* Canvas */}
-            <div className={'overflow-auto rounded border border-zinc-600'}>
+            <div className={'rounded border border-zinc-600'}>
                 <canvas
                     ref={canvasRef}
                     width={GRID_SIZE * CELL_SIZE}
@@ -212,7 +212,8 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
                         cursor: disabled ? 'not-allowed' : tool === 'erase' ? 'cell' : 'crosshair',
                         imageRendering: 'pixelated',
                         display: 'block',
-                        maxWidth: '100%',
+                        width: '100%',
+                        aspectRatio: '1 / 1',
                     }}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
