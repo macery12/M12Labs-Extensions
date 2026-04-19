@@ -13,6 +13,8 @@ import {
     resetStartupCommand,
 } from './api';
 
+const UNSAFE_CHARS_PATTERN = /[;`]|\|\|?|&&|\$[({]/;
+
 const FLASH_KEY = 'server:extensions:startup_editor';
 
 export default () => {
@@ -108,12 +110,17 @@ export default () => {
                             onChange={e => setOverrideValue(e.target.value)}
                             placeholder={'Enter custom startup command override...'}
                         />
+                        {UNSAFE_CHARS_PATTERN.test(overrideValue) && (
+                            <p className={'mt-2 text-sm text-yellow-400'}>
+                                ⚠ This command contains characters that may be unsafe. Double-check before saving.
+                            </p>
+                        )}
                         {!canStartupUpdate && (
                             <p className={'mt-2 text-xs text-neutral-500'}>Requires: startup.update</p>
                         )}
                         <div className={'mt-4 flex flex-wrap gap-3'}>
                             <Button
-                                disabled={!canStartupUpdate || saving}
+                                disabled={!canStartupUpdate || saving || overrideValue.trim() === ''}
                                 onClick={async () => {
                                     if (!uuid) return;
                                     setSaving(true);

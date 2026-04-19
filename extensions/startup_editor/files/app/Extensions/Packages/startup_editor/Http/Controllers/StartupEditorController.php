@@ -40,15 +40,20 @@ class StartupEditorController extends ClientApiController
     public function save(SaveStartupEditorRequest $request, Server $server): JsonResponse
     {
         $original = $server->startup;
-        $newStartup = $request->input('startup');
 
-        $server->startup = $newStartup;
+        $sanitized = preg_replace('/  +/', ' ', trim($request->input('startup')));
+
+        if ($sanitized === '') {
+            abort(422, 'Startup command cannot be empty after sanitization.');
+        }
+
+        $server->startup = $sanitized;
         $server->save();
 
         Activity::event('server:startup.command')
             ->property([
                 'old' => $original,
-                'new' => $newStartup,
+                'new' => $sanitized,
             ])
             ->log();
 
@@ -56,7 +61,7 @@ class StartupEditorController extends ClientApiController
             'object' => 'extension_startup_editor_save',
             'attributes' => [
                 'rendered_command' => $this->startupCommandService->handle($server),
-                'raw_startup' => $newStartup,
+                'raw_startup' => $sanitized,
                 'is_using_egg_default' => false,
             ],
         ]);
