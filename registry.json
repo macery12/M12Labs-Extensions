@@ -34,6 +34,26 @@
       ]
     },
     {
+      "id": "minecraft_icon_builder",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/minecraft_icon_builder/1.0.0/minecraft_icon_builder.M12LabsExtension",
+          "sha256": "f47073f2fb533b6d1056e2063344bc0d45c53cffd4deb20d7f17da095bfabe0c",
+          "publishedAt": "2026-04-19T00:19:35Z",
+          "compatiblePanelVersions": [
+            "2.0.0-m12-alpha-2.7"
+          ]
+        }
+      ],
+      "name": "Minecraft Icon Builder",
+      "description": "Paint and save a custom 64\u00d764 server-icon.png directly from the panel using a built-in pixel editor.",
+      "author": "M12Labs",
+      "icon": "image",
+      "route": "minecraft_icon_builder",
+      "settingsSchema": []
+    },
+    {
       "id": "minecraft_player_manager",
       "versions": [
         {
