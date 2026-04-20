@@ -18,10 +18,21 @@ namespace Everest\Extensions\Packages\startup_editor;
 class MinecraftStartupOptions
 {
     public const OPTIONS = [
+        // ── Core JVM flags (always-on baseline for Pterodactyl containers) ──
+        'core_flags' => [
+            'jvm_flags'    => '-XX:+AlwaysPreTouch -XX:+DisableExplicitGC'
+                . ' -XX:+UseContainerSupport -XX:+ParallelRefProcEnabled',
+            'server_args'  => '',
+            'loader_compat' => null,
+            'min_java'     => 8,
+        ],
+
         // ── Garbage Collection ────────────────────────────────────────────
+        // NOTE: AlwaysPreTouch, DisableExplicitGC, ParallelRefProcEnabled are
+        // in core_flags above and must not be duplicated here.
         'aikar_g1gc' => [
-            'jvm_flags'    => '-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200'
-                . ' -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch'
+            'jvm_flags'    => '-XX:+UseG1GC -XX:MaxGCPauseMillis=200'
+                . ' -XX:+UnlockExperimentalVMOptions'
                 . ' -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M'
                 . ' -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4'
                 . ' -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90'
@@ -32,13 +43,13 @@ class MinecraftStartupOptions
             'min_java'     => 8,
         ],
         'zgc' => [
-            'jvm_flags'    => '-XX:+UseZGC -XX:+ZGenerational -XX:+AlwaysPreTouch',
+            'jvm_flags'    => '-XX:+UseZGC -XX:+ZGenerational',
             'server_args'  => '',
             'loader_compat' => null,
             'min_java'     => 21,
         ],
         'shenandoah' => [
-            'jvm_flags'    => '-XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:+AlwaysPreTouch',
+            'jvm_flags'    => '-XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu',
             'server_args'  => '',
             'loader_compat' => null,
             'min_java'     => 11,
@@ -118,25 +129,26 @@ class MinecraftStartupOptions
 
     /**
      * Named presets; each holds an ordered list of option IDs to activate.
+     * core_flags is always included in every preset.
      */
     public const PRESETS = [
         'basic_optimize' => [
-            'options' => ['aikar_g1gc', 'terminal_compat', 'nogui'],
+            'options' => ['core_flags', 'aikar_g1gc', 'jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
         ],
         'large_modpack' => [
-            'options' => ['aikar_g1gc', 'jit_optimize', 'terminal_compat', 'nogui'],
+            'options' => ['core_flags', 'aikar_g1gc', 'jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
         ],
         'paper_performance' => [
-            'options' => ['aikar_g1gc', 'string_dedup', 'jit_optimize', 'paper_modules', 'nogui'],
+            'options' => ['core_flags', 'aikar_g1gc', 'string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix', 'nogui'],
         ],
         'low_latency' => [
-            'options' => ['zgc', 'terminal_compat', 'nogui'],
+            'options' => ['core_flags', 'zgc', 'jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
         ],
         'vanilla_clean' => [
-            'options' => ['g1gc_basic', 'nogui'],
+            'options' => ['core_flags', 'g1gc_basic', 'jit_optimize', 'log4j_fix', 'nogui'],
         ],
         'security_hardened' => [
-            'options' => ['aikar_g1gc', 'log4j_fix', 'terminal_compat', 'nogui'],
+            'options' => ['core_flags', 'aikar_g1gc', 'jit_optimize', 'log4j_fix', 'terminal_compat', 'nogui'],
         ],
     ];
 
@@ -151,14 +163,21 @@ class MinecraftStartupOptions
     /**
      * Compose a startup command from a validated list of option IDs.
      *
-     * Format: java -Xms128M -XX:MaxRAMPercentage=95.0 [jvm_flags] -jar [jarVar] [server_args]
+     * Format:
+     *   java -Xms{xmsMb}M -XX:MaxRAMPercentage=80.0 [jvm_flags] -jar [jarVar] [server_args]
+     *
+     * Xmx is expressed via MaxRAMPercentage=80.0 so that the JVM honours the
+     * container memory limit set by Pterodactyl without needing explicit math
+     * on {{SERVER_MEMORY}}.
      *
      * @param  string[]  $selectedOptionIds  Option IDs pre-validated against the allowlist by
      *                                        SaveStartupEditorRequest.  Unknown IDs are silently
      *                                        skipped as a defence-in-depth measure, but callers
      *                                        must validate before calling this method.
+     * @param  string    $jarVar             The jar-file variable placeholder (e.g. {{SERVER_JARFILE}}).
+     * @param  int       $xmsMb              Initial heap size in MB (Xms). Defaults to 256.
      */
-    public static function buildStartupCommand(array $selectedOptionIds, string $jarVar): string
+    public static function buildStartupCommand(array $selectedOptionIds, string $jarVar, int $xmsMb = 256): string
     {
         $jvmParts    = [];
         $serverParts = [];
@@ -176,7 +195,7 @@ class MinecraftStartupOptions
             }
         }
 
-        $parts = ['java', '-Xms128M', '-XX:MaxRAMPercentage=95.0'];
+        $parts = ['java', "-Xms{$xmsMb}M", '-XX:MaxRAMPercentage=80.0'];
 
         foreach ($jvmParts as $flags) {
             $parts[] = $flags;
@@ -238,3 +257,4 @@ class MinecraftStartupOptions
         return null;
     }
 }
+

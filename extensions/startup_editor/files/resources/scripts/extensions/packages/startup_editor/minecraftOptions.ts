@@ -34,7 +34,7 @@ export const LOADER_LABELS: Record<LoaderSlug, string> = {
 
 // ─── Option definition ────────────────────────────────────────────────────────
 
-export type OptionCategory = 'gc' | 'performance' | 'server' | 'security';
+export type OptionCategory = 'core' | 'gc' | 'performance' | 'server' | 'security';
 
 export interface MinecraftOption {
     /** Must match a key in MinecraftStartupOptions::OPTIONS (PHP). */
@@ -50,17 +50,55 @@ export interface MinecraftOption {
     minJava: number;
     /** IDs of options that cannot be enabled at the same time as this one. */
     incompatibleWith: string[];
-    /** If true, shown with a ⭐ recommended badge. */
+    /** If true, pre-selected on a fresh load and shown with a ⭐ recommended badge. */
     recommended?: boolean;
+    /**
+     * If true, this option is always enabled and cannot be deselected by the user.
+     * Shown with a 🔒 lock indicator instead of a checkbox.
+     */
+    alwaysEnabled?: boolean;
 }
 
+// ─── GC option IDs ────────────────────────────────────────────────────────────
+
+/** All GC option IDs — shown in the dedicated GC dropdown, not as checkboxes. */
+export const GC_OPTION_IDS = ['aikar_g1gc', 'zgc', 'shenandoah', 'g1gc_basic'] as const;
+export type GcOptionId = typeof GC_OPTION_IDS[number];
+
+/** Default GC selection shown on fresh load. */
+export const DEFAULT_GC: GcOptionId = 'aikar_g1gc';
+
+/**
+ * Option IDs that are pre-selected on fresh load (excluding the default GC and
+ * core_flags which is always-enabled separately).
+ */
+export const DEFAULT_ENABLED_OPTION_IDS: string[] = [
+    'nogui',
+    'jit_optimize',
+    'terminal_compat',
+    'log4j_fix',
+];
+
 export const MINECRAFT_OPTIONS: MinecraftOption[] = [
+    // ── Core (always-on baseline) ────────────────────────────────────────────
+    {
+        id:              'core_flags',
+        name:            'Core JVM Flags',
+        description:     'Essential flags for Pterodactyl containers: AlwaysPreTouch, DisableExplicitGC, UseContainerSupport, ParallelRefProcEnabled.',
+        tooltip:         '-XX:+AlwaysPreTouch pre-allocates heap memory at startup to prevent runtime lag spikes. -XX:+DisableExplicitGC prevents plugins from forcing GC. -XX:+UseContainerSupport ensures the JVM respects Docker/container memory limits — required for Pterodactyl. -XX:+ParallelRefProcEnabled speeds up reference processing during GC.',
+        category:        'core',
+        loaderCompat:    null,
+        minJava:         8,
+        incompatibleWith: [],
+        alwaysEnabled:   true,
+    },
+
     // ── Garbage Collection ──────────────────────────────────────────────────
     {
         id:              'aikar_g1gc',
-        name:            "Aikar's G1GC Flags",
-        description:     'Highly-tuned G1 garbage-collector flags recommended for all Minecraft servers.',
-        tooltip:         'A well-known set of G1GC JVM flags originally published by Aikar. Reduces GC pause times and avoids common Minecraft-related GC issues. Recommended for nearly every server regardless of loader or version.',
+        name:            "G1GC — Aikar's Flags",
+        description:     'Best for: general-purpose servers, Paper/Spigot, 4 GB–16 GB RAM. Most stable and widely used. Balanced performance and memory usage.',
+        tooltip:         "A well-known set of G1GC JVM flags originally published by Aikar. Reduces GC pause times and avoids common Minecraft-related GC issues. Recommended for nearly every server regardless of loader or version. Best results on 4–16 GB RAM with Java 8+.",
         category:        'gc',
         loaderCompat:    null,
         minJava:         8,
@@ -69,9 +107,9 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     },
     {
         id:              'zgc',
-        name:            'Generational ZGC',
-        description:     'Ultra-low-latency garbage collector. Best for large, memory-rich servers on Java 21+.',
-        tooltip:         'ZGC (with the Generational extension added in Java 21) provides sub-millisecond GC pauses. Requires at least Java 21 and works best when the server has plenty of RAM. Not compatible with G1GC-based options.',
+        name:            'ZGC (Generational)',
+        description:     'Best for: high-RAM servers (16 GB+). Extremely low latency (near-zero pause times). Slightly higher CPU usage. Ideal for large modpacks or high player counts.',
+        tooltip:         'ZGC with the Generational extension (Java 21+) provides sub-millisecond GC pauses. Requires at least Java 21 and works best with 16 GB+ of dedicated RAM. Higher CPU overhead than G1GC. Not compatible with G1GC-based options or String Deduplication.',
         category:        'gc',
         loaderCompat:    null,
         minJava:         21,
@@ -80,8 +118,8 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'shenandoah',
         name:            'ShenandoahGC',
-        description:     'Low-pause GC available on Java 11+. A middle-ground between G1 and ZGC.',
-        tooltip:         'ShenandoahGC performs concurrent compaction to keep pause times very low. Available from Java 11 and works on all loaders. Use "iu" (incremental-update) mode for most compatibility. Not compatible with G1GC or ZGC options.',
+        description:     'Best for: low-pause setups on Java 17+. Middle ground between G1GC and ZGC. Good alternative if ZGC is unavailable.',
+        tooltip:         'ShenandoahGC performs concurrent compaction to keep pause times very low. Available from Java 11 and uses the incremental-update (iu) mode for broadest compatibility. Good alternative when ZGC is not available. Not compatible with G1GC or ZGC options.',
         category:        'gc',
         loaderCompat:    null,
         minJava:         11,
@@ -90,8 +128,8 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'g1gc_basic',
         name:            'Basic G1GC',
-        description:     'Enables G1GC without additional tuning. Suitable when you want GC control without the full Aikar preset.',
-        tooltip:         "Enables the G1 garbage collector with JVM defaults. Use this only if you want to layer your own G1GC tuning on top, or if Aikar's flags cause issues. Not compatible with ZGC, Shenandoah, or Aikar's flags.",
+        description:     "Best for: minimal setups or debugging. Uses JVM defaults without Aikar's aggressive tuning.",
+        tooltip:         "Enables the G1 garbage collector with JVM defaults. Use this only if you want a simple baseline or if Aikar's flags cause issues. Not compatible with ZGC, Shenandoah, or Aikar's flags.",
         category:        'gc',
         loaderCompat:    null,
         minJava:         8,
@@ -118,6 +156,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
         loaderCompat:    null,
         minJava:         8,
         incompatibleWith: [],
+        recommended:     true,
     },
     {
         id:              'paper_modules',
@@ -135,12 +174,12 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
         id:              'terminal_compat',
         name:            'Terminal Compatibility',
         description:     'Disables JLine and enables ANSI colour for Forge-style terminal output in containers.',
-        tooltip:         'Sets -Dterminal.jline=false -Dterminal.ansi=true. Prevents JLine from crashing in headless container environments and ensures colour codes work properly. Recommended for Forge and NeoForge; optional for others.',
+        tooltip:         'Sets -Dterminal.jline=false -Dterminal.ansi=true. Prevents JLine from crashing in headless container environments and ensures colour codes work properly. Recommended for Forge and NeoForge; safe for all servers.',
         category:        'performance',
         loaderCompat:    null,
         minJava:         8,
         incompatibleWith: [],
-        recommended:     false,
+        recommended:     true,
     },
 
     // ── Security ────────────────────────────────────────────────────────────
@@ -208,75 +247,92 @@ export interface Preset {
     name: string;
     description: string;
     tooltip: string;
-    /** IDs of options this preset activates. */
+    /** GC option ID for this preset (null = no GC / JVM defaults). */
+    gcId: GcOptionId | null;
+    /** Non-GC option IDs this preset activates (core_flags always added automatically). */
     optionIds: string[];
     /** Optional: a loader this preset is best suited for. */
     recommendedLoader?: LoaderSlug | null;
     /** Tailwind colour class for the accent stripe. */
     accentColor: string;
+    /** Xms in MB for this preset. */
+    xmsMb: number;
 }
 
 export const PRESETS: Preset[] = [
     {
         id:               'basic_optimize',
         name:             'Basic Optimize',
-        description:      "Aikar's G1GC + terminal compat + No GUI. A safe starting point for any server.",
-        tooltip:          "The minimum recommended set of flags for every Minecraft server: Aikar's well-tuned G1GC settings, terminal-compatibility fixes, and the --nogui flag to suppress the Swing window.",
-        optionIds:        ['aikar_g1gc', 'terminal_compat', 'nogui'],
+        description:      "Aikar's G1GC + JIT + terminal compat + security. Recommended starting point.",
+        tooltip:          "The recommended set of flags for every Minecraft server: Aikar's G1GC, JIT compiler optimisations, terminal-compatibility fixes, Log4Shell mitigation, and --nogui.",
+        gcId:             'aikar_g1gc',
+        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
         recommendedLoader: null,
         accentColor:      'bg-blue-600',
+        xmsMb:            256,
     },
     {
         id:               'large_modpack',
         name:             'Large Modpack',
-        description:      "Optimised for Forge/NeoForge packs with hundreds of mods. Adds JIT tuning on top of Aikar's flags.",
-        tooltip:          "Combines Aikar's G1GC flags with JIT-compiler optimisations and terminal-compat flags. Designed for Forge/NeoForge modpacks with large classpaths where JIT warmup matters.",
-        optionIds:        ['aikar_g1gc', 'jit_optimize', 'terminal_compat', 'nogui'],
+        description:      "Aikar's G1GC + JIT tuning. Optimised for Forge/NeoForge packs with hundreds of mods.",
+        tooltip:          "Combines Aikar's G1GC flags with JIT-compiler optimisations, Log4Shell mitigation, and terminal-compat fixes. Designed for Forge/NeoForge modpacks with large classpaths.",
+        gcId:             'aikar_g1gc',
+        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
         recommendedLoader: 'forge',
         accentColor:      'bg-orange-600',
+        xmsMb:            512,
     },
     {
         id:               'paper_performance',
         name:             'Paper Performance',
-        description:      'Full performance stack for Paper/Purpur: Aikar + dedup + JIT + module opens.',
-        tooltip:          "Enables Aikar's G1GC flags, String Deduplication for memory savings, JIT optimisations, and the required Paper module-system opens. Ideal for high-player-count Paper or Purpur servers.",
-        optionIds:        ['aikar_g1gc', 'string_dedup', 'jit_optimize', 'paper_modules', 'nogui'],
+        description:      'Full performance stack for Paper/Purpur: Aikar + String Dedup + JIT + module opens.',
+        tooltip:          "Enables Aikar's G1GC flags, String Deduplication for memory savings, JIT optimisations, Paper module-system opens, and Log4Shell mitigation. Ideal for high-player-count Paper or Purpur servers.",
+        gcId:             'aikar_g1gc',
+        optionIds:        ['string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix', 'nogui'],
         recommendedLoader: 'paper',
         accentColor:      'bg-green-600',
+        xmsMb:            512,
     },
     {
         id:               'low_latency',
         name:             'Low Latency (ZGC)',
-        description:      'Generational ZGC for near-zero GC pauses. Requires Java 21+.',
-        tooltip:          "Uses Java 21's Generational ZGC (-XX:+UseZGC -XX:+ZGenerational) with AlwaysPreTouch for the lowest possible GC latency. Best for servers with 8 GB+ of dedicated RAM and Java 21.",
-        optionIds:        ['zgc', 'terminal_compat', 'nogui'],
+        description:      'Generational ZGC for near-zero GC pauses. Requires Java 21+ and 16 GB+ RAM.',
+        tooltip:          "Uses Java 21's Generational ZGC (-XX:+UseZGC -XX:+ZGenerational) for the lowest possible GC latency. Best for servers with 16 GB+ of dedicated RAM and Java 21.",
+        gcId:             'zgc',
+        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
         recommendedLoader: null,
         accentColor:      'bg-purple-600',
+        xmsMb:            512,
     },
     {
         id:               'vanilla_clean',
         name:             'Vanilla Clean',
-        description:      'Minimal config: basic G1GC and No GUI. Great for a vanilla or lightly modded server.',
-        tooltip:          'A clean, minimal flag set: just basic G1GC and --nogui. Use this when you want a simple baseline without any aggressive tuning.',
-        optionIds:        ['g1gc_basic', 'nogui'],
+        description:      'Minimal config: basic G1GC + JIT + security. Great for vanilla or lightly modded servers.',
+        tooltip:          'A clean, minimal flag set: basic G1GC, JIT optimisations, Log4Shell mitigation, and --nogui. Use this when you want a simple baseline without aggressive tuning.',
+        gcId:             'g1gc_basic',
+        optionIds:        ['jit_optimize', 'log4j_fix', 'nogui'],
         recommendedLoader: 'vanilla',
         accentColor:      'bg-zinc-500',
+        xmsMb:            256,
     },
     {
         id:               'security_hardened',
         name:             'Security Hardened',
         description:      "Aikar's flags + Log4Shell mitigation + terminal compat. Defence-in-depth for any server.",
         tooltip:          "Aikar's G1GC combined with the Log4Shell mitigation flag and terminal-compat fixes. The security flag is harmless on patched versions but adds defence-in-depth for older modpacks running legacy Minecraft.",
-        optionIds:        ['aikar_g1gc', 'log4j_fix', 'terminal_compat', 'nogui'],
+        gcId:             'aikar_g1gc',
+        optionIds:        ['jit_optimize', 'log4j_fix', 'terminal_compat', 'nogui'],
         recommendedLoader: null,
         accentColor:      'bg-red-700',
+        xmsMb:            256,
     },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export const CATEGORY_LABELS: Record<OptionCategory, string> = {
-    gc:          '🗑️ Garbage Collection',
+    core:        '🔒 Core JVM Flags',
+    gc:          '🗑️ Garbage Collector',
     performance: '⚡ Performance',
     server:      '🖥️ Server Arguments',
     security:    '🛡️ Security',
@@ -321,16 +377,21 @@ export function detectLoaderFromEggName(eggName: string): LoaderSlug | null {
 }
 
 /**
- * Parse a raw startup command string and return the set of known option IDs
- * whose flags are present in it.  Used to pre-populate the UI when the server
- * already has a custom override.
+ * Parse a raw startup command string and return the selected GC id plus non-GC
+ * option IDs inferred from the command text.  Used to pre-populate the UI when
+ * the server already has a custom override.
  */
-export function inferSelectedOptionsFromCommand(rawCommand: string): string[] {
-    if (!rawCommand) return [];
+export function inferStateFromCommand(rawCommand: string): {
+    gcId: GcOptionId | null;
+    selectedIds: string[];
+    xmsMb: number;
+} {
+    if (!rawCommand) return { gcId: DEFAULT_GC, selectedIds: [...DEFAULT_ENABLED_OPTION_IDS], xmsMb: 256 };
 
     // Fragments that uniquely identify each option in a startup command string.
     const knownFragments: Record<string, string[]> = {
-        aikar_g1gc:      ['-XX:+UseG1GC', '-XX:+ParallelRefProcEnabled', '-XX:MaxGCPauseMillis=200'],
+        core_flags:      ['-XX:+UseContainerSupport', '-XX:+AlwaysPreTouch'],
+        aikar_g1gc:      ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'],
         zgc:             ['-XX:+UseZGC', '-XX:+ZGenerational'],
         shenandoah:      ['-XX:+UseShenandoahGC'],
         g1gc_basic:      ['-XX:+UseG1GC'],
@@ -345,20 +406,35 @@ export function inferSelectedOptionsFromCommand(rawCommand: string): string[] {
         eraseCache:      ['--eraseCache'],
     };
 
+    let gcId: GcOptionId | null = null;
     const selectedIds: string[] = [];
+
     for (const option of MINECRAFT_OPTIONS) {
         const fragments = knownFragments[option.id];
         if (!fragments || !fragments.every(f => rawCommand.includes(f))) continue;
 
-        // Skip this option if any already-selected option declares it incompatible.
-        // This mirrors the incompatibleWith metadata so we don't need special cases.
-        const blockedBySelected = selectedIds.some(selectedId => {
-            const selectedOption = MINECRAFT_OPTIONS.find(o => o.id === selectedId);
-            return selectedOption?.incompatibleWith.includes(option.id) ?? false;
+        if (option.alwaysEnabled) continue; // core_flags is always on; don't add to selectedIds
+
+        if ((GC_OPTION_IDS as readonly string[]).includes(option.id)) {
+            // Avoid setting both aikar_g1gc and g1gc_basic (aikar is more specific)
+            if (gcId === null) gcId = option.id as GcOptionId;
+            continue;
+        }
+
+        // Skip if any already-selected option declares it incompatible.
+        const blocked = selectedIds.some(selId => {
+            const sel = MINECRAFT_OPTIONS.find(o => o.id === selId);
+            return sel?.incompatibleWith.includes(option.id) ?? false;
         });
-        if (blockedBySelected) continue;
+        if (blocked) continue;
 
         selectedIds.push(option.id);
     }
-    return selectedIds;
+
+    // Parse Xms value from command (e.g. -Xms256M)
+    const xmsMatch = rawCommand.match(/-Xms(\d+)[Mm]/);
+    const xmsMb = xmsMatch ? parseInt(xmsMatch[1], 10) : 256;
+
+    return { gcId, selectedIds, xmsMb };
 }
+

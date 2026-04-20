@@ -33,11 +33,19 @@ export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> =
  * Save a startup configuration built from a curated list of option IDs.
  * No raw command text is accepted by the server; all command text is
  * generated server-side from the validated allowlist.
+ *
+ * @param selectedOptions  Option IDs to activate (including GC and core_flags).
+ * @param xmsMb            Initial heap size in MB (-Xms).
  */
-export const saveStartupOptions = (uuid: string, selectedOptions: string[]): Promise<StartupSaveResult> => {
+export const saveStartupOptions = (
+    uuid: string,
+    selectedOptions: string[],
+    xmsMb: number,
+): Promise<StartupSaveResult> => {
     return http
         .post(`/api/client/servers/${uuid}/extensions/startup_editor/save`, {
             selected_options: selectedOptions,
+            xms_mb:           xmsMb,
         })
         .then(({ data }) => ({
             renderedCommand:   data.attributes.rendered_command,
