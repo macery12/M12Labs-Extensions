@@ -360,14 +360,14 @@ function MemorySection({ xmsMb, onChange, disabled }: MemorySectionProps) {
             <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
                 <div>
                     <div className={'flex items-center gap-1.5'}>
-                        <span className={'text-sm font-medium text-white'}>Xmx \u2014 Maximum Heap</span>
+                        <span className={'text-sm font-medium text-white'}>Xmx — Maximum Heap</span>
                         <span className={'rounded-full border border-green-800 bg-green-900/40 px-1.5 py-px text-[10px] font-medium text-green-300'}>
                             Auto
                         </span>
                         <InfoBadge text={"Xmx is set to 80% of your container memory limit via -XX:MaxRAMPercentage=80.0. This ensures the JVM respects Pterodactyl's container limits without needing explicit math on {{SERVER_MEMORY}}."} />
                     </div>
                     <p className={'text-xs text-zinc-500'}>
-                        <span className={'font-mono'}>-XX:MaxRAMPercentage=80.0</span> \u2014 80% of container memory
+                        <span className={'font-mono'}>-XX:MaxRAMPercentage=80.0</span> — 80% of container memory
                     </p>
                 </div>
             </div>
@@ -375,7 +375,7 @@ function MemorySection({ xmsMb, onChange, disabled }: MemorySectionProps) {
             <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
                 <div>
                     <label htmlFor={inputId} className={'flex items-center gap-1.5 text-sm font-medium text-white'}>
-                        Xms \u2014 Initial Heap
+                        Xms — Initial Heap
                         <InfoBadge text={'Lower Xms reduces startup memory usage. Increase for more consistent performance (less GC pressure at boot). Recommend ~10% of your allocated server RAM.'} />
                     </label>
                     <p className={'text-xs text-zinc-500'}>~10% of allocated RAM (e.g. 256 MB for a 2.5 GB server)</p>
@@ -424,12 +424,14 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
                     Last saved command
                 </p>
                 <pre className={'overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-zinc-300'}>
-                    {displayText || '\u2014'}
+                    {displayText || '—'}
                 </pre>
             </div>
             <button
                 onClick={handleCopy}
                 disabled={!displayText}
+                aria-live={'polite'}
+                aria-label={copied ? 'Copied to clipboard' : 'Copy command to clipboard'}
                 className={[
                     'flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                     copied
@@ -438,7 +440,7 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
                     'disabled:cursor-not-allowed disabled:opacity-40',
                 ].join(' ')}
             >
-                {copied ? '\u2713 Copied' : 'Copy'}
+                {copied ? '✓ Copied' : 'Copy'}
             </button>
         </div>
     );
@@ -642,7 +644,7 @@ export default () => {
                                     : 'border-zinc-600 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:text-white',
                             ].join(' ')}
                         >
-                            {advancedMode ? '\u2699 Advanced' : '\u2726 Basic'}
+                            {advancedMode ? '⚙ Advanced' : '✦ Basic'}
                         </button>
                     </div>
 
@@ -677,7 +679,7 @@ export default () => {
                             {/* Memory */}
                             <CollapsibleSection
                                 id={'memory'}
-                                title={'\ud83d\udcbe Memory Configuration'}
+                                title={'💾 Memory Configuration'}
                                 collapsed={collapsedSections.has('memory')}
                                 onToggle={toggleSection}
                             >
@@ -691,7 +693,7 @@ export default () => {
                             {/* Garbage Collector */}
                             <CollapsibleSection
                                 id={'gc'}
-                                title={'\ud83d\uddd1\ufe0f Garbage Collector'}
+                                title={'🗑️ Garbage Collector'}
                                 collapsed={collapsedSections.has('gc')}
                                 onToggle={toggleSection}
                                 badge={!advancedMode && gcOptions.length > visibleGcOptions.length
@@ -787,7 +789,7 @@ export default () => {
                                     disabled={!canStartupUpdate || saving}
                                     onClick={handleSave}
                                 >
-                                    {saving ? 'Saving\u2026' : 'Apply'}
+                                    {saving ? 'Saving…' : 'Apply'}
                                 </Button>
                                 <Button
                                     disabled={!canStartupUpdate || saving || (data?.isUsingEggDefault ?? true)}
