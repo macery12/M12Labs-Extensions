@@ -18,18 +18,41 @@ namespace Everest\Extensions\Packages\startup_editor;
 class MinecraftStartupOptions
 {
     public const OPTIONS = [
-        // ── Core JVM flags (always-on baseline for Pterodactyl containers) ──
+        // ── Core baseline (always-on; provides --nogui for container environments) ──
         'core_flags' => [
-            'jvm_flags'    => '-XX:+AlwaysPreTouch -XX:+DisableExplicitGC'
-                . ' -XX:+UseContainerSupport -XX:+ParallelRefProcEnabled',
+            'jvm_flags'    => '',
+            'server_args'  => '--nogui',
+            'loader_compat' => null,
+            'min_java'     => 8,
+        ],
+
+        // ── Core JVM Performance Toggles (individually shown, always enabled) ──
+        'always_pre_touch' => [
+            'jvm_flags'    => '-XX:+AlwaysPreTouch',
+            'server_args'  => '',
+            'loader_compat' => null,
+            'min_java'     => 8,
+        ],
+        'disable_explicit_gc' => [
+            'jvm_flags'    => '-XX:+DisableExplicitGC',
+            'server_args'  => '',
+            'loader_compat' => null,
+            'min_java'     => 8,
+        ],
+        'use_container_support' => [
+            'jvm_flags'    => '-XX:+UseContainerSupport',
+            'server_args'  => '',
+            'loader_compat' => null,
+            'min_java'     => 8,
+        ],
+        'parallel_ref_proc_enabled' => [
+            'jvm_flags'    => '-XX:+ParallelRefProcEnabled',
             'server_args'  => '',
             'loader_compat' => null,
             'min_java'     => 8,
         ],
 
         // ── Garbage Collection ────────────────────────────────────────────
-        // NOTE: AlwaysPreTouch, DisableExplicitGC, ParallelRefProcEnabled are
-        // in core_flags above and must not be duplicated here.
         'aikar_g1gc' => [
             'jvm_flags'    => '-XX:+UseG1GC -XX:MaxGCPauseMillis=200'
                 . ' -XX:+UnlockExperimentalVMOptions'
@@ -99,32 +122,6 @@ class MinecraftStartupOptions
             'loader_compat' => null,
             'min_java'     => 8,
         ],
-
-        // ── Server Arguments ─────────────────────────────────────────────
-        'nogui' => [
-            'jvm_flags'    => '',
-            'server_args'  => '--nogui',
-            'loader_compat' => null,
-            'min_java'     => 8,
-        ],
-        'force_upgrade' => [
-            'jvm_flags'    => '',
-            'server_args'  => '--forceUpgrade',
-            'loader_compat' => null,
-            'min_java'     => 8,
-        ],
-        'bonus_chest' => [
-            'jvm_flags'    => '',
-            'server_args'  => '--bonusChest',
-            'loader_compat' => ['vanilla', 'paper', 'purpur', 'spigot', 'bukkit', 'folia'],
-            'min_java'     => 8,
-        ],
-        'eraseCache' => [
-            'jvm_flags'    => '',
-            'server_args'  => '--eraseCache',
-            'loader_compat' => ['forge', 'neoforge'],
-            'min_java'     => 8,
-        ],
     ];
 
     /**
@@ -133,22 +130,22 @@ class MinecraftStartupOptions
      */
     public const PRESETS = [
         'basic_optimize' => [
-            'options' => ['core_flags', 'aikar_g1gc', 'jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
+            'options' => ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support', 'parallel_ref_proc_enabled', 'aikar_g1gc', 'jit_optimize', 'terminal_compat', 'log4j_fix'],
         ],
         'large_modpack' => [
-            'options' => ['core_flags', 'aikar_g1gc', 'jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
+            'options' => ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support', 'parallel_ref_proc_enabled', 'aikar_g1gc', 'jit_optimize', 'terminal_compat', 'log4j_fix'],
         ],
         'paper_performance' => [
-            'options' => ['core_flags', 'aikar_g1gc', 'string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix', 'nogui'],
+            'options' => ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support', 'parallel_ref_proc_enabled', 'aikar_g1gc', 'string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix'],
         ],
         'low_latency' => [
-            'options' => ['core_flags', 'zgc', 'jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
+            'options' => ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support', 'parallel_ref_proc_enabled', 'zgc', 'jit_optimize', 'terminal_compat', 'log4j_fix'],
         ],
         'vanilla_clean' => [
-            'options' => ['core_flags', 'g1gc_basic', 'jit_optimize', 'log4j_fix', 'nogui'],
+            'options' => ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support', 'parallel_ref_proc_enabled', 'g1gc_basic', 'jit_optimize', 'log4j_fix'],
         ],
         'security_hardened' => [
-            'options' => ['core_flags', 'aikar_g1gc', 'jit_optimize', 'log4j_fix', 'terminal_compat', 'nogui'],
+            'options' => ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support', 'parallel_ref_proc_enabled', 'aikar_g1gc', 'jit_optimize', 'log4j_fix', 'terminal_compat'],
         ],
     ];
 
@@ -169,6 +166,11 @@ class MinecraftStartupOptions
      * Xmx is expressed via MaxRAMPercentage=80.0 so that the JVM honours the
      * container memory limit set by Pterodactyl without needing explicit math
      * on {{SERVER_MEMORY}}.
+     *
+     * core_flags always provides --nogui (required in headless container environments).
+     * The four Core JVM Performance Toggle options (always_pre_touch, disable_explicit_gc,
+     * use_container_support, parallel_ref_proc_enabled) provide individual JVM flags
+     * that are always included via the frontend's buildSelectedOptions() helper.
      *
      * @param  string[]  $selectedOptionIds  Option IDs pre-validated against the allowlist by
      *                                        SaveStartupEditorRequest.  Unknown IDs are silently

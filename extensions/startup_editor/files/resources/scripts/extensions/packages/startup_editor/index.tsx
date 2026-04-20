@@ -29,8 +29,17 @@ import {
 
 const FLASH_KEY = 'server:extensions:startup_editor';
 
-/** Non-GC, non-core categories shown as toggleable checkboxes. */
-const TOGGLE_CATEGORIES: OptionCategory[] = ['performance', 'server', 'security'];
+/** Option IDs always included in every generated command. */
+const ALWAYS_INCLUDED_IDS = [
+    'core_flags',
+    'always_pre_touch',
+    'disable_explicit_gc',
+    'use_container_support',
+    'parallel_ref_proc_enabled',
+] as const;
+
+/** Toggleable (checkbox) categories. The 'server' category is always-on and handled separately. */
+const TOGGLE_CATEGORIES: OptionCategory[] = ['performance', 'security'];
 
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
 
@@ -58,16 +67,14 @@ function Tooltip({ text, children }: { text: string; children: ReactNode }) {
 function InfoBadge({ text }: { text: string }) {
     return (
         <Tooltip text={text}>
-            <span
-                className={'cursor-help rounded-full border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[10px] font-medium text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'}
-            >
+            <span className={'cursor-help rounded-full border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[10px] font-medium text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'}>
                 ?
             </span>
         </Tooltip>
     );
 }
 
-// ─── Loader badge ─────────────────────────────────────────────────────────────
+// ─── LoaderBadge ─────────────────────────────────────────────────────────────
 
 function LoaderBadge({ loader }: { loader: string | null }) {
     if (!loader) return null;
@@ -79,18 +86,49 @@ function LoaderBadge({ loader }: { loader: string | null }) {
     );
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
+// ─── CollapsibleSection ───────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+interface CollapsibleSectionProps {
+    id: string;
+    title: string;
+    children: ReactNode;
+    collapsed: boolean;
+    onToggle: (id: string) => void;
+    badge?: string;
+}
+
+function CollapsibleSection({ id, title, children, collapsed, onToggle, badge }: CollapsibleSectionProps) {
     return (
-        <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-5'}>
-            <h3 className={'mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400'}>{title}</h3>
-            {children}
+        <div className={'rounded-xl border border-zinc-700 bg-zinc-800'}>
+            <button
+                className={'flex w-full items-center justify-between px-4 py-3 text-left'}
+                onClick={() => onToggle(id)}
+                aria-expanded={!collapsed}
+            >
+                <div className={'flex items-center gap-2'}>
+                    <h3 className={'text-xs font-semibold uppercase tracking-wider text-zinc-400'}>{title}</h3>
+                    {badge && (
+                        <span className={'rounded-full bg-zinc-700 px-1.5 py-px text-[10px] font-medium text-zinc-400'}>
+                            {badge}
+                        </span>
+                    )}
+                </div>
+                <span className={'text-zinc-500 ' + (collapsed ? '' : '[transform:rotate(180deg)]')}>
+                    <svg width={'12'} height={'12'} viewBox={'0 0 12 12'} fill={'none'}>
+                        <path d={'M2 4l4 4 4-4'} stroke={'currentColor'} strokeWidth={'1.5'} strokeLinecap={'round'} strokeLinejoin={'round'} />
+                    </svg>
+                </span>
+            </button>
+            {!collapsed && (
+                <div className={'border-t border-zinc-700 px-4 pb-4 pt-3'}>
+                    {children}
+                </div>
+            )}
         </div>
     );
 }
 
-// ─── GC option card (radio style) ────────────────────────────────────────────
+// ─── GC option card (radio style, compact) ───────────────────────────────────
 
 interface GcCardProps {
     option: MinecraftOption;
@@ -100,42 +138,40 @@ interface GcCardProps {
 }
 
 function GcCard({ option, selected, onSelect, disabled }: GcCardProps) {
-    const borderClass = selected
-        ? 'border-blue-500 bg-blue-900/25 shadow-sm shadow-blue-900/30'
+    const stateClass = selected
+        ? 'border-zinc-600 bg-zinc-700/40 border-l-2 border-l-blue-500'
         : disabled
         ? 'border-zinc-700 bg-zinc-900/50 opacity-40 cursor-not-allowed'
-        : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500 cursor-pointer';
+        : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/50 cursor-pointer';
 
     return (
         <div
-            className={`flex items-start gap-3 rounded-lg border p-3 transition-all ${borderClass}`}
+            className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-all ${stateClass}`}
             onClick={() => { if (!disabled) onSelect(option.id as GcOptionId); }}
             role={'radio'}
             aria-checked={selected}
             tabIndex={disabled ? -1 : 0}
             onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !disabled) onSelect(option.id as GcOptionId); }}
         >
-            {/* Radio dot */}
-            <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-blue-500 bg-blue-500' : 'border-zinc-500 bg-transparent'}`}>
+            <span className={`flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-blue-500 bg-blue-500' : 'border-zinc-500'}`}>
                 {selected && <span className={'h-1.5 w-1.5 rounded-full bg-white'} />}
             </span>
-
             <div className={'min-w-0 flex-1'}>
-                <div className={'flex flex-wrap items-center gap-2'}>
-                    <span className={'text-sm font-semibold text-white'}>{option.name}</span>
+                <div className={'flex flex-wrap items-center gap-1.5'}>
+                    <span className={'text-sm font-medium text-white'}>{option.name}</span>
                     {option.recommended && (
-                        <span className={'rounded-full bg-yellow-600/90 px-1.5 py-px text-xs font-medium text-yellow-100'}>
-                            ⭐ Recommended
+                        <span className={'rounded-full bg-yellow-600/80 px-1.5 py-px text-[10px] font-medium text-yellow-100'}>
+                            Recommended
                         </span>
                     )}
                     {option.minJava > 8 && (
-                        <span className={'rounded-full border border-zinc-600 bg-zinc-700 px-1.5 py-px text-xs text-zinc-300'}>
+                        <span className={'rounded-full border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[10px] text-zinc-400'}>
                             Java {option.minJava}+
                         </span>
                     )}
                     <InfoBadge text={option.tooltip} />
                 </div>
-                <p className={'mt-1 text-xs leading-relaxed text-zinc-300'}>{option.description}</p>
+                <p className={'text-xs text-zinc-400'}>{option.description}</p>
             </div>
         </div>
     );
@@ -144,35 +180,35 @@ function GcCard({ option, selected, onSelect, disabled }: GcCardProps) {
 // ─── GC "None" card ───────────────────────────────────────────────────────────
 
 function GcNoneCard({ selected, onSelect, disabled }: { selected: boolean; onSelect: () => void; disabled: boolean }) {
-    const borderClass = selected
-        ? 'border-blue-500 bg-blue-900/25'
+    const stateClass = selected
+        ? 'border-zinc-600 bg-zinc-700/40 border-l-2 border-l-blue-500'
         : disabled
         ? 'border-zinc-700 bg-zinc-900/50 opacity-40 cursor-not-allowed'
-        : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500 cursor-pointer';
+        : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/50 cursor-pointer';
 
     return (
         <div
-            className={`flex items-center gap-3 rounded-lg border p-3 transition-all ${borderClass}`}
+            className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-all ${stateClass}`}
             onClick={() => { if (!disabled) onSelect(); }}
             role={'radio'}
             aria-checked={selected}
             tabIndex={disabled ? -1 : 0}
             onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !disabled) onSelect(); }}
         >
-            <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-blue-500 bg-blue-500' : 'border-zinc-500 bg-transparent'}`}>
+            <span className={`flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-blue-500 bg-blue-500' : 'border-zinc-500'}`}>
                 {selected && <span className={'h-1.5 w-1.5 rounded-full bg-white'} />}
             </span>
             <div>
-                <span className={'text-sm font-semibold text-white'}>No GC Selection</span>
-                <p className={'mt-0.5 text-xs text-zinc-400'}>Run with JVM defaults — no explicit GC flags applied.</p>
+                <span className={'text-sm font-medium text-white'}>No GC Selection</span>
+                <p className={'text-xs text-zinc-400'}>Run with JVM defaults — no explicit GC flags applied.</p>
             </div>
         </div>
     );
 }
 
-// ─── Option card (checkbox) ───────────────────────────────────────────────────
+// ─── Option row (checkbox, compact) ──────────────────────────────────────────
 
-interface OptionCardProps {
+interface OptionRowProps {
     option: MinecraftOption;
     checked: boolean;
     disabled: boolean;
@@ -180,87 +216,87 @@ interface OptionCardProps {
     onToggle: (id: string) => void;
 }
 
-function OptionCard({ option, checked, disabled, incompatible, onToggle }: OptionCardProps) {
-    const borderClass = checked
-        ? 'border-blue-500 bg-blue-900/20'
+function OptionRow({ option, checked, disabled, incompatible, onToggle }: OptionRowProps) {
+    const stateClass = checked
+        ? 'border-zinc-600 bg-zinc-700/30 border-l-2 border-l-blue-500'
         : incompatible
         ? 'border-zinc-700 bg-zinc-900/40 opacity-50'
         : disabled
         ? 'border-zinc-700 bg-zinc-900/40 opacity-40 cursor-not-allowed'
-        : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500 cursor-pointer';
+        : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/50 cursor-pointer';
 
     return (
         <div
-            className={`flex items-start gap-3 rounded-lg border p-3 transition-all ${borderClass}`}
+            className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-all ${stateClass}`}
             onClick={() => { if (!disabled && !incompatible) onToggle(option.id); }}
             role={'checkbox'}
             aria-checked={checked}
             tabIndex={disabled || incompatible ? -1 : 0}
             onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !disabled && !incompatible) onToggle(option.id); }}
         >
-            <span className={`mt-0.5 h-4 w-4 flex-shrink-0 rounded border-2 ${checked ? 'border-blue-500 bg-blue-500' : 'border-zinc-500 bg-transparent'}`}>
+            <span className={`flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded border-2 ${checked ? 'border-blue-500 bg-blue-500' : 'border-zinc-500'}`}>
                 {checked && (
                     <svg viewBox={'0 0 10 10'} fill={'none'} className={'h-full w-full'}>
                         <polyline points={'1.5,5 4,7.5 8.5,2.5'} stroke={'white'} strokeWidth={'1.5'} strokeLinecap={'round'} strokeLinejoin={'round'} />
                     </svg>
                 )}
             </span>
-
             <div className={'min-w-0 flex-1'}>
-                <div className={'flex flex-wrap items-center gap-2'}>
+                <div className={'flex flex-wrap items-center gap-1.5'}>
                     <span className={'text-sm font-medium text-white'}>{option.name}</span>
                     {option.recommended && !incompatible && (
-                        <span className={'rounded-full bg-yellow-600/80 px-1.5 py-px text-xs font-medium text-yellow-100'}>
-                            ⭐ Recommended
+                        <span className={'rounded-full bg-yellow-600/70 px-1.5 py-px text-[10px] font-medium text-yellow-100'}>
+                            Recommended
                         </span>
                     )}
                     {incompatible && (
-                        <span className={'rounded-full border border-red-800 bg-red-900/60 px-1.5 py-px text-xs font-medium text-red-300'}>
-                            ⚠ Incompatible
+                        <span className={'rounded-full border border-red-800 bg-red-900/60 px-1.5 py-px text-[10px] font-medium text-red-300'}>
+                            Incompatible
                         </span>
                     )}
                     {option.loaderCompat && (
-                        <span className={'rounded-full border border-zinc-600 bg-zinc-700 px-1.5 py-px text-xs text-zinc-300'}>
+                        <span className={'rounded-full border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[10px] text-zinc-400'}>
                             {option.loaderCompat.map(l => LOADER_LABELS[l] ?? l).join(', ')} only
                         </span>
                     )}
                     {option.minJava > 8 && (
-                        <span className={'rounded-full border border-zinc-600 bg-zinc-700 px-1.5 py-px text-xs text-zinc-300'}>
+                        <span className={'rounded-full border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[10px] text-zinc-400'}>
                             Java {option.minJava}+
                         </span>
                     )}
                     <InfoBadge text={option.tooltip} />
                 </div>
-                <p className={'mt-1 text-xs leading-relaxed text-zinc-300'}>{option.description}</p>
+                <p className={'text-xs text-zinc-400'}>{option.description}</p>
             </div>
         </div>
     );
 }
 
-// ─── Core flags row (always-on, locked) ──────────────────────────────────────
+// ─── CoreFlagRow (individual always-on item) ──────────────────────────────────
 
-function CoreFlagsRow() {
-    const option = MINECRAFT_OPTIONS.find(o => o.id === 'core_flags')!;
+function CoreFlagRow({ option }: { option: MinecraftOption }) {
     return (
-        <div className={'flex items-start gap-3 rounded-lg border border-zinc-600 bg-zinc-700/40 p-3'}>
-            <span className={'mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border-2 border-blue-500 bg-blue-500 text-[10px] text-white'}>
-                🔒
+        <div className={'flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-2'}>
+            <span className={'flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded border-2 border-blue-600 bg-blue-600'}>
+                <svg viewBox={'0 0 10 10'} fill={'none'} className={'h-full w-full'}>
+                    <polyline points={'1.5,5 4,7.5 8.5,2.5'} stroke={'white'} strokeWidth={'1.5'} strokeLinecap={'round'} strokeLinejoin={'round'} />
+                </svg>
             </span>
             <div className={'min-w-0 flex-1'}>
-                <div className={'flex flex-wrap items-center gap-2'}>
+                <div className={'flex flex-wrap items-center gap-1.5'}>
                     <span className={'text-sm font-medium text-white'}>{option.name}</span>
-                    <span className={'rounded-full border border-blue-700 bg-blue-900/50 px-1.5 py-px text-xs font-medium text-blue-300'}>
-                        Always enabled
+                    <span className={'rounded-full border border-blue-800 bg-blue-900/40 px-1.5 py-px text-[10px] font-medium text-blue-300'}>
+                        Always on
                     </span>
                     <InfoBadge text={option.tooltip} />
                 </div>
-                <p className={'mt-1 text-xs leading-relaxed text-zinc-300'}>{option.description}</p>
+                <p className={'text-xs text-zinc-400'}>{option.description}</p>
             </div>
         </div>
     );
 }
 
-// ─── Preset card ─────────────────────────────────────────────────────────────
+// ─── PresetCard (left accent strip) ──────────────────────────────────────────
 
 interface PresetCardProps {
     preset: Preset;
@@ -272,34 +308,38 @@ function PresetCard({ preset, active, onApply }: PresetCardProps) {
     return (
         <div
             className={[
-                'group cursor-pointer rounded-lg border p-3 transition-all',
-                active ? 'border-blue-500 bg-blue-900/20 shadow-sm shadow-blue-900/30' : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500',
+                'group cursor-pointer rounded-lg border transition-all',
+                active
+                    ? 'border-zinc-500 bg-zinc-700/40'
+                    : 'border-transparent hover:border-zinc-700 hover:bg-zinc-800/40',
             ].join(' ')}
             onClick={() => onApply(preset)}
             role={'button'}
             tabIndex={0}
             onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') onApply(preset); }}
         >
-            <div className={'flex items-start gap-2'}>
-                <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${preset.accentColor}`} />
+            <div className={'flex items-start gap-2 px-2.5 py-2'}>
+                <span className={`mt-1.5 h-2 w-1.5 flex-shrink-0 rounded-full ${preset.accentColor}`} />
                 <div className={'min-w-0 flex-1'}>
-                    <div className={'flex items-center gap-2'}>
-                        <p className={'text-sm font-semibold text-white'}>{preset.name}</p>
-                        <InfoBadge text={preset.tooltip} />
+                    <div className={'flex items-center gap-1.5'}>
+                        <p className={`text-sm font-medium leading-tight ${active ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}>
+                            {preset.name}
+                        </p>
+                        {active && <span className={'text-xs text-blue-400'}>{'✓'}</span>}
                     </div>
-                    <p className={'mt-1 text-xs leading-relaxed text-zinc-300'}>{preset.description}</p>
                     {preset.recommendedLoader && (
-                        <span className={'mt-1.5 inline-block rounded-full border border-zinc-600 bg-zinc-700 px-1.5 py-px text-xs text-zinc-300'}>
+                        <p className={'text-[10px] text-zinc-500'}>
                             Best for {LOADER_LABELS[preset.recommendedLoader]}
-                        </span>
+                        </p>
                     )}
                 </div>
+                <InfoBadge text={preset.tooltip} />
             </div>
         </div>
     );
 }
 
-// ─── Memory input ─────────────────────────────────────────────────────────────
+// ─── Memory section ───────────────────────────────────────────────────────────
 
 interface MemorySectionProps {
     xmsMb: number;
@@ -316,28 +356,31 @@ function MemorySection({ xmsMb, onChange, disabled }: MemorySectionProps) {
     };
 
     return (
-        <Section title={'💾 Memory Configuration'}>
-            {/* Xmx — auto */}
-            <div className={'mb-4 rounded-lg border border-zinc-700 bg-zinc-900 p-3'}>
-                <div className={'flex items-center gap-2'}>
-                    <span className={'text-sm font-semibold text-white'}>Xmx — Maximum Heap</span>
-                    <span className={'rounded-full border border-green-800 bg-green-900/50 px-1.5 py-px text-xs font-medium text-green-300'}>
-                        Auto-configured
-                    </span>
-                    <InfoBadge text={'Xmx is set to 80% of your container memory limit via -XX:MaxRAMPercentage=80.0. This ensures the JVM respects Pterodactyl\'s container limits without needing explicit math on {{SERVER_MEMORY}}.'} />
+        <div className={'space-y-2'}>
+            <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
+                <div>
+                    <div className={'flex items-center gap-1.5'}>
+                        <span className={'text-sm font-medium text-white'}>Xmx \u2014 Maximum Heap</span>
+                        <span className={'rounded-full border border-green-800 bg-green-900/40 px-1.5 py-px text-[10px] font-medium text-green-300'}>
+                            Auto
+                        </span>
+                        <InfoBadge text={"Xmx is set to 80% of your container memory limit via -XX:MaxRAMPercentage=80.0. This ensures the JVM respects Pterodactyl's container limits without needing explicit math on {{SERVER_MEMORY}}."} />
+                    </div>
+                    <p className={'text-xs text-zinc-500'}>
+                        <span className={'font-mono'}>-XX:MaxRAMPercentage=80.0</span> \u2014 80% of container memory
+                    </p>
                 </div>
-                <p className={'mt-1.5 text-xs leading-relaxed text-zinc-400'}>
-                    Set to <span className={'font-mono text-zinc-200'}>-XX:MaxRAMPercentage=80.0</span> (80% of container memory). Since the JVM uses 80% of the container limit, allocate your server memory to 125% of your desired JVM heap (e.g. 5 GB container → ~4 GB JVM).
-                </p>
             </div>
 
-            {/* Xms — user input */}
-            <div>
-                <label htmlFor={inputId} className={'mb-1.5 flex items-center gap-2 text-sm font-semibold text-white'}>
-                    Xms — Initial Heap (MB)
-                    <InfoBadge text={'Lower Xms reduces startup memory usage. Increase for more consistent performance (less GC pressure at boot). Recommend ~10% of your allocated server RAM.'} />
-                </label>
-                <div className={'flex items-center gap-3'}>
+            <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
+                <div>
+                    <label htmlFor={inputId} className={'flex items-center gap-1.5 text-sm font-medium text-white'}>
+                        Xms \u2014 Initial Heap
+                        <InfoBadge text={'Lower Xms reduces startup memory usage. Increase for more consistent performance (less GC pressure at boot). Recommend ~10% of your allocated server RAM.'} />
+                    </label>
+                    <p className={'text-xs text-zinc-500'}>~10% of allocated RAM (e.g. 256 MB for a 2.5 GB server)</p>
+                </div>
+                <div className={'flex items-center gap-2'}>
                     <input
                         id={inputId}
                         type={'number'}
@@ -348,18 +391,56 @@ function MemorySection({ xmsMb, onChange, disabled }: MemorySectionProps) {
                         onChange={handleChange}
                         disabled={disabled}
                         className={[
-                            'w-32 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-1.5 text-sm text-white',
+                            'w-24 rounded-lg border border-zinc-600 bg-zinc-800 px-2.5 py-1.5 text-right text-sm text-white',
                             'focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
                             'disabled:cursor-not-allowed disabled:opacity-50',
                         ].join(' ')}
                     />
-                    <span className={'text-sm text-zinc-400'}>MB</span>
+                    <span className={'text-xs text-zinc-500'}>MB</span>
                 </div>
-                <p className={'mt-1.5 text-xs leading-relaxed text-zinc-500'}>
-                    Minimum: 64 MB. Recommend ~10% of allocated RAM (e.g. 256 MB for a 2.5 GB server).
-                </p>
             </div>
-        </Section>
+        </div>
+    );
+}
+
+// ─── Command preview with copy button ────────────────────────────────────────
+
+function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
+    const [copied, setCopied] = useState(false);
+    const displayText = command || raw;
+
+    const handleCopy = () => {
+        if (!displayText) return;
+        navigator.clipboard.writeText(displayText).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    return (
+        <div className={'flex min-w-0 flex-1 items-start gap-3'}>
+            <div className={'min-w-0 flex-1'}>
+                <p className={'mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500'}>
+                    Last saved command
+                </p>
+                <pre className={'overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-zinc-300'}>
+                    {displayText || '\u2014'}
+                </pre>
+            </div>
+            <button
+                onClick={handleCopy}
+                disabled={!displayText}
+                className={[
+                    'flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                    copied
+                        ? 'border-green-700 bg-green-900/40 text-green-300'
+                        : 'border-zinc-600 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:text-white',
+                    'disabled:cursor-not-allowed disabled:opacity-40',
+                ].join(' ')}
+            >
+                {copied ? '\u2713 Copied' : 'Copy'}
+            </button>
+        </div>
     );
 }
 
@@ -381,6 +462,10 @@ export default () => {
     const [xmsMb, setXmsMb] = useState(256);
     // Active preset indicator
     const [activePreset, setActivePreset] = useState<string | null>(null);
+    // UI mode: basic hides non-recommended options
+    const [advancedMode, setAdvancedMode] = useState(false);
+    // Collapsed section IDs
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set<string>());
 
     const [canStartupRead]   = usePermissions('startup.read');
     const [canStartupUpdate] = usePermissions('startup.update');
@@ -418,6 +503,16 @@ export default () => {
         );
     }
 
+    // ── Section collapse helper ───────────────────────────────────────────
+
+    const toggleSection = (id: string) => {
+        setCollapsedSections(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) { next.delete(id); } else { next.add(id); }
+            return next;
+        });
+    };
+
     // ── Option toggle helpers ─────────────────────────────────────────────
 
     const toggleOption = (id: string) => {
@@ -445,10 +540,10 @@ export default () => {
     const isUnavailable = (option: MinecraftOption): boolean =>
         !isCompatibleWithLoader(option, detectedLoader);
 
-    // ── Build payload helper ──────────────────────────────────────────────
+    // ── Build payload ─────────────────────────────────────────────────────
 
     const buildSelectedOptions = (): string[] => {
-        const ids: string[] = ['core_flags'];
+        const ids: string[] = [...ALWAYS_INCLUDED_IDS];
         if (selectedGc) ids.push(selectedGc);
         ids.push(...selected);
         return ids;
@@ -494,6 +589,18 @@ export default () => {
         }
     };
 
+    // ── Visibility helpers ────────────────────────────────────────────────
+
+    /** In basic mode, only recommended (or alwaysEnabled) options are visible. */
+    const filterByMode = (opts: MinecraftOption[]) =>
+        advancedMode ? opts : opts.filter(o => o.recommended || o.alwaysEnabled);
+
+    const gcOptions = MINECRAFT_OPTIONS.filter(o => (GC_OPTION_IDS as readonly string[]).includes(o.id));
+    const visibleGcOptions = filterByMode(gcOptions);
+
+    /** Always-on Core JVM Performance Toggle items (server category). */
+    const coreToggleOptions = optionsByCategory('server').filter(o => o.alwaysEnabled);
+
     // ── Render ────────────────────────────────────────────────────────────
 
     return (
@@ -505,43 +612,50 @@ export default () => {
                     <Spinner size={'large'} />
                 </div>
             ) : (
-                <div className={'space-y-5'}>
+                <div className={'space-y-4 pb-28'}>
+
                     {/* ── Header ── */}
-                    <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-5'}>
-                        <div className={'flex flex-wrap items-center gap-3'}>
-                            <span className={'text-2xl'} aria-hidden>⛏️</span>
-                            <h2 className={'text-lg font-bold text-white'}>Minecraft Startup Editor</h2>
+                    <div className={'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3'}>
+                        <div className={'flex flex-wrap items-center gap-2'}>
+                            <span aria-hidden>{'⛏️'}</span>
+                            <h2 className={'text-base font-bold text-white'}>Minecraft Startup Editor</h2>
                             {data?.isUsingEggDefault ? (
-                                <span className={'rounded-full border border-green-700 bg-green-900/50 px-2 py-0.5 text-xs font-medium text-green-300'}>
-                                    Using egg default
+                                <span className={'rounded-full border border-green-700 bg-green-900/40 px-2 py-0.5 text-xs text-green-300'}>
+                                    Egg default
                                 </span>
                             ) : (
-                                <span className={'rounded-full border border-yellow-600 bg-yellow-900/50 px-2 py-0.5 text-xs font-medium text-yellow-300'}>
-                                    Custom override active
+                                <span className={'rounded-full border border-yellow-600 bg-yellow-900/40 px-2 py-0.5 text-xs text-yellow-300'}>
+                                    Custom override
                                 </span>
                             )}
                             <LoaderBadge loader={detectedLoader} />
+                            {data?.eggName && (
+                                <span className={'text-xs text-zinc-500'}>{data.eggName}</span>
+                            )}
                         </div>
-                        {data?.eggName && (
-                            <p className={'mt-1.5 text-sm text-zinc-400'}>
-                                Egg: <span className={'text-zinc-200'}>{data.eggName}</span>
-                            </p>
-                        )}
-                        <p className={'mt-2 text-xs leading-relaxed text-zinc-500'}>
-                            Select a preset or configure individual options. Options incompatible with your loader or with each other are blocked automatically. No raw command editing — all commands are generated from the safe, curated allowlist.
-                        </p>
+                        <button
+                            onClick={() => setAdvancedMode(m => !m)}
+                            className={[
+                                'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                                advancedMode
+                                    ? 'border-blue-700 bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                                    : 'border-zinc-600 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:text-white',
+                            ].join(' ')}
+                        >
+                            {advancedMode ? '\u2699 Advanced' : '\u2726 Basic'}
+                        </button>
                     </div>
 
                     {/* ── Two-column layout ── */}
-                    <div className={'flex flex-col gap-5 lg:flex-row lg:items-start'}>
+                    <div className={'flex flex-col gap-4 lg:flex-row lg:items-start'}>
 
-                        {/* ── Presets side panel ── */}
-                        <aside className={'lg:w-64 lg:flex-shrink-0'}>
-                            <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-4'}>
-                                <h3 className={'mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400'}>
+                        {/* ── Left: Presets ── */}
+                        <aside className={'lg:w-52 lg:flex-shrink-0'}>
+                            <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-3'}>
+                                <h3 className={'mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500'}>
                                     Presets
                                 </h3>
-                                <div className={'space-y-2'}>
+                                <div className={'space-y-0.5'}>
                                     {PRESETS.map(preset => (
                                         <PresetCard
                                             key={preset.id}
@@ -551,29 +665,46 @@ export default () => {
                                         />
                                     ))}
                                 </div>
-                                <p className={'mt-3 text-xs leading-relaxed text-zinc-500'}>
-                                    Selecting a preset replaces your current selection. Fine-tune individual options on the right.
+                                <p className={'mt-2 px-1 text-[10px] leading-relaxed text-zinc-600'}>
+                                    Selecting a preset replaces your current selection.
                                 </p>
                             </div>
                         </aside>
 
-                        {/* ── Main configuration area ── */}
-                        <div className={'flex-1 space-y-5'}>
+                        {/* ── Right: Configuration sections ── */}
+                        <div className={'flex-1 space-y-3'}>
 
                             {/* Memory */}
-                            <MemorySection
-                                xmsMb={xmsMb}
-                                onChange={setXmsMb}
-                                disabled={!canStartupUpdate || saving}
-                            />
+                            <CollapsibleSection
+                                id={'memory'}
+                                title={'\ud83d\udcbe Memory Configuration'}
+                                collapsed={collapsedSections.has('memory')}
+                                onToggle={toggleSection}
+                            >
+                                <MemorySection
+                                    xmsMb={xmsMb}
+                                    onChange={setXmsMb}
+                                    disabled={!canStartupUpdate || saving}
+                                />
+                            </CollapsibleSection>
 
-                            {/* GC Selection */}
-                            <Section title={'🗑️ Garbage Collector'}>
-                                <p className={'mb-3 text-xs leading-relaxed text-zinc-400'}>
-                                    Choose a garbage collector. Select "No GC Selection" to run with JVM defaults.
-                                </p>
-                                <div role={'radiogroup'} aria-label={'Garbage Collector'} className={'space-y-2'}>
-                                    {MINECRAFT_OPTIONS.filter(o => (GC_OPTION_IDS as readonly string[]).includes(o.id)).map(option => (
+                            {/* Garbage Collector */}
+                            <CollapsibleSection
+                                id={'gc'}
+                                title={'\ud83d\uddd1\ufe0f Garbage Collector'}
+                                collapsed={collapsedSections.has('gc')}
+                                onToggle={toggleSection}
+                                badge={!advancedMode && gcOptions.length > visibleGcOptions.length
+                                    ? `+${gcOptions.length - visibleGcOptions.length} in Advanced`
+                                    : undefined}
+                            >
+                                {!advancedMode && (
+                                    <p className={'mb-2 text-xs text-zinc-500'}>
+                                        Showing recommended options only. Enable Advanced for all GC options.
+                                    </p>
+                                )}
+                                <div role={'radiogroup'} aria-label={'Garbage Collector'} className={'space-y-1.5'}>
+                                    {visibleGcOptions.map(option => (
                                         <GcCard
                                             key={option.id}
                                             option={option}
@@ -582,31 +713,51 @@ export default () => {
                                             disabled={!canStartupUpdate || saving}
                                         />
                                     ))}
-                                    <GcNoneCard
-                                        selected={selectedGc === null}
-                                        onSelect={() => { setSelectedGc(null); setActivePreset(null); }}
-                                        disabled={!canStartupUpdate || saving}
-                                    />
+                                    {advancedMode && (
+                                        <GcNoneCard
+                                            selected={selectedGc === null}
+                                            onSelect={() => { setSelectedGc(null); setActivePreset(null); }}
+                                            disabled={!canStartupUpdate || saving}
+                                        />
+                                    )}
                                 </div>
-                            </Section>
+                            </CollapsibleSection>
 
-                            {/* Core flags (always-on) */}
-                            <Section title={'🔒 Core JVM Flags — Always Enabled'}>
-                                <p className={'mb-3 text-xs leading-relaxed text-zinc-400'}>
-                                    These flags are always included in the generated command. They are required for Pterodactyl container compatibility and cannot be disabled.
+                            {/* Core JVM Performance Toggles */}
+                            <CollapsibleSection
+                                id={'core-toggles'}
+                                title={CATEGORY_LABELS['server']}
+                                collapsed={collapsedSections.has('core-toggles')}
+                                onToggle={toggleSection}
+                            >
+                                <p className={'mb-2 text-xs text-zinc-500'}>
+                                    Always included. Required for Pterodactyl container compatibility.
                                 </p>
-                                <CoreFlagsRow />
-                            </Section>
+                                <div className={'space-y-1.5'}>
+                                    {coreToggleOptions.map(option => (
+                                        <CoreFlagRow key={option.id} option={option} />
+                                    ))}
+                                </div>
+                            </CollapsibleSection>
 
-                            {/* Toggle sections */}
+                            {/* Performance + Security */}
                             {TOGGLE_CATEGORIES.map(category => {
-                                const opts = optionsByCategory(category).filter(o => !o.alwaysEnabled);
+                                const allOpts = optionsByCategory(category).filter(o => !o.alwaysEnabled);
+                                const opts = filterByMode(allOpts);
+                                const hiddenCount = allOpts.length - opts.length;
                                 if (opts.length === 0) return null;
                                 return (
-                                    <Section key={category} title={CATEGORY_LABELS[category]}>
-                                        <div className={'space-y-2'}>
+                                    <CollapsibleSection
+                                        key={category}
+                                        id={category}
+                                        title={CATEGORY_LABELS[category]}
+                                        collapsed={collapsedSections.has(category)}
+                                        onToggle={toggleSection}
+                                        badge={hiddenCount > 0 ? `+${hiddenCount} in Advanced` : undefined}
+                                    >
+                                        <div className={'space-y-1.5'}>
                                             {opts.map(option => (
-                                                <OptionCard
+                                                <OptionRow
                                                     key={option.id}
                                                     option={option}
                                                     checked={selected.has(option.id)}
@@ -616,44 +767,36 @@ export default () => {
                                                 />
                                             ))}
                                         </div>
-                                    </Section>
+                                    </CollapsibleSection>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* ── Rendered preview ── */}
-                    <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-5'}>
-                        <div className={'mb-2 flex items-center gap-2'}>
-                            <h3 className={'text-xs font-semibold uppercase tracking-wider text-zinc-400'}>
-                                Rendered Preview
-                            </h3>
-                            <InfoBadge text={'The fully rendered startup command after Pterodactyl variable substitution. This reflects the last saved state, not your unsaved selection.'} />
+                    {/* ── Sticky bottom bar ── */}
+                    <div className={'fixed bottom-0 left-0 right-0 z-20 border-t border-zinc-700 bg-zinc-900/95 px-4 py-3 shadow-2xl backdrop-blur-sm'}>
+                        <div className={'mx-auto flex max-w-screen-xl items-center gap-3'}>
+                            <CommandPreview command={data?.renderedCommand} raw={data?.rawStartup} />
+                            <div className={'flex flex-shrink-0 items-center gap-2'}>
+                                {!canStartupUpdate && (
+                                    <p className={'text-xs text-zinc-500'}>
+                                        Requires <span className={'font-mono text-zinc-400'}>startup.update</span>
+                                    </p>
+                                )}
+                                <Button
+                                    disabled={!canStartupUpdate || saving}
+                                    onClick={handleSave}
+                                >
+                                    {saving ? 'Saving\u2026' : 'Apply'}
+                                </Button>
+                                <Button
+                                    disabled={!canStartupUpdate || saving || (data?.isUsingEggDefault ?? true)}
+                                    onClick={handleReset}
+                                >
+                                    Reset
+                                </Button>
+                            </div>
                         </div>
-                        <pre className={'overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm leading-relaxed text-zinc-200'}>
-                            {data?.renderedCommand || '—'}
-                        </pre>
-                    </div>
-
-                    {/* ── Action bar ── */}
-                    <div className={'flex flex-wrap items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-4'}>
-                        <Button
-                            disabled={!canStartupUpdate || saving}
-                            onClick={handleSave}
-                        >
-                            {saving ? 'Saving…' : `Apply Configuration`}
-                        </Button>
-                        <Button
-                            disabled={!canStartupUpdate || saving || (data?.isUsingEggDefault ?? true)}
-                            onClick={handleReset}
-                        >
-                            Reset to Egg Default
-                        </Button>
-                        {!canStartupUpdate && (
-                            <p className={'text-xs text-zinc-500'}>
-                                Requires permission: <span className={'font-mono text-zinc-400'}>startup.update</span>
-                            </p>
-                        )}
                     </div>
                 </div>
             )}

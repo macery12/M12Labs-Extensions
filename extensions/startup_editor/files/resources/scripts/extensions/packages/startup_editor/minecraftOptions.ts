@@ -70,23 +70,55 @@ export const DEFAULT_GC: GcOptionId = 'aikar_g1gc';
 
 /**
  * Option IDs that are pre-selected on fresh load (excluding the default GC and
- * core_flags which is always-enabled separately).
+ * always-enabled items which are included automatically).
  */
 export const DEFAULT_ENABLED_OPTION_IDS: string[] = [
-    'nogui',
     'jit_optimize',
     'terminal_compat',
     'log4j_fix',
 ];
 
 export const MINECRAFT_OPTIONS: MinecraftOption[] = [
-    // ── Core (always-on baseline) ────────────────────────────────────────────
+    // ── Core JVM Performance Toggles (always-on, shown individually) ─────────
     {
-        id:              'core_flags',
-        name:            'Core JVM Flags',
-        description:     'Essential flags for Pterodactyl containers: AlwaysPreTouch, DisableExplicitGC, UseContainerSupport, ParallelRefProcEnabled.',
-        tooltip:         '-XX:+AlwaysPreTouch pre-allocates heap memory at startup to prevent runtime lag spikes. -XX:+DisableExplicitGC prevents plugins from forcing GC. -XX:+UseContainerSupport ensures the JVM respects Docker/container memory limits — required for Pterodactyl. -XX:+ParallelRefProcEnabled speeds up reference processing during GC.',
-        category:        'core',
+        id:              'always_pre_touch',
+        name:            'AlwaysPreTouch',
+        description:     'Pre-allocates heap memory at startup to prevent runtime lag spikes.',
+        tooltip:         '-XX:+AlwaysPreTouch forces the JVM to allocate and touch all heap memory at startup. This prevents lazy allocation from causing lag spikes during gameplay when new memory regions are first accessed.',
+        category:        'server',
+        loaderCompat:    null,
+        minJava:         8,
+        incompatibleWith: [],
+        alwaysEnabled:   true,
+    },
+    {
+        id:              'disable_explicit_gc',
+        name:            'DisableExplicitGC',
+        description:     'Prevents plugins from forcing GC pauses via System.gc().',
+        tooltip:         '-XX:+DisableExplicitGC prevents code from triggering explicit garbage collection via System.gc(). Some poorly-written plugins call this, causing unexpected GC pauses. Disabling it lets the JVM manage GC automatically.',
+        category:        'server',
+        loaderCompat:    null,
+        minJava:         8,
+        incompatibleWith: [],
+        alwaysEnabled:   true,
+    },
+    {
+        id:              'use_container_support',
+        name:            'UseContainerSupport',
+        description:     'Ensures the JVM respects Docker/Pterodactyl container memory limits.',
+        tooltip:         '-XX:+UseContainerSupport makes the JVM container-aware so it correctly reads memory limits from Docker/Pterodactyl. Without this, the JVM may see the host machine\'s total RAM instead of the container limit.',
+        category:        'server',
+        loaderCompat:    null,
+        minJava:         8,
+        incompatibleWith: [],
+        alwaysEnabled:   true,
+    },
+    {
+        id:              'parallel_ref_proc_enabled',
+        name:            'ParallelRefProcEnabled',
+        description:     'Improves GC efficiency by processing Java references in parallel.',
+        tooltip:         '-XX:+ParallelRefProcEnabled allows the garbage collector to process soft, weak, and phantom references in parallel during GC. This can significantly reduce GC pause times on servers with many objects.',
+        category:        'server',
         loaderCompat:    null,
         minJava:         8,
         incompatibleWith: [],
@@ -194,49 +226,6 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
         incompatibleWith: [],
         recommended:     true,
     },
-
-    // ── Server Arguments ────────────────────────────────────────────────────
-    {
-        id:              'nogui',
-        name:            'No GUI (--nogui)',
-        description:     'Disables the Swing server GUI window. Required in headless/container environments.',
-        tooltip:         'Passes --nogui to the server JAR. Prevents Minecraft from opening a Swing-based GUI window that would fail in a headless Docker container. Strongly recommended for all panel-hosted servers.',
-        category:        'server',
-        loaderCompat:    null,
-        minJava:         8,
-        incompatibleWith: [],
-        recommended:     true,
-    },
-    {
-        id:              'force_upgrade',
-        name:            'Force World Upgrade (--forceUpgrade)',
-        description:     'Forces the server to upgrade all loaded chunks on next start.',
-        tooltip:         'Passes --forceUpgrade to the server JAR. Use this once after a major Minecraft version update to pre-convert all chunk data. Remove after the first successful start to avoid re-processing on every boot.',
-        category:        'server',
-        loaderCompat:    null,
-        minJava:         8,
-        incompatibleWith: [],
-    },
-    {
-        id:              'bonus_chest',
-        name:            'Bonus Chest (--bonusChest)',
-        description:     'Spawns a bonus chest near the world spawn on a fresh world.',
-        tooltip:         'Passes --bonusChest to the server JAR. Only takes effect when generating a new world. Safe to leave enabled on a new server; harmless on existing worlds.',
-        category:        'server',
-        loaderCompat:    ['vanilla', 'paper', 'purpur', 'spigot', 'bukkit', 'folia'],
-        minJava:         8,
-        incompatibleWith: [],
-    },
-    {
-        id:              'eraseCache',
-        name:            'Erase Cache (--eraseCache)',
-        description:     'Tells Forge/NeoForge to wipe and rebuild its optimisation cache on next start.',
-        tooltip:         'Passes --eraseCache to the Forge or NeoForge server JAR. Useful after updating mods to prevent stale cache entries from causing startup errors. Remove after the cache has been rebuilt.',
-        category:        'server',
-        loaderCompat:    ['forge', 'neoforge'],
-        minJava:         8,
-        incompatibleWith: [],
-    },
 ];
 
 // ─── Preset definition ────────────────────────────────────────────────────────
@@ -264,9 +253,9 @@ export const PRESETS: Preset[] = [
         id:               'basic_optimize',
         name:             'Basic Optimize',
         description:      "Aikar's G1GC + JIT + terminal compat + security. Recommended starting point.",
-        tooltip:          "The recommended set of flags for every Minecraft server: Aikar's G1GC, JIT compiler optimisations, terminal-compatibility fixes, Log4Shell mitigation, and --nogui.",
+        tooltip:          "The recommended set of flags for every Minecraft server: Aikar's G1GC, JIT compiler optimisations, terminal-compatibility fixes, and Log4Shell mitigation.",
         gcId:             'aikar_g1gc',
-        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
+        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix'],
         recommendedLoader: null,
         accentColor:      'bg-blue-600',
         xmsMb:            256,
@@ -277,7 +266,7 @@ export const PRESETS: Preset[] = [
         description:      "Aikar's G1GC + JIT tuning. Optimised for Forge/NeoForge packs with hundreds of mods.",
         tooltip:          "Combines Aikar's G1GC flags with JIT-compiler optimisations, Log4Shell mitigation, and terminal-compat fixes. Designed for Forge/NeoForge modpacks with large classpaths.",
         gcId:             'aikar_g1gc',
-        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
+        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix'],
         recommendedLoader: 'forge',
         accentColor:      'bg-orange-600',
         xmsMb:            512,
@@ -288,7 +277,7 @@ export const PRESETS: Preset[] = [
         description:      'Full performance stack for Paper/Purpur: Aikar + String Dedup + JIT + module opens.',
         tooltip:          "Enables Aikar's G1GC flags, String Deduplication for memory savings, JIT optimisations, Paper module-system opens, and Log4Shell mitigation. Ideal for high-player-count Paper or Purpur servers.",
         gcId:             'aikar_g1gc',
-        optionIds:        ['string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix', 'nogui'],
+        optionIds:        ['string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix'],
         recommendedLoader: 'paper',
         accentColor:      'bg-green-600',
         xmsMb:            512,
@@ -299,7 +288,7 @@ export const PRESETS: Preset[] = [
         description:      'Generational ZGC for near-zero GC pauses. Requires Java 21+ and 16 GB+ RAM.',
         tooltip:          "Uses Java 21's Generational ZGC (-XX:+UseZGC -XX:+ZGenerational) for the lowest possible GC latency. Best for servers with 16 GB+ of dedicated RAM and Java 21.",
         gcId:             'zgc',
-        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix', 'nogui'],
+        optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix'],
         recommendedLoader: null,
         accentColor:      'bg-purple-600',
         xmsMb:            512,
@@ -308,9 +297,9 @@ export const PRESETS: Preset[] = [
         id:               'vanilla_clean',
         name:             'Vanilla Clean',
         description:      'Minimal config: basic G1GC + JIT + security. Great for vanilla or lightly modded servers.',
-        tooltip:          'A clean, minimal flag set: basic G1GC, JIT optimisations, Log4Shell mitigation, and --nogui. Use this when you want a simple baseline without aggressive tuning.',
+        tooltip:          'A clean, minimal flag set: basic G1GC, JIT optimisations, and Log4Shell mitigation. Use this when you want a simple baseline without aggressive tuning.',
         gcId:             'g1gc_basic',
-        optionIds:        ['jit_optimize', 'log4j_fix', 'nogui'],
+        optionIds:        ['jit_optimize', 'log4j_fix'],
         recommendedLoader: 'vanilla',
         accentColor:      'bg-zinc-500',
         xmsMb:            256,
@@ -321,7 +310,7 @@ export const PRESETS: Preset[] = [
         description:      "Aikar's flags + Log4Shell mitigation + terminal compat. Defence-in-depth for any server.",
         tooltip:          "Aikar's G1GC combined with the Log4Shell mitigation flag and terminal-compat fixes. The security flag is harmless on patched versions but adds defence-in-depth for older modpacks running legacy Minecraft.",
         gcId:             'aikar_g1gc',
-        optionIds:        ['jit_optimize', 'log4j_fix', 'terminal_compat', 'nogui'],
+        optionIds:        ['jit_optimize', 'log4j_fix', 'terminal_compat'],
         recommendedLoader: null,
         accentColor:      'bg-red-700',
         xmsMb:            256,
@@ -334,7 +323,7 @@ export const CATEGORY_LABELS: Record<OptionCategory, string> = {
     core:        '🔒 Core JVM Flags',
     gc:          '🗑️ Garbage Collector',
     performance: '⚡ Performance',
-    server:      '🖥️ Server Arguments',
+    server:      '⚙️ Core JVM Performance Toggles',
     security:    '🛡️ Security',
 };
 
@@ -390,20 +379,19 @@ export function inferStateFromCommand(rawCommand: string): {
 
     // Fragments that uniquely identify each option in a startup command string.
     const knownFragments: Record<string, string[]> = {
-        core_flags:      ['-XX:+UseContainerSupport', '-XX:+AlwaysPreTouch'],
-        aikar_g1gc:      ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'],
-        zgc:             ['-XX:+UseZGC', '-XX:+ZGenerational'],
-        shenandoah:      ['-XX:+UseShenandoahGC'],
-        g1gc_basic:      ['-XX:+UseG1GC'],
-        string_dedup:    ['-XX:+UseStringDeduplication'],
-        jit_optimize:    ['-XX:+TieredCompilation'],
-        paper_modules:   ['--add-opens java.base/java.lang=ALL-UNNAMED'],
-        terminal_compat: ['-Dterminal.jline=false'],
-        log4j_fix:       ['-Dlog4j2.formatMsgNoLookups=true'],
-        nogui:           ['--nogui'],
-        force_upgrade:   ['--forceUpgrade'],
-        bonus_chest:     ['--bonusChest'],
-        eraseCache:      ['--eraseCache'],
+        always_pre_touch:        ['-XX:+AlwaysPreTouch'],
+        disable_explicit_gc:     ['-XX:+DisableExplicitGC'],
+        use_container_support:   ['-XX:+UseContainerSupport'],
+        parallel_ref_proc_enabled: ['-XX:+ParallelRefProcEnabled'],
+        aikar_g1gc:              ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'],
+        zgc:                     ['-XX:+UseZGC', '-XX:+ZGenerational'],
+        shenandoah:              ['-XX:+UseShenandoahGC'],
+        g1gc_basic:              ['-XX:+UseG1GC'],
+        string_dedup:            ['-XX:+UseStringDeduplication'],
+        jit_optimize:            ['-XX:+TieredCompilation'],
+        paper_modules:           ['--add-opens java.base/java.lang=ALL-UNNAMED'],
+        terminal_compat:         ['-Dterminal.jline=false'],
+        log4j_fix:               ['-Dlog4j2.formatMsgNoLookups=true'],
     };
 
     let gcId: GcOptionId | null = null;
@@ -413,7 +401,7 @@ export function inferStateFromCommand(rawCommand: string): {
         const fragments = knownFragments[option.id];
         if (!fragments || !fragments.every(f => rawCommand.includes(f))) continue;
 
-        if (option.alwaysEnabled) continue; // core_flags is always on; don't add to selectedIds
+        if (option.alwaysEnabled) continue; // always-on items are included automatically; don't add to selectedIds
 
         if ((GC_OPTION_IDS as readonly string[]).includes(option.id)) {
             // Avoid setting both aikar_g1gc and g1gc_basic (aikar is more specific)
