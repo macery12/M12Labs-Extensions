@@ -72,35 +72,6 @@
       "icon": "users",
       "route": "minecraft_player_manager",
       "settingsSchema": []
-    },
-    {
-      "id": "startup_editor",
-      "versions": [
-        {
-          "version": "2.0.0",
-          "archive": "packages/startup_editor/2.0.0/startup_editor.M12LabsExtension",
-          "sha256": "6e15eb9ae9a3f0ad6acb568f5f91b6b6ec38fb69ac1833aaa8e0b347939e06ae",
-          "publishedAt": "2026-04-20T02:14:02Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
-          ]
-        },
-        {
-          "version": "1.0.0",
-          "archive": "packages/startup_editor/1.0.0/startup_editor.M12LabsExtension",
-          "sha256": "057bc9afae4575a9dc604fbd73fa17cc05ea1edc6c86ed17bb368ce0d9c8da23",
-          "publishedAt": "2026-04-19T02:49:27Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
-          ]
-        }
-      ],
-      "name": "Minecraft Startup Editor",
-      "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input \u2014 all options are validated against a secure server-side allowlist.",
-      "author": "M12Labs",
-      "icon": "terminal",
-      "route": "startup_editor",
-      "settingsSchema": []
     }
   ]
 }
