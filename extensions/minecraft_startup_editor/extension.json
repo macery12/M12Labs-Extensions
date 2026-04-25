@@ -1,0 +1,24 @@
+{
+  "package": {
+    "id": "minecraft_startup_editor",
+    "version": "1.0.0"
+  },
+  "extension": {
+    "id": "minecraft_startup_editor",
+    "name": "Minecraft Startup Editor",
+    "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input — all options are validated against a secure server-side allowlist.",
+    "author": "M12Labs",
+    "icon": "terminal",
+    "route": "minecraft_startup_editor",
+    "settingsSchema": [],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [1],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-m12-alpha-2.7"
+  ]
+}
