@@ -1,16 +1,16 @@
 <?php
 
-namespace Everest\Extensions\Packages\startup_editor\Http\Controllers;
+namespace Everest\Extensions\Packages\minecraft_startup_editor\Http\Controllers;
 
 use Everest\Models\Server;
 use Everest\Facades\Activity;
 use Illuminate\Http\JsonResponse;
 use Everest\Services\Servers\StartupCommandService;
 use Everest\Http\Controllers\Api\Client\ClientApiController;
-use Everest\Extensions\Packages\startup_editor\Http\Requests\GetStartupEditorRequest;
-use Everest\Extensions\Packages\startup_editor\Http\Requests\ResetStartupEditorRequest;
-use Everest\Extensions\Packages\startup_editor\Http\Requests\SaveStartupEditorRequest;
-use Everest\Extensions\Packages\startup_editor\MinecraftStartupOptions;
+use Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests\GetStartupEditorRequest;
+use Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests\ResetStartupEditorRequest;
+use Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests\SaveStartupEditorRequest;
+use Everest\Extensions\Packages\minecraft_startup_editor\MinecraftStartupOptions;
 
 class StartupEditorController extends ClientApiController
 {
@@ -27,7 +27,7 @@ class StartupEditorController extends ClientApiController
         $isUsingEggDefault = is_null($rawStartup) || $rawStartup === '';
 
         return new JsonResponse([
-            'object' => 'extension_startup_editor',
+            'object' => 'extension_minecraft_startup_editor',
             'attributes' => [
                 'raw_startup'        => $rawStartup,
                 'egg_default'        => $eggDefault,
@@ -59,7 +59,7 @@ class StartupEditorController extends ClientApiController
             ->log();
 
         return new JsonResponse([
-            'object' => 'extension_startup_editor_save',
+            'object' => 'extension_minecraft_startup_editor_save',
             'attributes' => [
                 'rendered_command'  => $this->startupCommandService->handle($server),
                 'raw_startup'       => $startup,
@@ -83,7 +83,7 @@ class StartupEditorController extends ClientApiController
             ->log();
 
         return new JsonResponse([
-            'object' => 'extension_startup_editor_save',
+            'object' => 'extension_minecraft_startup_editor_save',
             'attributes' => [
                 'rendered_command'    => $this->startupCommandService->handle($server),
                 'raw_startup'         => null,

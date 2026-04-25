@@ -18,7 +18,7 @@ export interface StartupSaveResult {
 
 export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> => {
     return http
-        .get(`/api/client/servers/${uuid}/extensions/startup_editor`)
+        .get(`/api/client/servers/${uuid}/extensions/minecraft_startup_editor`)
         .then(({ data }) => ({
             rawStartup:        data.attributes.raw_startup,
             eggDefault:        data.attributes.egg_default,
@@ -45,7 +45,7 @@ export const saveStartupOptions = (
     xmxMb: number,
 ): Promise<StartupSaveResult> => {
     return http
-        .post(`/api/client/servers/${uuid}/extensions/startup_editor/save`, {
+        .post(`/api/client/servers/${uuid}/extensions/minecraft_startup_editor/save`, {
             selected_options: selectedOptions,
             xms_mb:           xmsMb,
             xmx_mb:           xmxMb,
@@ -59,7 +59,7 @@ export const saveStartupOptions = (
 
 export const resetStartupCommand = (uuid: string): Promise<StartupSaveResult> => {
     return http
-        .post(`/api/client/servers/${uuid}/extensions/startup_editor/reset`, {})
+        .post(`/api/client/servers/${uuid}/extensions/minecraft_startup_editor/reset`, {})
         .then(({ data }) => ({
             renderedCommand:   data.attributes.rendered_command,
             rawStartup:        data.attributes.raw_startup,

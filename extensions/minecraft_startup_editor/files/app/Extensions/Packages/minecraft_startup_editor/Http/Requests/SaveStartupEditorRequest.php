@@ -1,12 +1,12 @@
 <?php
 
-namespace Everest\Extensions\Packages\startup_editor\Http\Requests;
+namespace Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests;
 
 use Everest\Models\Permission;
 use Everest\Contracts\Http\ClientPermissionsRequest;
 use Everest\Http\Requests\Api\Client\ClientApiRequest;
 use Illuminate\Validation\Validator;
-use Everest\Extensions\Packages\startup_editor\MinecraftStartupOptions;
+use Everest\Extensions\Packages\minecraft_startup_editor\MinecraftStartupOptions;
 
 /**
  * Validates a preset-based save payload.

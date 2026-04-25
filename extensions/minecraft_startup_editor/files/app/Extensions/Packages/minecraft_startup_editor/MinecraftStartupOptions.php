@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Extensions\Packages\startup_editor;
+namespace Everest\Extensions\Packages\minecraft_startup_editor;
 
 /**
  * Defines the allowlist of Minecraft startup options and presets.

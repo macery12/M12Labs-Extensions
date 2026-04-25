@@ -27,7 +27,7 @@ import {
     optionsByCategory,
 } from './minecraftOptions';
 
-const FLASH_KEY = 'server:extensions:startup_editor';
+const FLASH_KEY = 'server:extensions:minecraft_startup_editor';
 
 /** Option IDs always included in every generated command. */
 const ALWAYS_INCLUDED_IDS = [
