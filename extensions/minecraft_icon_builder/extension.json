@@ -1,5 +1,8 @@
 {
-  "package": { "id": "minecraft_icon_builder", "version": "1.0.0" },
+  "package": {
+    "id": "minecraft_icon_builder",
+    "version": "1.0.0"
+  },
   "extension": {
     "id": "minecraft_icon_builder",
     "name": "Minecraft Icon Builder",
@@ -8,7 +11,14 @@
     "icon": "image",
     "route": "minecraft_icon_builder",
     "settingsSchema": [],
-    "defaults": { "enabled": false, "allowedNests": [], "allowedEggs": [], "settings": {} }
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [1],
+      "allowedEggs": [],
+      "settings": {}
+    }
   },
-  "compatiblePanelVersions": ["2.0.0-m12-alpha-2.7"]
+  "compatiblePanelVersions": [
+    "2.0.0-m12-alpha-2.7"
+  ]
 }

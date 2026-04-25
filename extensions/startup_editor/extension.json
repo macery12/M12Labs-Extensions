@@ -13,7 +13,7 @@
     "settingsSchema": [],
     "defaults": {
       "enabled": false,
-      "allowedNests": [],
+      "allowedNests": [1],
       "allowedEggs": [],
       "settings": {}
     }

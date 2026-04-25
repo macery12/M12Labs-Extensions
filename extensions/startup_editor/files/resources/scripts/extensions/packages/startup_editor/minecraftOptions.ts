@@ -83,7 +83,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'always_pre_touch',
         name:            'AlwaysPreTouch',
-        description:     'Pre-allocates heap memory at startup to prevent runtime lag spikes.',
+        description:     'Best for: stable tick pacing on all servers. Tradeoff: slower startup due to full heap pre-allocation.',
         tooltip:         '-XX:+AlwaysPreTouch forces the JVM to allocate and touch all heap memory at startup. This prevents lazy allocation from causing lag spikes during gameplay when new memory regions are first accessed.',
         category:        'server',
         loaderCompat:    null,
@@ -94,7 +94,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'disable_explicit_gc',
         name:            'DisableExplicitGC',
-        description:     'Prevents plugins from forcing GC pauses via System.gc().',
+        description:     'Best for: avoiding plugin-triggered pause spikes. Tradeoff: explicit GC calls from plugins are ignored.',
         tooltip:         '-XX:+DisableExplicitGC prevents code from triggering explicit garbage collection via System.gc(). Some poorly-written plugins call this, causing unexpected GC pauses. Disabling it lets the JVM manage GC automatically.',
         category:        'server',
         loaderCompat:    null,
@@ -105,8 +105,8 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'use_container_support',
         name:            'UseContainerSupport',
-        description:     'Ensures the JVM respects Docker/Pterodactyl container memory limits.',
-        tooltip:         '-XX:+UseContainerSupport makes the JVM container-aware so it correctly reads memory limits from Docker/Pterodactyl. Without this, the JVM may see the host machine\'s total RAM instead of the container limit.',
+        description:     'Best for: containerized hosting (Docker/M12labs). Benefit: JVM respects cgroup memory limits correctly.',
+        tooltip:         '-XX:+UseContainerSupport makes the JVM container-aware so it correctly reads memory limits from Docker/M12labs. Without this, the JVM may see the host machine\'s total RAM instead of the container limit.',
         category:        'server',
         loaderCompat:    null,
         minJava:         8,
@@ -116,7 +116,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'parallel_ref_proc_enabled',
         name:            'ParallelRefProcEnabled',
-        description:     'Improves GC efficiency by processing Java references in parallel.',
+        description:     'Best for: object-heavy workloads. Benefit: faster reference processing during GC and lower pause pressure.',
         tooltip:         '-XX:+ParallelRefProcEnabled allows the garbage collector to process soft, weak, and phantom references in parallel during GC. This can significantly reduce GC pause times on servers with many objects.',
         category:        'server',
         loaderCompat:    null,
@@ -129,7 +129,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'aikar_g1gc',
         name:            "G1GC — Aikar's Flags",
-        description:     'Best for: general-purpose servers, Paper/Spigot, 4 GB–16 GB RAM. Most stable and widely used. Balanced performance and memory usage.',
+        description:     'Best for: most vanilla, plugin-based, and modded servers with 4 GB-16 GB RAM. Tradeoff: not the lowest-latency option at very high RAM.',
         tooltip:         "A well-known set of G1GC JVM flags originally published by Aikar. Reduces GC pause times and avoids common Minecraft-related GC issues. Recommended for nearly every server regardless of loader or version. Best results on 4–16 GB RAM with Java 8+.",
         category:        'gc',
         loaderCompat:    null,
@@ -140,7 +140,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'zgc',
         name:            'ZGC (Generational)',
-        description:     'Best for: high-RAM servers (16 GB+). Extremely low latency (near-zero pause times). Slightly higher CPU usage. Ideal for large modpacks or high player counts.',
+        description:     'Best for: high-RAM servers (16 GB+) targeting minimal pause times. Tradeoff: typically higher CPU overhead than G1GC.',
         tooltip:         'ZGC with the Generational extension (Java 21+) provides sub-millisecond GC pauses. Requires at least Java 21 and works best with 16 GB+ of dedicated RAM. Higher CPU overhead than G1GC. Not compatible with G1GC-based options or String Deduplication.',
         category:        'gc',
         loaderCompat:    null,
@@ -150,7 +150,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'shenandoah',
         name:            'ShenandoahGC',
-        description:     'Best for: low-pause setups on Java 17+. Middle ground between G1GC and ZGC. Good alternative if ZGC is unavailable.',
+        description:     'Best for: low-pause setups on Java 11+ when ZGC is unavailable. Tradeoff: tuning ecosystem is less common than G1GC.',
         tooltip:         'ShenandoahGC performs concurrent compaction to keep pause times very low. Available from Java 11 and uses the incremental-update (iu) mode for broadest compatibility. Good alternative when ZGC is not available. Not compatible with G1GC or ZGC options.',
         category:        'gc',
         loaderCompat:    null,
@@ -160,7 +160,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'g1gc_basic',
         name:            'Basic G1GC',
-        description:     "Best for: minimal setups or debugging. Uses JVM defaults without Aikar's aggressive tuning.",
+        description:     "Best for: conservative baselines, compatibility checks, or debugging. Tradeoff: less tuned than Aikar's G1GC.",
         tooltip:         "Enables the G1 garbage collector with JVM defaults. Use this only if you want a simple baseline or if Aikar's flags cause issues. Not compatible with ZGC, Shenandoah, or Aikar's flags.",
         category:        'gc',
         loaderCompat:    null,
@@ -172,7 +172,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'string_dedup',
         name:            'String Deduplication',
-        description:     'Instructs G1GC to deduplicate equal String objects, saving heap memory.',
+        description:     'Best for: memory-constrained G1GC servers with many duplicate strings. Tradeoff: small additional GC CPU work.',
         tooltip:         'Enables -XX:+UseStringDeduplication, which causes G1GC to merge identical String objects in the heap. Reduces memory usage on servers with many duplicate strings (chat, items). Requires G1GC; not compatible with ZGC or Shenandoah.',
         category:        'performance',
         loaderCompat:    null,
@@ -182,7 +182,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'jit_optimize',
         name:            'JIT Compiler Optimizations',
-        description:     'Enables tiered compilation and string-concat optimisation in the JIT.',
+        description:     'Best for: all server types. Benefit: better long-run CPU efficiency as hot paths are optimized.',
         tooltip:         'Turns on -XX:+TieredCompilation (multi-tier JIT) and -XX:+OptimizeStringConcat. Generally beneficial for all Minecraft servers; helps reduce CPU usage over time as hot code paths are compiled.',
         category:        'performance',
         loaderCompat:    null,
@@ -193,7 +193,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'paper_modules',
         name:            'Paper Module Opens',
-        description:     'Adds --add-opens flags required by Paper/Purpur on Java 16+.',
+        description:     'Best for: Paper-family servers on Java 16+. Benefit: avoids module-access errors and reflective warnings.',
         tooltip:         'Paper and its forks (Purpur, Folia) need access to internal JDK classes via the Java module system. These --add-opens flags are required on Java 16+ and prevent reflective-access warnings and crashes. Only relevant for Paper-based servers.',
         category:        'performance',
         loaderCompat:    ['paper', 'purpur', 'folia'],
@@ -205,8 +205,8 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'terminal_compat',
         name:            'Terminal Compatibility',
-        description:     'Disables JLine and enables ANSI colour for Forge-style terminal output in containers.',
-        tooltip:         'Sets -Dterminal.jline=false -Dterminal.ansi=true. Prevents JLine from crashing in headless container environments and ensures colour codes work properly. Recommended for Forge and NeoForge; safe for all servers.',
+        description:     'Best for: container or headless consoles. Benefit: more reliable terminal behavior and readable color output.',
+        tooltip:         'Sets -Dterminal.jline=false -Dterminal.ansi=true. Helps avoid terminal issues in containerized or headless environments and keeps colour output readable. Commonly useful for modded server consoles, but safe for all server types.',
         category:        'performance',
         loaderCompat:    null,
         minJava:         8,
@@ -218,7 +218,7 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'log4j_fix',
         name:            'Log4Shell Mitigation',
-        description:     'Disables Log4j2 JNDI message lookups (Log4Shell / CVE-2021-44228).',
+        description:     'Best for: all server types. Benefit: defense-in-depth against Log4Shell-style lookup abuse.',
         tooltip:         'Adds -Dlog4j2.formatMsgNoLookups=true to block the Log4Shell exploit. Modern Minecraft versions (1.18.1+) ship a patched log4j, but this flag is harmless and provides defence-in-depth for all versions.',
         category:        'security',
         loaderCompat:    null,
@@ -252,7 +252,7 @@ export const PRESETS: Preset[] = [
     {
         id:               'basic_optimize',
         name:             'Basic Optimize',
-        description:      "Aikar's G1GC + JIT + terminal compat + security. Recommended starting point.",
+        description:      "Best for: most servers as a default baseline. Includes: Aikar G1GC, JIT tuning, terminal compatibility, and security hardening.",
         tooltip:          "The recommended set of flags for every Minecraft server: Aikar's G1GC, JIT compiler optimisations, terminal-compatibility fixes, and Log4Shell mitigation.",
         gcId:             'aikar_g1gc',
         optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix'],
@@ -263,8 +263,8 @@ export const PRESETS: Preset[] = [
     {
         id:               'large_modpack',
         name:             'Large Modpack',
-        description:      "Aikar's G1GC + JIT tuning. Optimised for Forge/NeoForge packs with hundreds of mods.",
-        tooltip:          "Combines Aikar's G1GC flags with JIT-compiler optimisations, Log4Shell mitigation, and terminal-compat fixes. Designed for Forge/NeoForge modpacks with large classpaths.",
+        description:      "Best for: large modded environments with heavy classpaths. Includes: Aikar G1GC, JIT tuning, terminal compatibility, and security hardening.",
+        tooltip:          "Combines Aikar's G1GC flags with JIT compiler optimisations, Log4Shell mitigation, and terminal compatibility fixes. Best suited to large modded environments where startup footprint and classpath size are higher than average.",
         gcId:             'aikar_g1gc',
         optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix'],
         recommendedLoader: 'forge',
@@ -274,7 +274,7 @@ export const PRESETS: Preset[] = [
     {
         id:               'paper_performance',
         name:             'Paper Performance',
-        description:      'Full performance stack for Paper/Purpur: Aikar + String Dedup + JIT + module opens.',
+        description:      'Best for: Paper-family servers under higher player load. Includes: Aikar G1GC, String Deduplication, JIT tuning, module opens, and security hardening.',
         tooltip:          "Enables Aikar's G1GC flags, String Deduplication for memory savings, JIT optimisations, Paper module-system opens, and Log4Shell mitigation. Ideal for high-player-count Paper or Purpur servers.",
         gcId:             'aikar_g1gc',
         optionIds:        ['string_dedup', 'jit_optimize', 'paper_modules', 'log4j_fix'],
@@ -285,7 +285,7 @@ export const PRESETS: Preset[] = [
     {
         id:               'low_latency',
         name:             'Low Latency (ZGC)',
-        description:      'Generational ZGC for near-zero GC pauses. Requires Java 21+ and 16 GB+ RAM.',
+        description:      'Best for: high-memory, low-latency targets. Includes: Generational ZGC with JIT, terminal compatibility, and security hardening. Requires Java 21+ and 16 GB+ RAM.',
         tooltip:          "Uses Java 21's Generational ZGC (-XX:+UseZGC -XX:+ZGenerational) for the lowest possible GC latency. Best for servers with 16 GB+ of dedicated RAM and Java 21.",
         gcId:             'zgc',
         optionIds:        ['jit_optimize', 'terminal_compat', 'log4j_fix'],
@@ -296,7 +296,7 @@ export const PRESETS: Preset[] = [
     {
         id:               'vanilla_clean',
         name:             'Vanilla Clean',
-        description:      'Minimal config: basic G1GC + JIT + security. Great for vanilla or lightly modded servers.',
+        description:      'Best for: lightweight or conservative setups. Includes: basic G1GC, JIT tuning, and security hardening.',
         tooltip:          'A clean, minimal flag set: basic G1GC, JIT optimisations, and Log4Shell mitigation. Use this when you want a simple baseline without aggressive tuning.',
         gcId:             'g1gc_basic',
         optionIds:        ['jit_optimize', 'log4j_fix'],
@@ -307,7 +307,7 @@ export const PRESETS: Preset[] = [
     {
         id:               'security_hardened',
         name:             'Security Hardened',
-        description:      "Aikar's flags + Log4Shell mitigation + terminal compat. Defence-in-depth for any server.",
+        description:      "Best for: security-first configurations on any server type. Includes: Aikar G1GC, terminal compatibility, JIT tuning, and Log4Shell mitigation.",
         tooltip:          "Aikar's G1GC combined with the Log4Shell mitigation flag and terminal-compat fixes. The security flag is harmless on patched versions but adds defence-in-depth for older modpacks running legacy Minecraft.",
         gcId:             'aikar_g1gc',
         optionIds:        ['jit_optimize', 'log4j_fix', 'terminal_compat'],
