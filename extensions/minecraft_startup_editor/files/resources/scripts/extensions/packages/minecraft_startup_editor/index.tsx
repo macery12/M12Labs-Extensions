@@ -845,7 +845,7 @@ export default () => {
                                             option={option}
                                             selected={selectedGc === option.id}
                                             onSelect={id => { setSelectedGc(id); setActivePreset(null); }}
-                                            disabled={(!canStartupUpdate || saving) || (advancedMode && option.minJava > tierMaxJava)}
+                                            disabled={!canStartupUpdate || saving || (advancedMode && option.minJava > tierMaxJava)}
                                             recommended={isGcRecommendedForTier(option.id, javaVersionTier)}
                                             legacy={isGcLegacyForTier(option.id, javaVersionTier)}
                                         />
@@ -906,7 +906,7 @@ export default () => {
                                                         option={option}
                                                         checked={selected.has(option.id)}
                                                         disabled={!canStartupUpdate || saving || isUnavailable(option)}
-                                                        incompatible={canStartupUpdate && !selected.has(option.id) && !isNativeAccessAlwaysOn && isIncompatible(option)}
+                                                        incompatible={!isNativeAccessAlwaysOn && canStartupUpdate && !selected.has(option.id) && isIncompatible(option)}
                                                         onToggle={toggleOption}
                                                         alwaysOn={isNativeAccessAlwaysOn}
                                                     />

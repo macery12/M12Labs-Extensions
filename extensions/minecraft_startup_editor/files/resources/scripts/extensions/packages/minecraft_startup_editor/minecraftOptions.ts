@@ -50,7 +50,7 @@ export const TIER_MAX_JAVA: Record<JavaVersionTier, number> = {
     java8_16:   16,
     java17_20:  20,
     java21_24:  24,
-    java25plus: 999,
+    java25plus: Number.MAX_SAFE_INTEGER,
 };
 
 // ─── GC option IDs (needed by tier helpers below) ────────────────────────────
@@ -462,8 +462,9 @@ export function inferStateFromCommand(rawCommand: string): {
     let isJava25ZGC = false;
     const selectedIds: string[] = [];
 
-    // Check for zgc_java25 first (more specific than zgc)
-    if (knownFragments['zgc_java25'].every(f => rawCommand.includes(f))) {
+    // Check for zgc_java25 first (more specific than zgc) before the main option loop
+    const zgc25Fragments = knownFragments['zgc_java25'];
+    if (zgc25Fragments && zgc25Fragments.every(f => rawCommand.includes(f))) {
         gcId = 'zgc';
         isJava25ZGC = true;
     }
@@ -475,8 +476,7 @@ export function inferStateFromCommand(rawCommand: string): {
         if (option.alwaysEnabled) continue; // always-on items are included automatically; don't add to selectedIds
 
         if ((GC_OPTION_IDS as readonly string[]).includes(option.id)) {
-            // Avoid setting both aikar_g1gc and g1gc_basic (aikar is more specific)
-            // Skip zgc if we already detected zgc_java25
+            // Set gcId only once; the pre-check above may have already set it for zgc_java25
             if (gcId === null) gcId = option.id as GcOptionId;
             continue;
         }
