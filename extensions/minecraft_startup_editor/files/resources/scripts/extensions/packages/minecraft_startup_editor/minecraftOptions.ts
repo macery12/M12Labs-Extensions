@@ -32,6 +32,62 @@ export const LOADER_LABELS: Record<LoaderSlug, string> = {
     vanilla:  'Vanilla',
 };
 
+// ─── Java version tiers ───────────────────────────────────────────────────────
+
+export type JavaVersionTier = 'java8_16' | 'java17_20' | 'java21_24' | 'java25plus';
+
+export const JAVA_VERSION_TIER_LABELS: Record<JavaVersionTier, string> = {
+    java8_16:   'Java 8–16',
+    java17_20:  'Java 17–20',
+    java21_24:  'Java 21–24',
+    java25plus: 'Java 25+',
+};
+
+export const DEFAULT_JAVA_TIER: JavaVersionTier = 'java21_24';
+
+/** Maximum Java major version represented by each tier (for minJava comparisons). */
+export const TIER_MAX_JAVA: Record<JavaVersionTier, number> = {
+    java8_16:   16,
+    java17_20:  20,
+    java21_24:  24,
+    java25plus: 999,
+};
+
+// ─── GC option IDs (needed by tier helpers below) ────────────────────────────
+
+/** All GC option IDs — shown in the dedicated GC dropdown, not as checkboxes. */
+export const GC_OPTION_IDS = ['aikar_g1gc', 'zgc', 'shenandoah', 'g1gc_basic'] as const;
+export type GcOptionId = typeof GC_OPTION_IDS[number];
+
+/** Default GC selection — depends on the default tier (java21_24). */
+export const DEFAULT_GC: GcOptionId = 'zgc';
+
+/** Returns the recommended default GC for a given tier. */
+export function getDefaultGcForTier(tier: JavaVersionTier): GcOptionId {
+    return (tier === 'java21_24' || tier === 'java25plus') ? 'zgc' : 'aikar_g1gc';
+}
+
+/** Returns true when the given GC option should show a "Recommended" badge for the tier. */
+export function isGcRecommendedForTier(gcId: string, tier: JavaVersionTier): boolean {
+    if (tier === 'java21_24' || tier === 'java25plus') return gcId === 'zgc';
+    return gcId === 'aikar_g1gc';
+}
+
+/** Returns true when the given GC option should show a "Legacy / Not recommended" badge for the tier. */
+export function isGcLegacyForTier(gcId: string, tier: JavaVersionTier): boolean {
+    return (tier === 'java21_24' || tier === 'java25plus') && gcId === 'aikar_g1gc';
+}
+
+/** Returns extra option IDs that are always forced on for the given tier + GC combo. */
+export function getAlwaysIncludedForContext(tier: JavaVersionTier, gcId: GcOptionId | null): string[] {
+    const ids: string[] = ['core_flags', 'always_pre_touch', 'disable_explicit_gc', 'use_container_support'];
+    // ParallelRefProcEnabled is G1GC-specific — exclude it when ZGC is selected
+    if (gcId !== 'zgc') ids.push('parallel_ref_proc_enabled');
+    // native_access is forced on for Java 25+
+    if (tier === 'java25plus') ids.push('native_access');
+    return ids;
+}
+
 // ─── Option definition ────────────────────────────────────────────────────────
 
 export type OptionCategory = 'core' | 'gc' | 'performance' | 'server' | 'security';
@@ -59,23 +115,16 @@ export interface MinecraftOption {
     alwaysEnabled?: boolean;
 }
 
-// ─── GC option IDs ────────────────────────────────────────────────────────────
-
-/** All GC option IDs — shown in the dedicated GC dropdown, not as checkboxes. */
-export const GC_OPTION_IDS = ['aikar_g1gc', 'zgc', 'shenandoah', 'g1gc_basic'] as const;
-export type GcOptionId = typeof GC_OPTION_IDS[number];
-
-/** Default GC selection shown on fresh load. */
-export const DEFAULT_GC: GcOptionId = 'aikar_g1gc';
-
 /**
  * Option IDs that are pre-selected on fresh load (excluding the default GC and
  * always-enabled items which are included automatically).
+ * Reflects the default tier (java21_24): native_access is recommended for Java 21+.
  */
 export const DEFAULT_ENABLED_OPTION_IDS: string[] = [
     'jit_optimize',
     'terminal_compat',
     'log4j_fix',
+    'native_access',
 ];
 
 export const MINECRAFT_OPTIONS: MinecraftOption[] = [
@@ -129,19 +178,18 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
     {
         id:              'aikar_g1gc',
         name:            "G1GC — Aikar's Flags",
-        description:     'Best for: most vanilla, plugin-based, and modded servers with 4 GB-16 GB RAM. Tradeoff: not the lowest-latency option at very high RAM.',
-        tooltip:         "A well-known set of G1GC JVM flags originally published by Aikar. Reduces GC pause times and avoids common Minecraft-related GC issues. Recommended for nearly every server regardless of loader or version. Best results on 4–16 GB RAM with Java 8+.",
+        description:     'Best for: Java 8–20 servers. Classic G1GC tuning by Aikar. For Java 21+, ZGC is now the recommended choice.',
+        tooltip:         "A well-known set of G1GC JVM flags originally published by Aikar. Reduces GC pause times and avoids common Minecraft-related GC issues. Recommended for Java 8–20 servers. For Java 21+, consider ZGC for lower pause times. Best results on 4–16 GB RAM.",
         category:        'gc',
         loaderCompat:    null,
         minJava:         8,
         incompatibleWith: ['zgc', 'shenandoah', 'g1gc_basic'],
-        recommended:     true,
     },
     {
         id:              'zgc',
-        name:            'ZGC (Generational)',
-        description:     'Best for: high-RAM servers (16 GB+) targeting minimal pause times. Tradeoff: typically higher CPU overhead than G1GC.',
-        tooltip:         'ZGC with the Generational extension (Java 21+) provides sub-millisecond GC pauses. Requires at least Java 21 and works best with 16 GB+ of dedicated RAM. Higher CPU overhead than G1GC. Not compatible with G1GC-based options or String Deduplication.',
+        name:            'ZGC — Low Latency',
+        description:     'Best for: Java 21+ servers. Mojang\'s default as of Minecraft 26.1. Lowest pause times. Tradeoff: slightly higher memory overhead.',
+        tooltip:         'ZGC with the Generational extension (Java 21+) provides sub-millisecond GC pauses. Recommended for Java 21+ servers. For Java 25+, automatically uses Compact Object Headers and String Deduplication (Mojang\'s defaults for Minecraft 26.1). Not compatible with G1GC-based options.',
         category:        'gc',
         loaderCompat:    null,
         minJava:         21,
@@ -210,6 +258,17 @@ export const MINECRAFT_OPTIONS: MinecraftOption[] = [
         category:        'performance',
         loaderCompat:    null,
         minJava:         8,
+        incompatibleWith: [],
+        recommended:     true,
+    },
+    {
+        id:              'native_access',
+        name:            'Native Access (JNA Warning Suppression)',
+        description:     'Best for: Java 21+ servers. Benefit: suppresses JNA restricted method warnings that will become errors in a future Java release.',
+        tooltip:         '--enable-native-access=ALL-UNNAMED allows JNA (Java Native Access) to call restricted native methods without warnings. In Java 21+ these generate warnings; in a future release they will become errors. Recommended for Java 21+; automatically forced on for Java 25+.',
+        category:        'performance',
+        loaderCompat:    null,
+        minJava:         21,
         incompatibleWith: [],
         recommended:     true,
     },
@@ -375,28 +434,39 @@ export function inferStateFromCommand(rawCommand: string): {
     selectedIds: string[];
     xmsMb: number;
     xmxMb: number;
+    javaVersionTier: JavaVersionTier;
 } {
-    if (!rawCommand) return { gcId: DEFAULT_GC, selectedIds: [...DEFAULT_ENABLED_OPTION_IDS], xmsMb: 256, xmxMb: 0 };
+    if (!rawCommand) return { gcId: DEFAULT_GC, selectedIds: [...DEFAULT_ENABLED_OPTION_IDS], xmsMb: 256, xmxMb: 0, javaVersionTier: DEFAULT_JAVA_TIER };
 
     // Fragments that uniquely identify each option in a startup command string.
     const knownFragments: Record<string, string[]> = {
-        always_pre_touch:        ['-XX:+AlwaysPreTouch'],
-        disable_explicit_gc:     ['-XX:+DisableExplicitGC'],
-        use_container_support:   ['-XX:+UseContainerSupport'],
+        always_pre_touch:          ['-XX:+AlwaysPreTouch'],
+        disable_explicit_gc:       ['-XX:+DisableExplicitGC'],
+        use_container_support:     ['-XX:+UseContainerSupport'],
         parallel_ref_proc_enabled: ['-XX:+ParallelRefProcEnabled'],
-        aikar_g1gc:              ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'],
-        zgc:                     ['-XX:+UseZGC', '-XX:+ZGenerational'],
-        shenandoah:              ['-XX:+UseShenandoahGC'],
-        g1gc_basic:              ['-XX:+UseG1GC'],
-        string_dedup:            ['-XX:+UseStringDeduplication'],
-        jit_optimize:            ['-XX:+TieredCompilation'],
-        paper_modules:           ['--add-opens java.base/java.lang=ALL-UNNAMED'],
-        terminal_compat:         ['-Dterminal.jline=false'],
-        log4j_fix:               ['-Dlog4j2.formatMsgNoLookups=true'],
+        aikar_g1gc:                ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'],
+        // zgc_java25 must be checked before zgc to avoid a partial match
+        zgc_java25:                ['-XX:+UseZGC', '-XX:+ZGenerational', '-XX:+UseCompactObjectHeaders'],
+        zgc:                       ['-XX:+UseZGC', '-XX:+ZGenerational'],
+        shenandoah:                ['-XX:+UseShenandoahGC'],
+        g1gc_basic:                ['-XX:+UseG1GC'],
+        string_dedup:              ['-XX:+UseStringDeduplication'],
+        jit_optimize:              ['-XX:+TieredCompilation'],
+        paper_modules:             ['--add-opens java.base/java.lang=ALL-UNNAMED'],
+        terminal_compat:           ['-Dterminal.jline=false'],
+        native_access:             ['--enable-native-access=ALL-UNNAMED'],
+        log4j_fix:                 ['-Dlog4j2.formatMsgNoLookups=true'],
     };
 
     let gcId: GcOptionId | null = null;
+    let isJava25ZGC = false;
     const selectedIds: string[] = [];
+
+    // Check for zgc_java25 first (more specific than zgc)
+    if (knownFragments['zgc_java25'].every(f => rawCommand.includes(f))) {
+        gcId = 'zgc';
+        isJava25ZGC = true;
+    }
 
     for (const option of MINECRAFT_OPTIONS) {
         const fragments = knownFragments[option.id];
@@ -406,9 +476,13 @@ export function inferStateFromCommand(rawCommand: string): {
 
         if ((GC_OPTION_IDS as readonly string[]).includes(option.id)) {
             // Avoid setting both aikar_g1gc and g1gc_basic (aikar is more specific)
+            // Skip zgc if we already detected zgc_java25
             if (gcId === null) gcId = option.id as GcOptionId;
             continue;
         }
+
+        // Skip string_dedup if it was baked into zgc_java25 flags
+        if (option.id === 'string_dedup' && isJava25ZGC) continue;
 
         // Skip if any already-selected option declares it incompatible.
         const blocked = selectedIds.some(selId => {
@@ -420,12 +494,26 @@ export function inferStateFromCommand(rawCommand: string): {
         selectedIds.push(option.id);
     }
 
+    // Infer Java version tier from detected GC
+    let javaVersionTier: JavaVersionTier;
+    if (isJava25ZGC) {
+        javaVersionTier = 'java25plus';
+    } else if (gcId === 'zgc') {
+        javaVersionTier = 'java21_24';
+    } else if (gcId === 'shenandoah') {
+        javaVersionTier = 'java17_20';
+    } else if (gcId !== null) {
+        // G1GC detected — assume Java 17-20 for modern servers using G1GC
+        javaVersionTier = 'java17_20';
+    } else {
+        javaVersionTier = DEFAULT_JAVA_TIER;
+    }
+
     // Parse Xms and Xmx values from command (e.g. -Xms256M, -Xmx1024M)
     const xmsMatch = rawCommand.match(/-Xms(\d+)[Mm]/);
     const xmxMatch = rawCommand.match(/-Xmx(\d+)[Mm]/);
     const xmsMb = xmsMatch ? parseInt(xmsMatch[1], 10) : 256;
     const xmxMb = xmxMatch ? parseInt(xmxMatch[1], 10) : 0; // 0 = not found; caller should substitute suggested value
 
-    return { gcId, selectedIds, xmsMb, xmxMb };
+    return { gcId, selectedIds, xmsMb, xmxMb, javaVersionTier };
 }
-

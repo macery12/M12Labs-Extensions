@@ -16,27 +16,26 @@ import {
     GC_OPTION_IDS,
     DEFAULT_GC,
     DEFAULT_ENABLED_OPTION_IDS,
+    DEFAULT_JAVA_TIER,
+    JAVA_VERSION_TIER_LABELS,
+    TIER_MAX_JAVA,
     LoaderSlug,
     GcOptionId,
+    JavaVersionTier,
     MinecraftOption,
     Preset,
     OptionCategory,
     isCompatibleWithLoader,
+    isGcRecommendedForTier,
+    isGcLegacyForTier,
+    getDefaultGcForTier,
+    getAlwaysIncludedForContext,
     detectLoaderFromEggName,
     inferStateFromCommand,
     optionsByCategory,
 } from './minecraftOptions';
 
 const FLASH_KEY = 'server:extensions:minecraft_startup_editor';
-
-/** Option IDs always included in every generated command. */
-const ALWAYS_INCLUDED_IDS = [
-    'core_flags',
-    'always_pre_touch',
-    'disable_explicit_gc',
-    'use_container_support',
-    'parallel_ref_proc_enabled',
-] as const;
 
 /** Toggleable (checkbox) categories. The 'server' category is always-on and handled separately. */
 const TOGGLE_CATEGORIES: OptionCategory[] = ['performance', 'security'];
@@ -135,9 +134,11 @@ interface GcCardProps {
     selected: boolean;
     onSelect: (id: GcOptionId) => void;
     disabled: boolean;
+    recommended?: boolean;
+    legacy?: boolean;
 }
 
-function GcCard({ option, selected, onSelect, disabled }: GcCardProps) {
+function GcCard({ option, selected, onSelect, disabled, recommended, legacy }: GcCardProps) {
     const stateClass = selected
         ? 'border-zinc-600 bg-zinc-700/40 border-l-2 border-l-blue-500'
         : disabled
@@ -159,9 +160,14 @@ function GcCard({ option, selected, onSelect, disabled }: GcCardProps) {
             <div className={'min-w-0 flex-1'}>
                 <div className={'flex flex-wrap items-center gap-1.5'}>
                     <span className={'text-sm font-medium text-white'}>{option.name}</span>
-                    {option.recommended && (
+                    {recommended && (
                         <span className={'rounded-full bg-yellow-600/80 px-1.5 py-px text-[10px] font-medium text-yellow-100'}>
                             Recommended
+                        </span>
+                    )}
+                    {legacy && (
+                        <span className={'rounded-full border border-orange-700 bg-orange-900/50 px-1.5 py-px text-[10px] font-medium text-orange-300'}>
+                            Legacy
                         </span>
                     )}
                     {option.minJava > 8 && (
@@ -214,10 +220,14 @@ interface OptionRowProps {
     disabled: boolean;
     incompatible: boolean;
     onToggle: (id: string) => void;
+    alwaysOn?: boolean;
 }
 
-function OptionRow({ option, checked, disabled, incompatible, onToggle }: OptionRowProps) {
-    const stateClass = checked
+function OptionRow({ option, checked, disabled, incompatible, onToggle, alwaysOn }: OptionRowProps) {
+    const effectiveChecked = alwaysOn || checked;
+    const stateClass = alwaysOn
+        ? 'border-zinc-700 bg-zinc-900/50'
+        : effectiveChecked
         ? 'border-zinc-600 bg-zinc-700/30 border-l-2 border-l-blue-500'
         : incompatible
         ? 'border-zinc-700 bg-zinc-900/40 opacity-50'
@@ -225,17 +235,19 @@ function OptionRow({ option, checked, disabled, incompatible, onToggle }: Option
         ? 'border-zinc-700 bg-zinc-900/40 opacity-40 cursor-not-allowed'
         : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/50 cursor-pointer';
 
+    const isClickable = !alwaysOn && !disabled && !incompatible;
+
     return (
         <div
             className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-all ${stateClass}`}
-            onClick={() => { if (!disabled && !incompatible) onToggle(option.id); }}
+            onClick={() => { if (isClickable) onToggle(option.id); }}
             role={'checkbox'}
-            aria-checked={checked}
-            tabIndex={disabled || incompatible ? -1 : 0}
-            onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !disabled && !incompatible) onToggle(option.id); }}
+            aria-checked={effectiveChecked}
+            tabIndex={isClickable ? 0 : -1}
+            onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && isClickable) onToggle(option.id); }}
         >
-            <span className={`flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded border-2 ${checked ? 'border-blue-500 bg-blue-500' : 'border-zinc-500'}`}>
-                {checked && (
+            <span className={`flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded border-2 ${alwaysOn ? 'border-blue-600 bg-blue-600' : effectiveChecked ? 'border-blue-500 bg-blue-500' : 'border-zinc-500'}`}>
+                {effectiveChecked && (
                     <svg viewBox={'0 0 10 10'} fill={'none'} className={'h-full w-full'}>
                         <polyline points={'1.5,5 4,7.5 8.5,2.5'} stroke={'white'} strokeWidth={'1.5'} strokeLinecap={'round'} strokeLinejoin={'round'} />
                     </svg>
@@ -244,7 +256,12 @@ function OptionRow({ option, checked, disabled, incompatible, onToggle }: Option
             <div className={'min-w-0 flex-1'}>
                 <div className={'flex flex-wrap items-center gap-1.5'}>
                     <span className={'text-sm font-medium text-white'}>{option.name}</span>
-                    {option.recommended && !incompatible && (
+                    {alwaysOn && (
+                        <span className={'rounded-full border border-blue-800 bg-blue-900/40 px-1.5 py-px text-[10px] font-medium text-blue-300'}>
+                            Always on
+                        </span>
+                    )}
+                    {!alwaysOn && option.recommended && !incompatible && (
                         <span className={'rounded-full bg-yellow-600/70 px-1.5 py-px text-[10px] font-medium text-yellow-100'}>
                             Recommended
                         </span>
@@ -492,6 +509,8 @@ export default () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving]   = useState(false);
 
+    // Java version tier — controls GC recommendations and flag generation
+    const [javaVersionTier, setJavaVersionTier] = useState<JavaVersionTier>(DEFAULT_JAVA_TIER);
     // GC selection state (null = no GC / JVM defaults)
     const [selectedGc, setSelectedGc] = useState<GcOptionId | null>(DEFAULT_GC);
     // Non-GC, non-core toggle state
@@ -521,10 +540,11 @@ export default () => {
             .then(result => {
                 setData(result);
                 if (!result.isUsingEggDefault && result.rawStartup) {
-                    const { gcId, selectedIds, xmsMb: inferredXms, xmxMb: inferredXmx } = inferStateFromCommand(result.rawStartup);
+                    const { gcId, selectedIds, xmsMb: inferredXms, xmxMb: inferredXmx, javaVersionTier: inferredTier } = inferStateFromCommand(result.rawStartup);
                     setSelectedGc(gcId);
                     setSelected(new Set(selectedIds));
                     setXmsMb(inferredXms);
+                    setJavaVersionTier(inferredTier);
                     // If the saved command has an explicit -Xmx, restore it; otherwise keep the suggested value
                     if (inferredXmx > 0) setXmxMb(inferredXmx);
                 }
@@ -554,6 +574,24 @@ export default () => {
         });
     };
 
+    // ── Java tier change ──────────────────────────────────────────────────
+
+    const handleTierChange = (newTier: JavaVersionTier) => {
+        setJavaVersionTier(newTier);
+        setActivePreset(null);
+        // If the current GC is incompatible with the new tier, switch to the best option for the tier
+        if (selectedGc) {
+            const gcOption = MINECRAFT_OPTIONS.find(o => o.id === selectedGc);
+            if (gcOption && gcOption.minJava > TIER_MAX_JAVA[newTier]) {
+                setSelectedGc(getDefaultGcForTier(newTier));
+            }
+        }
+        // native_access is recommended for Java 21+ and always-on for Java 25+
+        if (newTier === 'java21_24' || newTier === 'java25plus') {
+            setSelected(prev => new Set([...prev, 'native_access']));
+        }
+    };
+
     // ── Option toggle helpers ─────────────────────────────────────────────
 
     const toggleOption = (id: string) => {
@@ -569,6 +607,10 @@ export default () => {
         setActivePreset(preset.id);
         setSelectedGc(preset.gcId);
         setSelected(new Set(preset.optionIds));
+        // Ensure the tier is compatible with the preset's GC requirement
+        if (preset.gcId === 'zgc' && (javaVersionTier === 'java8_16' || javaVersionTier === 'java17_20')) {
+            setJavaVersionTier('java21_24');
+        }
         // Reset memory to the values calculated from server RAM
         setXmsMb(suggestedXmsMb);
         setXmxMb(suggestedXmxMb);
@@ -586,9 +628,20 @@ export default () => {
     // ── Build payload ─────────────────────────────────────────────────────
 
     const buildSelectedOptions = (): string[] => {
-        const ids: string[] = [...ALWAYS_INCLUDED_IDS];
-        if (selectedGc) ids.push(selectedGc);
-        ids.push(...selected);
+        const ids: string[] = getAlwaysIncludedForContext(javaVersionTier, selectedGc);
+        // Translate ZGC to the Java-25+ variant when appropriate
+        if (selectedGc) {
+            if (selectedGc === 'zgc' && javaVersionTier === 'java25plus') {
+                ids.push('zgc_java25');
+            } else {
+                ids.push(selectedGc);
+            }
+        }
+        // Add user-selected options; skip native_access if already forced in by Java 25+
+        for (const id of selected) {
+            if (id === 'native_access' && javaVersionTier === 'java25plus') continue;
+            ids.push(id);
+        }
         return ids;
     };
 
@@ -620,6 +673,7 @@ export default () => {
             setData(prev =>
                 prev ? { ...prev, rawStartup: result.rawStartup, renderedCommand: result.renderedCommand, isUsingEggDefault: result.isUsingEggDefault, eggDefault: result.eggDefault ?? prev.eggDefault } : prev,
             );
+            setJavaVersionTier(DEFAULT_JAVA_TIER);
             setSelectedGc(DEFAULT_GC);
             setSelected(new Set(DEFAULT_ENABLED_OPTION_IDS));
             setXmsMb(suggestedXmsMb);
@@ -639,11 +693,21 @@ export default () => {
     const filterByMode = (opts: MinecraftOption[]) =>
         advancedMode ? opts : opts.filter(o => o.recommended || o.alwaysEnabled);
 
-    const gcOptions = MINECRAFT_OPTIONS.filter(o => (GC_OPTION_IDS as readonly string[]).includes(o.id));
-    const visibleGcOptions = filterByMode(gcOptions);
+    const tierMaxJava = TIER_MAX_JAVA[javaVersionTier];
 
-    /** Always-on Core JVM Performance Toggle items (server category). */
-    const coreToggleOptions = optionsByCategory('server').filter(o => o.alwaysEnabled);
+    // Filter GC options to those compatible with the current tier;
+    // in advanced mode show all but disable incompatible ones
+    const allGcOptions = MINECRAFT_OPTIONS.filter(o => (GC_OPTION_IDS as readonly string[]).includes(o.id));
+    const gcOptions = advancedMode
+        ? allGcOptions
+        : allGcOptions.filter(o => o.minJava <= tierMaxJava);
+    const visibleGcOptions = gcOptions;
+
+    /** Always-on Core JVM Performance Toggle items (server category).
+     *  ParallelRefProcEnabled is hidden when ZGC is active (it's G1GC-specific). */
+    const coreToggleOptions = optionsByCategory('server').filter(o =>
+        o.alwaysEnabled && !(o.id === 'parallel_ref_proc_enabled' && selectedGc === 'zgc'),
+    );
 
     // ── Render ────────────────────────────────────────────────────────────
 
@@ -742,15 +806,38 @@ export default () => {
                                 title={'🗑️ Garbage Collector'}
                                 collapsed={collapsedSections.has('gc')}
                                 onToggle={toggleSection}
-                                badge={!advancedMode && gcOptions.length > visibleGcOptions.length
-                                    ? `+${gcOptions.length - visibleGcOptions.length} in Advanced`
+                                badge={advancedMode && allGcOptions.length > gcOptions.length
+                                    ? `+${allGcOptions.length - gcOptions.length} hidden by tier`
                                     : undefined}
                             >
-                                {!advancedMode && (
-                                    <p className={'mb-2 text-xs text-zinc-500'}>
-                                        Showing recommended options only. Enable Advanced for all GC options.
-                                    </p>
-                                )}
+                                {/* Java version tier selector */}
+                                <div className={'mb-3 flex items-center gap-2'}>
+                                    <label className={'text-xs font-medium text-zinc-400'}>
+                                        Java version:
+                                    </label>
+                                    <select
+                                        value={javaVersionTier}
+                                        onChange={e => handleTierChange(e.target.value as JavaVersionTier)}
+                                        disabled={!canStartupUpdate || saving}
+                                        className={[
+                                            'rounded-lg border border-zinc-600 bg-zinc-800 px-2.5 py-1 text-xs text-white',
+                                            'focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
+                                            'disabled:cursor-not-allowed disabled:opacity-50',
+                                        ].join(' ')}
+                                        aria-label={'Java version tier'}
+                                    >
+                                        {(Object.keys(JAVA_VERSION_TIER_LABELS) as JavaVersionTier[]).map(tier => (
+                                            <option key={tier} value={tier}>
+                                                {JAVA_VERSION_TIER_LABELS[tier]}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {javaVersionTier === 'java25plus' && (
+                                        <span className={'rounded-full border border-purple-700 bg-purple-900/40 px-1.5 py-px text-[10px] font-medium text-purple-300'}>
+                                            Minecraft 26.1+
+                                        </span>
+                                    )}
+                                </div>
                                 <div role={'radiogroup'} aria-label={'Garbage Collector'} className={'space-y-1.5'}>
                                     {visibleGcOptions.map(option => (
                                         <GcCard
@@ -758,7 +845,9 @@ export default () => {
                                             option={option}
                                             selected={selectedGc === option.id}
                                             onSelect={id => { setSelectedGc(id); setActivePreset(null); }}
-                                            disabled={!canStartupUpdate || saving}
+                                            disabled={(!canStartupUpdate || saving) || (advancedMode && option.minJava > tierMaxJava)}
+                                            recommended={isGcRecommendedForTier(option.id, javaVersionTier)}
+                                            legacy={isGcLegacyForTier(option.id, javaVersionTier)}
                                         />
                                     ))}
                                     {advancedMode && (
@@ -780,6 +869,11 @@ export default () => {
                             >
                                 <p className={'mb-2 text-xs text-zinc-500'}>
                                     Always included. Required for Pterodactyl container compatibility.
+                                    {selectedGc === 'zgc' && (
+                                        <span className={'ml-1 text-zinc-500'}>
+                                            ParallelRefProcEnabled is hidden — not applicable under ZGC.
+                                        </span>
+                                    )}
                                 </p>
                                 <div className={'space-y-1.5'}>
                                     {coreToggleOptions.map(option => (
@@ -804,16 +898,20 @@ export default () => {
                                         badge={hiddenCount > 0 ? `+${hiddenCount} in Advanced` : undefined}
                                     >
                                         <div className={'space-y-1.5'}>
-                                            {opts.map(option => (
-                                                <OptionRow
-                                                    key={option.id}
-                                                    option={option}
-                                                    checked={selected.has(option.id)}
-                                                    disabled={!canStartupUpdate || saving || isUnavailable(option)}
-                                                    incompatible={canStartupUpdate && !selected.has(option.id) && isIncompatible(option)}
-                                                    onToggle={toggleOption}
-                                                />
-                                            ))}
+                                            {opts.map(option => {
+                                                const isNativeAccessAlwaysOn = option.id === 'native_access' && javaVersionTier === 'java25plus';
+                                                return (
+                                                    <OptionRow
+                                                        key={option.id}
+                                                        option={option}
+                                                        checked={selected.has(option.id)}
+                                                        disabled={!canStartupUpdate || saving || isUnavailable(option)}
+                                                        incompatible={canStartupUpdate && !selected.has(option.id) && !isNativeAccessAlwaysOn && isIncompatible(option)}
+                                                        onToggle={toggleOption}
+                                                        alwaysOn={isNativeAccessAlwaysOn}
+                                                    />
+                                                );
+                                            })}
                                         </div>
                                     </CollapsibleSection>
                                 );
