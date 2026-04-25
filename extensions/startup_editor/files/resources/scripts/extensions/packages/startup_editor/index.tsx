@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ServerContext } from '@/state/server';
 import PageContentBlock from '@/elements/PageContentBlock';
 import FlashMessageRender from '@/elements/FlashMessageRender';
@@ -17,6 +17,19 @@ const UNSAFE_CHARS_PATTERN = /[;`]|\|\|?|&&|\$[({]/;
 
 const FLASH_KEY = 'server:extensions:startup_editor';
 
+function applyMemoryFlags(command: string, xms: number, xmx: number): string {
+    let result = command
+        .replace(/-Xmx\S+/gi, `-Xmx${xmx}M`)
+        .replace(/-Xms\S+/gi, `-Xms${xms}M`);
+    if (!/-Xmx\S+/i.test(result)) {
+        result = result.replace(/\bjava\b/i, `java -Xmx${xmx}M`);
+    }
+    if (!/-Xms\S+/i.test(result)) {
+        result = result.replace(/\bjava\b/i, `java -Xms${xms}M`);
+    }
+    return result.replace(/  +/g, ' ').trim();
+}
+
 export default () => {
     const uuid = ServerContext.useStoreState(state => state.server.data?.uuid);
 
@@ -28,6 +41,9 @@ export default () => {
 
     const [canStartupRead] = usePermissions('startup.read');
     const [canStartupUpdate] = usePermissions('startup.update');
+
+    const recommendedXms = useMemo(() => (data ? Math.floor(data.memoryLimit * 0.25) : 0), [data]);
+    const recommendedXmx = useMemo(() => (data ? Math.floor(data.memoryLimit * 0.85) : 0), [data]);
 
     useEffect(() => {
         if (!uuid) return;
@@ -84,6 +100,41 @@ export default () => {
                             <p className={'mt-1 text-sm text-neutral-400'}>
                                 Egg: <span className={'text-neutral-200'}>{data.eggName}</span>
                             </p>
+                        )}
+                    </div>
+
+                    <div className={'mt-6 rounded-lg bg-zinc-800 p-6'}>
+                        <h3 className={'text-lg font-semibold text-white'}>Recommended Memory Flags</h3>
+                        <p className={'mt-2 text-sm text-neutral-400'}>
+                            Pre-calculated based on this container&apos;s allocated RAM of{' '}
+                            <span className={'text-neutral-200'}>{data?.memoryLimit ?? 0} MB</span>.
+                            Xmx is set to 85% and Xms to 25% of allocated RAM.
+                        </p>
+                        <div className={'mt-3 flex flex-wrap gap-6'}>
+                            <div className={'rounded bg-zinc-900 px-4 py-3'}>
+                                <p className={'text-xs text-neutral-400'}>Xms (25%)</p>
+                                <p className={'mt-1 font-mono text-sm font-semibold text-green-400'}>
+                                    -Xms{recommendedXms}M
+                                </p>
+                            </div>
+                            <div className={'rounded bg-zinc-900 px-4 py-3'}>
+                                <p className={'text-xs text-neutral-400'}>Xmx (85%)</p>
+                                <p className={'mt-1 font-mono text-sm font-semibold text-blue-400'}>
+                                    -Xmx{recommendedXmx}M
+                                </p>
+                            </div>
+                        </div>
+                        {canStartupUpdate && (
+                            <Button
+                                className={'mt-4'}
+                                disabled={saving || recommendedXms === 0 || recommendedXmx === 0}
+                                onClick={() => {
+                                    const base = overrideValue.trim() || data?.eggDefault || '';
+                                    setOverrideValue(applyMemoryFlags(base, recommendedXms, recommendedXmx));
+                                }}
+                            >
+                                Apply Recommended Values
+                            </Button>
                         )}
                     </div>
 

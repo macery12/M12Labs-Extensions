@@ -6,6 +6,7 @@ export interface StartupEditorData {
     renderedCommand: string;
     isUsingEggDefault: boolean;
     eggName: string;
+    memoryLimit: number;
 }
 
 export interface StartupSaveResult {
@@ -24,6 +25,7 @@ export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> =
             renderedCommand: data.attributes.rendered_command,
             isUsingEggDefault: data.attributes.is_using_egg_default,
             eggName: data.attributes.egg_name,
+            memoryLimit: data.attributes.memory_limit,
         }));
 };
 

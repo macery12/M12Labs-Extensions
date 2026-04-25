@@ -33,6 +33,7 @@ class StartupEditorController extends ClientApiController
                 'rendered_command' => $this->startupCommandService->handle($server),
                 'is_using_egg_default' => $isUsingEggDefault,
                 'egg_name' => $server->egg->name,
+                'memory_limit' => $server->memory,
             ],
         ]);
     }
