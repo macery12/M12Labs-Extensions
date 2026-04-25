@@ -45,6 +45,13 @@ class SaveStartupEditorRequest extends ClientApiRequest implements ClientPermiss
                     return;
                 }
             }
+
+            // Ensure Xmx is at least as large as Xms to prevent invalid heap configuration.
+            $xmsMb = (int) ($this->input('xms_mb') ?? 256);
+            $xmxMb = (int) ($this->input('xmx_mb') ?? 1024);
+            if ($xmxMb < $xmsMb) {
+                $v->errors()->add('xmx_mb', 'Maximum heap (Xmx) must be greater than or equal to initial heap (Xms).');
+            }
         });
     }
 }
