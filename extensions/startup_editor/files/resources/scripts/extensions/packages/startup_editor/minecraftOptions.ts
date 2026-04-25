@@ -374,8 +374,9 @@ export function inferStateFromCommand(rawCommand: string): {
     gcId: GcOptionId | null;
     selectedIds: string[];
     xmsMb: number;
+    xmxMb: number;
 } {
-    if (!rawCommand) return { gcId: DEFAULT_GC, selectedIds: [...DEFAULT_ENABLED_OPTION_IDS], xmsMb: 256 };
+    if (!rawCommand) return { gcId: DEFAULT_GC, selectedIds: [...DEFAULT_ENABLED_OPTION_IDS], xmsMb: 256, xmxMb: 0 };
 
     // Fragments that uniquely identify each option in a startup command string.
     const knownFragments: Record<string, string[]> = {
@@ -419,10 +420,12 @@ export function inferStateFromCommand(rawCommand: string): {
         selectedIds.push(option.id);
     }
 
-    // Parse Xms value from command (e.g. -Xms256M)
+    // Parse Xms and Xmx values from command (e.g. -Xms256M, -Xmx1024M)
     const xmsMatch = rawCommand.match(/-Xms(\d+)[Mm]/);
+    const xmxMatch = rawCommand.match(/-Xmx(\d+)[Mm]/);
     const xmsMb = xmsMatch ? parseInt(xmsMatch[1], 10) : 256;
+    const xmxMb = xmxMatch ? parseInt(xmxMatch[1], 10) : 0; // 0 = not found; caller should substitute suggested value
 
-    return { gcId, selectedIds, xmsMb };
+    return { gcId, selectedIds, xmsMb, xmxMb };
 }
 

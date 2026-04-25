@@ -44,8 +44,9 @@ class StartupEditorController extends ClientApiController
         $original        = $server->startup;
         $selectedOptions = $request->input('selected_options', []);
         $xmsMb           = (int) ($request->input('xms_mb') ?? 256);
+        $xmxMb           = (int) ($request->input('xmx_mb') ?? 1024);
         $jarVar          = MinecraftStartupOptions::extractJarVariable($server->egg->startup);
-        $startup         = MinecraftStartupOptions::buildStartupCommand($selectedOptions, $jarVar, $xmsMb);
+        $startup         = MinecraftStartupOptions::buildStartupCommand($selectedOptions, $jarVar, $xmsMb, $xmxMb);
 
         $server->startup = $startup;
         $server->save();

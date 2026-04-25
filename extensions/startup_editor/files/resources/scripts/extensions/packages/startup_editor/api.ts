@@ -36,16 +36,19 @@ export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> =
  *
  * @param selectedOptions  Option IDs to activate (including GC and core_flags).
  * @param xmsMb            Initial heap size in MB (-Xms).
+ * @param xmxMb            Maximum heap size in MB (-Xmx).
  */
 export const saveStartupOptions = (
     uuid: string,
     selectedOptions: string[],
     xmsMb: number,
+    xmxMb: number,
 ): Promise<StartupSaveResult> => {
     return http
         .post(`/api/client/servers/${uuid}/extensions/startup_editor/save`, {
             selected_options: selectedOptions,
             xms_mb:           xmsMb,
+            xmx_mb:           xmxMb,
         })
         .then(({ data }) => ({
             renderedCommand:   data.attributes.rendered_command,

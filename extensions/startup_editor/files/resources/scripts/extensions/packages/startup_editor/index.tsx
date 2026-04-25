@@ -343,52 +343,82 @@ function PresetCard({ preset, active, onApply }: PresetCardProps) {
 
 interface MemorySectionProps {
     xmsMb: number;
-    onChange: (v: number) => void;
+    xmxMb: number;
+    suggestedXmsMb: number;
+    suggestedXmxMb: number;
+    onXmsChange: (v: number) => void;
+    onXmxChange: (v: number) => void;
     disabled: boolean;
 }
 
-function MemorySection({ xmsMb, onChange, disabled }: MemorySectionProps) {
-    const inputId = useId();
+function MemorySection({ xmsMb, xmxMb, suggestedXmsMb, suggestedXmxMb, onXmsChange, onXmxChange, disabled }: MemorySectionProps) {
+    const baseId = useId();
+    const xmsId  = `${baseId}-xms`;
+    const xmxId  = `${baseId}-xmx`;
 
-    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleXmsChange = (e: ChangeEvent<HTMLInputElement>) => {
         const v = parseInt(e.target.value, 10);
-        if (!isNaN(v) && v >= 64) onChange(v);
+        if (!isNaN(v) && v >= 64) onXmsChange(v);
+    };
+
+    const handleXmxChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const v = parseInt(e.target.value, 10);
+        if (!isNaN(v) && v >= 64) onXmxChange(v);
     };
 
     return (
         <div className={'space-y-2'}>
+            {/* Xms */}
             <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
                 <div>
-                    <div className={'flex items-center gap-1.5'}>
-                        <span className={'text-sm font-medium text-white'}>Xmx — Maximum Heap</span>
-                        <span className={'rounded-full border border-green-800 bg-green-900/40 px-1.5 py-px text-[10px] font-medium text-green-300'}>
-                            Auto
-                        </span>
-                        <InfoBadge text={"Xmx is set to 80% of your container memory limit via -XX:MaxRAMPercentage=80.0. This ensures the JVM respects Pterodactyl's container limits without needing explicit math on {{SERVER_MEMORY}}."} />
-                    </div>
-                    <p className={'text-xs text-zinc-500'}>
-                        <span className={'font-mono'}>-XX:MaxRAMPercentage=80.0</span> — 80% of container memory
-                    </p>
-                </div>
-            </div>
-
-            <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
-                <div>
-                    <label htmlFor={inputId} className={'flex items-center gap-1.5 text-sm font-medium text-white'}>
+                    <label htmlFor={xmsId} className={'flex items-center gap-1.5 text-sm font-medium text-white'}>
                         Xms — Initial Heap
-                        <InfoBadge text={'Lower Xms reduces startup memory usage. Increase for more consistent performance (less GC pressure at boot). Recommend ~10% of your allocated server RAM.'} />
+                        <InfoBadge text={'The initial heap size the JVM allocates at startup. Lower values reduce startup memory; higher values reduce GC pressure early on. Recommended: 25% of allocated server RAM.'} />
                     </label>
-                    <p className={'text-xs text-zinc-500'}>~10% of allocated RAM (e.g. 256 MB for a 2.5 GB server)</p>
+                    <p className={'text-xs text-zinc-500'}>
+                        Suggested: <span className={'font-mono text-zinc-400'}>{suggestedXmsMb} MB</span> (25% of container RAM)
+                    </p>
                 </div>
                 <div className={'flex items-center gap-2'}>
                     <input
-                        id={inputId}
+                        id={xmsId}
                         type={'number'}
                         min={64}
                         max={16384}
                         step={64}
                         value={xmsMb}
-                        onChange={handleChange}
+                        onChange={handleXmsChange}
+                        disabled={disabled}
+                        className={[
+                            'w-24 rounded-lg border border-zinc-600 bg-zinc-800 px-2.5 py-1.5 text-right text-sm text-white',
+                            'focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
+                            'disabled:cursor-not-allowed disabled:opacity-50',
+                        ].join(' ')}
+                    />
+                    <span className={'text-xs text-zinc-500'}>MB</span>
+                </div>
+            </div>
+
+            {/* Xmx */}
+            <div className={'flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2'}>
+                <div>
+                    <label htmlFor={xmxId} className={'flex items-center gap-1.5 text-sm font-medium text-white'}>
+                        Xmx — Maximum Heap
+                        <InfoBadge text={'The maximum heap size the JVM is allowed to use. Should be set below the container memory limit to leave room for the OS and off-heap memory. Recommended: 85% of allocated server RAM.'} />
+                    </label>
+                    <p className={'text-xs text-zinc-500'}>
+                        Suggested: <span className={'font-mono text-zinc-400'}>{suggestedXmxMb} MB</span> (85% of container RAM)
+                    </p>
+                </div>
+                <div className={'flex items-center gap-2'}>
+                    <input
+                        id={xmxId}
+                        type={'number'}
+                        min={64}
+                        max={65536}
+                        step={64}
+                        value={xmxMb}
+                        onChange={handleXmxChange}
                         disabled={disabled}
                         className={[
                             'w-24 rounded-lg border border-zinc-600 bg-zinc-800 px-2.5 py-1.5 text-right text-sm text-white',
@@ -450,6 +480,12 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
 
 export default () => {
     const uuid = ServerContext.useStoreState(state => state.server.data?.uuid);
+    // Server-allocated memory in MB (0 = unlimited / unknown)
+    const serverMemoryMb = ServerContext.useStoreState(state => state.server.data?.limits?.memory ?? 0);
+
+    // Suggested Xms = 25%, Xmx = 85% of allocated RAM; fall back to safe defaults when unknown
+    const suggestedXmsMb = serverMemoryMb > 0 ? Math.max(64, Math.round(serverMemoryMb * 0.25)) : 256;
+    const suggestedXmxMb = serverMemoryMb > 0 ? Math.max(128, Math.round(serverMemoryMb * 0.85)) : 1024;
 
     const { addFlash, clearFlashes, clearAndAddHttpError } = useFlash();
     const [data, setData]       = useState<StartupEditorData | null>(null);
@@ -460,8 +496,9 @@ export default () => {
     const [selectedGc, setSelectedGc] = useState<GcOptionId | null>(DEFAULT_GC);
     // Non-GC, non-core toggle state
     const [selected, setSelected] = useState<Set<string>>(new Set(DEFAULT_ENABLED_OPTION_IDS));
-    // Memory state
-    const [xmsMb, setXmsMb] = useState(256);
+    // Memory state — initialised to calculated suggestions
+    const [xmsMb, setXmsMb] = useState(() => suggestedXmsMb);
+    const [xmxMb, setXmxMb] = useState(() => suggestedXmxMb);
     // Active preset indicator
     const [activePreset, setActivePreset] = useState<string | null>(null);
     // UI mode: basic hides non-recommended options
@@ -484,10 +521,12 @@ export default () => {
             .then(result => {
                 setData(result);
                 if (!result.isUsingEggDefault && result.rawStartup) {
-                    const { gcId, selectedIds, xmsMb: inferredXms } = inferStateFromCommand(result.rawStartup);
+                    const { gcId, selectedIds, xmsMb: inferredXms, xmxMb: inferredXmx } = inferStateFromCommand(result.rawStartup);
                     setSelectedGc(gcId);
                     setSelected(new Set(selectedIds));
                     setXmsMb(inferredXms);
+                    // If the saved command has an explicit -Xmx, restore it; otherwise keep the suggested value
+                    if (inferredXmx > 0) setXmxMb(inferredXmx);
                 }
             })
             .catch(error => clearAndAddHttpError({ key: FLASH_KEY, error }))
@@ -530,7 +569,9 @@ export default () => {
         setActivePreset(preset.id);
         setSelectedGc(preset.gcId);
         setSelected(new Set(preset.optionIds));
-        setXmsMb(preset.xmsMb);
+        // Reset memory to the values calculated from server RAM
+        setXmsMb(suggestedXmsMb);
+        setXmxMb(suggestedXmxMb);
     };
 
     const isIncompatible = (option: MinecraftOption): boolean => {
@@ -558,7 +599,7 @@ export default () => {
         setSaving(true);
         clearFlashes(FLASH_KEY);
         try {
-            const result = await saveStartupOptions(uuid, buildSelectedOptions(), xmsMb);
+            const result = await saveStartupOptions(uuid, buildSelectedOptions(), xmsMb, xmxMb);
             setData(prev =>
                 prev ? { ...prev, rawStartup: result.rawStartup, renderedCommand: result.renderedCommand, isUsingEggDefault: result.isUsingEggDefault } : prev,
             );
@@ -581,7 +622,8 @@ export default () => {
             );
             setSelectedGc(DEFAULT_GC);
             setSelected(new Set(DEFAULT_ENABLED_OPTION_IDS));
-            setXmsMb(256);
+            setXmsMb(suggestedXmsMb);
+            setXmxMb(suggestedXmxMb);
             setActivePreset(null);
             addFlash({ key: FLASH_KEY, type: 'success', message: 'Reset to egg default.' });
         } catch (error) {
@@ -685,7 +727,11 @@ export default () => {
                             >
                                 <MemorySection
                                     xmsMb={xmsMb}
-                                    onChange={setXmsMb}
+                                    xmxMb={xmxMb}
+                                    suggestedXmsMb={suggestedXmsMb}
+                                    suggestedXmxMb={suggestedXmxMb}
+                                    onXmsChange={setXmsMb}
+                                    onXmxChange={setXmxMb}
                                     disabled={!canStartupUpdate || saving}
                                 />
                             </CollapsibleSection>

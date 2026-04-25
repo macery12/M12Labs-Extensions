@@ -161,11 +161,11 @@ class MinecraftStartupOptions
      * Compose a startup command from a validated list of option IDs.
      *
      * Format:
-     *   java -Xms{xmsMb}M -XX:MaxRAMPercentage=80.0 [jvm_flags] -jar [jarVar] [server_args]
+     *   java -Xms{xmsMb}M -Xmx{xmxMb}M [jvm_flags] -jar [jarVar] [server_args]
      *
-     * Xmx is expressed via MaxRAMPercentage=80.0 so that the JVM honours the
-     * container memory limit set by Pterodactyl without needing explicit math
-     * on {{SERVER_MEMORY}}.
+     * Both heap sizes are expressed as explicit fixed MB values calculated from
+     * the server's allocated container memory (Xms = 25%, Xmx = 85%).
+     * The user may override both values manually in the UI.
      *
      * core_flags always provides --nogui (required in headless container environments).
      * The four Core JVM Performance Toggle options (always_pre_touch, disable_explicit_gc,
@@ -178,8 +178,9 @@ class MinecraftStartupOptions
      *                                        must validate before calling this method.
      * @param  string    $jarVar             The jar-file variable placeholder (e.g. {{SERVER_JARFILE}}).
      * @param  int       $xmsMb              Initial heap size in MB (Xms). Defaults to 256.
+     * @param  int       $xmxMb              Maximum heap size in MB (Xmx). Defaults to 1024.
      */
-    public static function buildStartupCommand(array $selectedOptionIds, string $jarVar, int $xmsMb = 256): string
+    public static function buildStartupCommand(array $selectedOptionIds, string $jarVar, int $xmsMb = 256, int $xmxMb = 1024): string
     {
         $jvmParts    = [];
         $serverParts = [];
@@ -197,7 +198,7 @@ class MinecraftStartupOptions
             }
         }
 
-        $parts = ['java', "-Xms{$xmsMb}M", '-XX:MaxRAMPercentage=80.0'];
+        $parts = ['java', "-Xms{$xmsMb}M", "-Xmx{$xmxMb}M"];
 
         foreach ($jvmParts as $flags) {
             $parts[] = $flags;

@@ -29,6 +29,8 @@ class SaveStartupEditorRequest extends ClientApiRequest implements ClientPermiss
             'selected_options.*' => ['required', 'string', 'max:64'],
             // Xms heap size in MB; 64 MB minimum, 16 384 MB (16 GB) maximum.
             'xms_mb'             => ['nullable', 'integer', 'min:64', 'max:16384'],
+            // Xmx heap size in MB; 64 MB minimum, 65 536 MB (64 GB) maximum.
+            'xmx_mb'             => ['nullable', 'integer', 'min:64', 'max:65536'],
         ];
     }
 
