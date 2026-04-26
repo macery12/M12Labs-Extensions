@@ -14,8 +14,6 @@ import {
     BIOME_PRESETS,
     fieldsBySection,
     isFieldAvailable,
-    compareVersions,
-    validateField,
     validateAll,
     buildDefaultProperties,
     getRecommendations,
@@ -61,19 +59,23 @@ function InfoBadge({ text }: { text: string }) {
     );
 }
 
-// ─── CollapsibleSection ───────────────────────────────────────────────────────
+// ─── Collapsible (used only for Recommendations banner) ───────────────────────
 
-interface CollapsibleSectionProps {
+function Collapsible({
+    id,
+    title,
+    badge,
+    children,
+    collapsed,
+    onToggle,
+}: {
     id: string;
     title: string;
+    badge?: string;
     children: ReactNode;
     collapsed: boolean;
     onToggle: (id: string) => void;
-    badge?: string;
-    defaultCollapsed?: boolean;
-}
-
-function CollapsibleSection({ id, title, children, collapsed, onToggle, badge }: CollapsibleSectionProps) {
+}) {
     return (
         <div className={'rounded-xl border border-zinc-700 bg-zinc-800'}>
             <button
@@ -100,6 +102,62 @@ function CollapsibleSection({ id, title, children, collapsed, onToggle, badge }:
                     {children}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ─── TabBar ───────────────────────────────────────────────────────────────────
+
+interface TabDef {
+    id: string;
+    label: string;
+    disabled?: boolean;
+    soon?: boolean;
+}
+
+function TabBar({
+    tabs,
+    activeTab,
+    onSelect,
+}: {
+    tabs: TabDef[];
+    activeTab: string;
+    onSelect: (id: string) => void;
+}) {
+    return (
+        <div className={'overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-800'}>
+            <div className={'flex min-w-max items-stretch'}>
+                {tabs.map((tab, i) => {
+                    const isActive = !tab.disabled && tab.id === activeTab;
+                    return (
+                        <button
+                            key={tab.id}
+                            type={'button'}
+                            disabled={tab.disabled}
+                            onClick={() => !tab.disabled && onSelect(tab.id)}
+                            className={[
+                                'relative flex items-center gap-1.5 whitespace-nowrap px-4 py-2.5 text-xs font-medium transition-colors',
+                                i > 0 ? 'border-l border-zinc-700' : '',
+                                isActive
+                                    ? 'bg-zinc-700 text-white'
+                                    : tab.disabled
+                                        ? 'cursor-not-allowed text-zinc-600'
+                                        : 'text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200',
+                            ].join(' ')}
+                        >
+                            {isActive && (
+                                <span className={'absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500'} />
+                            )}
+                            {tab.label}
+                            {tab.soon && (
+                                <span className={'rounded-full border border-zinc-600 bg-zinc-700 px-1 py-px text-[9px] text-zinc-500'}>
+                                    Soon
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -139,7 +197,6 @@ interface FieldRowProps {
     disabled: boolean;
     mcVersion: string | null;
     errors: ValidationResult[];
-    advancedMode: boolean;
 }
 
 function FieldRow({ field, value, onChange, disabled, mcVersion, errors }: FieldRowProps) {
@@ -214,7 +271,6 @@ function FieldRow({ field, value, onChange, disabled, mcVersion, errors }: Field
             );
         }
 
-        // text / textarea
         if (field.type === 'textarea') {
             return (
                 <textarea
@@ -227,7 +283,6 @@ function FieldRow({ field, value, onChange, disabled, mcVersion, errors }: Field
             );
         }
 
-        // text with special cases
         if (field.key === 'level-seed') {
             return (
                 <div className={'flex items-center gap-1'}>
@@ -396,27 +451,6 @@ function RecommendationCard({
     );
 }
 
-// ─── Placeholder Stub ─────────────────────────────────────────────────────────
-
-function PlaceholderStub({ title, description }: { title: string; description: string }) {
-    return (
-        <div className={'rounded-xl border border-zinc-700 bg-zinc-800 opacity-60'}>
-            <div className={'flex items-center justify-between px-4 py-3'}>
-                <div className={'flex items-center gap-2'}>
-                    <span className={'text-zinc-500'}>🔒</span>
-                    <h3 className={'text-xs font-semibold uppercase tracking-wider text-zinc-500'}>{title}</h3>
-                    <span className={'rounded-full bg-zinc-700 px-1.5 py-px text-[10px] font-medium text-zinc-500'}>
-                        Coming Soon
-                    </span>
-                </div>
-            </div>
-            <div className={'border-t border-zinc-700 px-4 py-3'}>
-                <p className={'text-xs text-zinc-600'}>{description}</p>
-            </div>
-        </div>
-    );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default () => {
@@ -428,27 +462,28 @@ export default () => {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving]   = useState(false);
-    const [fileExists, setFileExists]   = useState(false);
-    const [eggName, setEggName]         = useState('');
+    const [fileExists, setFileExists] = useState(false);
+    const [eggName, setEggName]       = useState('');
 
-    const [properties, setProperties]         = useState<Record<string, string>>({});
+    const [properties, setProperties]           = useState<Record<string, string>>({});
     const [savedProperties, setSavedProperties] = useState<Record<string, string>>({});
 
-    const [serverType, setServerType] = useState<ServerType>('vanilla');
-    const [mcVersion, setMcVersion]   = useState<string | null>(null);
+    const [serverType, setServerType]     = useState<ServerType>('vanilla');
+    const [mcVersion, setMcVersion]       = useState<string | null>(null);
     const [advancedMode, setAdvancedMode] = useState(false);
-    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-        new Set(['advanced', 'performance', 'resource_pack', 'rcon_query', 'security']),
-    );
+    const [activeTab, setActiveTab]       = useState<SectionId | 'raw'>('general');
+    const [recsCollapsed, setRecsCollapsed] = useState(false);
 
-    const [rawText, setRawText] = useState('');
-    const [rawTextDirty, setRawTextDirty] = useState(false);
+    const [rawText, setRawText]             = useState('');
+    const [rawTextDirty, setRawTextDirty]   = useState(false);
 
     const [dismissedRecs, setDismissedRecs] = useState<Set<string>>(new Set());
 
     const [customBiomePresets, setCustomBiomePresets] = useState<Array<{ name: string; levelType: string }>>([]);
-    const [customPresetName, setCustomPresetName] = useState('');
+    const [customPresetName, setCustomPresetName]     = useState('');
     const [customPresetLevelType, setCustomPresetLevelType] = useState('');
+
+    // ── Derived ───────────────────────────────────────────────────────────
 
     const isDirty = useMemo(() => {
         const keys = new Set([...Object.keys(properties), ...Object.keys(savedProperties)]);
@@ -464,6 +499,13 @@ export default () => {
         const recs = getRecommendations(serverType, mcVersion);
         return recs.filter(r => !dismissedRecs.has(r.key));
     }, [serverType, mcVersion, dismissedRecs]);
+
+    // When switching off advanced mode, move away from advanced/raw tabs
+    useEffect(() => {
+        if (!advancedMode && (activeTab === 'advanced' || activeTab === 'raw')) {
+            setActiveTab('general');
+        }
+    }, [advancedMode]);
 
     // ── Load ──────────────────────────────────────────────────────────────
 
@@ -487,15 +529,7 @@ export default () => {
             .finally(() => setLoading(false));
     }, [uuid]);
 
-    // ── Helpers ───────────────────────────────────────────────────────────
-
-    const toggleSection = useCallback((id: string) => {
-        setCollapsedSections(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) { next.delete(id); } else { next.add(id); }
-            return next;
-        });
-    }, []);
+    // ── Callbacks ─────────────────────────────────────────────────────────
 
     const updateField = useCallback((key: string, value: string) => {
         setProperties(prev => ({ ...prev, [key]: value }));
@@ -529,7 +563,7 @@ export default () => {
         setRawTextDirty(false);
     }, [rawText]);
 
-    // ── Save ──────────────────────────────────────────────────────────────
+    // ── Save / Discard ────────────────────────────────────────────────────
 
     const handleSave = async () => {
         if (!uuid) return;
@@ -550,7 +584,7 @@ export default () => {
         setProperties(savedProperties);
     };
 
-    // ── Guard ─────────────────────────────────────────────────────────────
+    // ── Permission guard ──────────────────────────────────────────────────
 
     if (!canFileRead) {
         return (
@@ -563,9 +597,156 @@ export default () => {
         );
     }
 
-    // ── Render ────────────────────────────────────────────────────────────
+    // ── Tab definitions ───────────────────────────────────────────────────
+
+    const visibleSections: SectionId[] = advancedMode
+        ? SECTIONS
+        : SECTIONS.filter(s => s !== 'advanced');
+
+    const tabs: TabDef[] = [
+        ...visibleSections.map(s => ({ id: s, label: SECTION_LABELS[s] })),
+        ...(advancedMode ? [{ id: 'raw', label: '📄 Raw' }] : []),
+        { id: 'plugin_configs', label: '🔒 Plugin Configs', disabled: true, soon: true },
+        { id: 'mod_configs',    label: '🔒 Mod Configs',    disabled: true, soon: true },
+    ];
+
+    // ── Tab content ───────────────────────────────────────────────────────
 
     const activeLevelType = properties['level-type'] ?? '';
+
+    const renderTabContent = () => {
+        if (activeTab === 'raw') {
+            return (
+                <div className={'space-y-3'}>
+                    <p className={'text-xs text-zinc-500'}>
+                        Directly edit the raw file content. Click "Apply Raw" to sync changes to the form fields.
+                    </p>
+                    <textarea
+                        value={rawText}
+                        onChange={e => { setRawText(e.target.value); setRawTextDirty(true); }}
+                        rows={24}
+                        spellCheck={false}
+                        className={[
+                            'w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2',
+                            'font-mono text-xs text-zinc-200 focus:border-blue-500 focus:outline-none',
+                        ].join(' ')}
+                    />
+                    <button
+                        type={'button'}
+                        disabled={!rawTextDirty}
+                        onClick={applyRawText}
+                        className={'rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50'}
+                    >
+                        Apply Raw
+                    </button>
+                </div>
+            );
+        }
+
+        const sectionId = activeTab as SectionId;
+        let fields = fieldsBySection(sectionId);
+
+        if (!advancedMode) {
+            fields = fields.filter(f => !f.basicHide && !f.advanced);
+        }
+
+        return (
+            <div className={'space-y-2'}>
+                {fields.map(field => (
+                    <FieldRow
+                        key={field.key}
+                        field={field}
+                        value={properties[field.key] ?? field.defaultValue}
+                        onChange={updateField}
+                        disabled={!canFileUpdate || saving}
+                        mcVersion={mcVersion}
+                        errors={validationErrors.filter(e => e.field === field.key)}
+                    />
+                ))}
+
+                {/* Biome Mod Presets — World tab only */}
+                {sectionId === 'world' && (
+                    <div className={'mt-4 rounded-lg border border-zinc-700 bg-zinc-800 p-3'}>
+                        <h4 className={'mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400'}>
+                            🌿 Biome Mod Presets
+                        </h4>
+                        {serverType === 'vanilla' && (
+                            <div className={'mb-2 rounded border border-orange-700 bg-orange-900/20 px-3 py-2 text-xs text-orange-300'}>
+                                ⚠ Biome mods require Fabric or Forge/NeoForge. Vanilla servers are not compatible.
+                            </div>
+                        )}
+                        <div className={'space-y-2'}>
+                            {BIOME_PRESETS.map(preset => (
+                                <BiomePresetCard
+                                    key={preset.id}
+                                    preset={preset}
+                                    serverType={serverType}
+                                    onApply={applyBiomePreset}
+                                    active={activeLevelType === preset.levelType}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Custom preset */}
+                        <div className={'mt-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3'}>
+                            <p className={'mb-2 text-xs font-medium text-zinc-400'}>Custom Biome Preset</p>
+                            <div className={'flex flex-wrap items-center gap-2'}>
+                                <input
+                                    type={'text'}
+                                    placeholder={'Preset name'}
+                                    value={customPresetName}
+                                    onChange={e => setCustomPresetName(e.target.value)}
+                                    className={'w-32 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-white focus:outline-none'}
+                                />
+                                <input
+                                    type={'text'}
+                                    placeholder={'level-type value'}
+                                    value={customPresetLevelType}
+                                    onChange={e => setCustomPresetLevelType(e.target.value)}
+                                    className={'w-48 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 font-mono text-xs text-white focus:outline-none'}
+                                />
+                                <button
+                                    type={'button'}
+                                    disabled={!customPresetName || !customPresetLevelType}
+                                    onClick={() => {
+                                        if (customPresetName && customPresetLevelType) {
+                                            setCustomBiomePresets(prev => [...prev, { name: customPresetName, levelType: customPresetLevelType }]);
+                                            setCustomPresetName('');
+                                            setCustomPresetLevelType('');
+                                        }
+                                    }}
+                                    className={'rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-50'}
+                                >
+                                    Save Preset
+                                </button>
+                            </div>
+                            {customBiomePresets.length > 0 && (
+                                <div className={'mt-2 space-y-1'}>
+                                    {customBiomePresets.map((p, i) => (
+                                        <div key={i} className={'flex items-center justify-between rounded border border-zinc-700 px-2 py-1'}>
+                                            <span className={'text-xs text-zinc-300'}>{p.name}</span>
+                                            <div className={'flex items-center gap-1'}>
+                                                <span className={'font-mono text-[10px] text-zinc-500'}>{p.levelType}</span>
+                                                <button
+                                                    type={'button'}
+                                                    onClick={() => applyBiomePreset(p.levelType)}
+                                                    className={'rounded border border-zinc-600 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white'}
+                                                >
+                                                    Apply
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ── Render ────────────────────────────────────────────────────────────
 
     return (
         <PageContentBlock title={'MC Property Editor'}>
@@ -576,7 +757,7 @@ export default () => {
                     <Spinner size={'large'} />
                 </div>
             ) : (
-                <div className={'space-y-4 pb-28'}>
+                <div className={'space-y-3 pb-28'}>
 
                     {/* ── Header ── */}
                     <div className={'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3'}>
@@ -643,14 +824,14 @@ export default () => {
                         </div>
                     )}
 
-                    {/* ── Recommendations ── */}
+                    {/* ── Recommendations (persistent collapsible banner, above tab bar) ── */}
                     {recommendations.length > 0 && (
-                        <CollapsibleSection
+                        <Collapsible
                             id={'recommendations'}
                             title={'💡 Recommended Settings'}
-                            collapsed={collapsedSections.has('recommendations')}
-                            onToggle={toggleSection}
                             badge={String(recommendations.length)}
+                            collapsed={recsCollapsed}
+                            onToggle={() => setRecsCollapsed(v => !v)}
                         >
                             <p className={'mb-2 text-xs text-zinc-500'}>
                                 Suggestions for {serverType} servers. Accept to apply, dismiss to hide.
@@ -665,169 +846,20 @@ export default () => {
                                     />
                                 ))}
                             </div>
-                        </CollapsibleSection>
+                        </Collapsible>
                     )}
 
-                    {/* ── Property sections ── */}
-                    {SECTIONS.map(sectionId => {
-                        let fields = fieldsBySection(sectionId);
-
-                        if (!advancedMode) {
-                            fields = fields.filter(f => !f.basicHide && !f.advanced);
-                        }
-
-                        // Hide entirely if no fields to show in this mode
-                        if (fields.length === 0 && sectionId !== 'world') return null;
-                        if (fields.length === 0 && sectionId === 'world' && !advancedMode) {
-                            fields = fieldsBySection('world').filter(f => !f.basicHide && !f.advanced);
-                        }
-
-                        return (
-                            <CollapsibleSection
-                                key={sectionId}
-                                id={sectionId}
-                                title={SECTION_LABELS[sectionId]}
-                                collapsed={collapsedSections.has(sectionId)}
-                                onToggle={toggleSection}
-                            >
-                                <div className={'space-y-2'}>
-                                    {fields.map(field => (
-                                        <FieldRow
-                                            key={field.key}
-                                            field={field}
-                                            value={properties[field.key] ?? field.defaultValue}
-                                            onChange={updateField}
-                                            disabled={!canFileUpdate || saving}
-                                            mcVersion={mcVersion}
-                                            errors={validationErrors.filter(e => e.field === field.key)}
-                                            advancedMode={advancedMode}
-                                        />
-                                    ))}
-
-                                    {/* Biome presets inside World section */}
-                                    {sectionId === 'world' && (
-                                        <div className={'mt-4 rounded-lg border border-zinc-700 bg-zinc-800 p-3'}>
-                                            <h4 className={'mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400'}>
-                                                🌿 Biome Mod Presets
-                                            </h4>
-                                            {serverType === 'vanilla' && (
-                                                <div className={'mb-2 rounded border border-orange-700 bg-orange-900/20 px-3 py-2 text-xs text-orange-300'}>
-                                                    ⚠ Biome mods require Fabric or Forge/NeoForge. Vanilla servers are not compatible.
-                                                </div>
-                                            )}
-                                            <div className={'space-y-2'}>
-                                                {BIOME_PRESETS.map(preset => (
-                                                    <BiomePresetCard
-                                                        key={preset.id}
-                                                        preset={preset}
-                                                        serverType={serverType}
-                                                        onApply={applyBiomePreset}
-                                                        active={activeLevelType === preset.levelType}
-                                                    />
-                                                ))}
-                                            </div>
-
-                                            {/* Custom preset */}
-                                            <div className={'mt-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3'}>
-                                                <p className={'mb-2 text-xs font-medium text-zinc-400'}>Custom Biome Preset</p>
-                                                <div className={'flex flex-wrap items-center gap-2'}>
-                                                    <input
-                                                        type={'text'}
-                                                        placeholder={'Preset name'}
-                                                        value={customPresetName}
-                                                        onChange={e => setCustomPresetName(e.target.value)}
-                                                        className={'rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-white focus:outline-none w-32'}
-                                                    />
-                                                    <input
-                                                        type={'text'}
-                                                        placeholder={'level-type value'}
-                                                        value={customPresetLevelType}
-                                                        onChange={e => setCustomPresetLevelType(e.target.value)}
-                                                        className={'rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-white focus:outline-none w-48 font-mono'}
-                                                    />
-                                                    <button
-                                                        type={'button'}
-                                                        disabled={!customPresetName || !customPresetLevelType}
-                                                        onClick={() => {
-                                                            if (customPresetName && customPresetLevelType) {
-                                                                setCustomBiomePresets(prev => [...prev, { name: customPresetName, levelType: customPresetLevelType }]);
-                                                                setCustomPresetName('');
-                                                                setCustomPresetLevelType('');
-                                                            }
-                                                        }}
-                                                        className={'rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-50'}
-                                                    >
-                                                        Save Preset
-                                                    </button>
-                                                </div>
-                                                {customBiomePresets.length > 0 && (
-                                                    <div className={'mt-2 space-y-1'}>
-                                                        {customBiomePresets.map((p, i) => (
-                                                            <div key={i} className={'flex items-center justify-between rounded border border-zinc-700 px-2 py-1'}>
-                                                                <span className={'text-xs text-zinc-300'}>{p.name}</span>
-                                                                <div className={'flex items-center gap-1'}>
-                                                                    <span className={'font-mono text-[10px] text-zinc-500'}>{p.levelType}</span>
-                                                                    <button
-                                                                        type={'button'}
-                                                                        onClick={() => applyBiomePreset(p.levelType)}
-                                                                        className={'rounded border border-zinc-600 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white'}
-                                                                    >
-                                                                        Apply
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </CollapsibleSection>
-                        );
-                    })}
-
-                    {/* ── Raw text editor (advanced mode only) ── */}
-                    {advancedMode && (
-                        <CollapsibleSection
-                            id={'raw'}
-                            title={'📄 Raw server.properties'}
-                            collapsed={collapsedSections.has('raw')}
-                            onToggle={toggleSection}
-                        >
-                            <p className={'mb-2 text-xs text-zinc-500'}>
-                                Directly edit the raw file content. Click "Apply Raw" to sync changes to the form fields above.
-                            </p>
-                            <textarea
-                                value={rawText}
-                                onChange={e => { setRawText(e.target.value); setRawTextDirty(true); }}
-                                rows={20}
-                                spellCheck={false}
-                                className={[
-                                    'w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2',
-                                    'font-mono text-xs text-zinc-200 focus:border-blue-500 focus:outline-none',
-                                ].join(' ')}
-                            />
-                            <button
-                                type={'button'}
-                                disabled={!rawTextDirty}
-                                onClick={applyRawText}
-                                className={'mt-2 rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50'}
-                            >
-                                Apply Raw
-                            </button>
-                        </CollapsibleSection>
-                    )}
-
-                    {/* ── Placeholder stubs ── */}
-                    <PlaceholderStub
-                        title={'Coming Soon — Plugin Configs'}
-                        description={'Edit bukkit.yml, spigot.yml, and paper.yml with a structured form editor. Not yet implemented.'}
+                    {/* ── Horizontal tab bar ── */}
+                    <TabBar
+                        tabs={tabs}
+                        activeTab={activeTab}
+                        onSelect={id => setActiveTab(id as SectionId | 'raw')}
                     />
-                    <PlaceholderStub
-                        title={'Coming Soon — Mod Configs'}
-                        description={'Edit Forge and Fabric per-mod configuration files. Not yet implemented.'}
-                    />
+
+                    {/* ── Active tab content ── */}
+                    <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-4'}>
+                        {renderTabContent()}
+                    </div>
 
                     {/* ── Sticky bottom bar ── */}
                     <div className={'fixed bottom-0 left-0 right-0 z-20 border-t border-zinc-700 bg-zinc-900/95 px-4 py-3 shadow-2xl backdrop-blur-sm'}>

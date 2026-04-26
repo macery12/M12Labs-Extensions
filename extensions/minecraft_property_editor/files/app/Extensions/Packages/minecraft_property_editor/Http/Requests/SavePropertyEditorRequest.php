@@ -17,7 +17,7 @@ class SavePropertyEditorRequest extends ClientApiRequest implements ClientPermis
     {
         return [
             'properties'   => ['required', 'array', 'max:200'],
-            'properties.*' => ['required', 'string', 'max:2048'],
+            'properties.*' => ['nullable', 'string', 'max:2048'],
             'server_type'  => ['nullable', 'string', 'in:vanilla,spigot,paper,fabric,forge,neoforge'],
             'mc_version'   => ['nullable', 'string', 'max:20', 'regex:/^\d+\.\d+(\.\d+)?$/'],
         ];
