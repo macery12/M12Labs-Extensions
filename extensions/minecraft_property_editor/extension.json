@@ -1,0 +1,14 @@
+{
+  "package": { "id": "minecraft_property_editor", "version": "1.0.0" },
+  "extension": {
+    "id": "minecraft_property_editor",
+    "name": "MC Property Editor",
+    "description": "Dual-mode (basic + advanced) editor for Minecraft server.properties with version-aware fields, smart validation, biome mod presets, and recommended settings engine.",
+    "author": "M12Labs",
+    "icon": "settings",
+    "route": "minecraft_property_editor",
+    "settingsSchema": [],
+    "defaults": { "enabled": false, "allowedNests": [1], "allowedEggs": [], "settings": {} }
+  },
+  "compatiblePanelVersions": ["2.0.0-m12-alpha-2.7"]
+}

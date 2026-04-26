@@ -74,6 +74,26 @@
       "settingsSchema": []
     },
     {
+      "id": "minecraft_property_editor",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/minecraft_property_editor/1.0.0/minecraft_property_editor.M12LabsExtension",
+          "sha256": "f86efed6ae4f9874e969d3b9605656a825413092bff8b786cd1971ef3fe51349",
+          "publishedAt": "2026-04-26T00:59:29Z",
+          "compatiblePanelVersions": [
+            "2.0.0-m12-alpha-2.7"
+          ]
+        }
+      ],
+      "name": "MC Property Editor",
+      "description": "Dual-mode (basic + advanced) editor for Minecraft server.properties with version-aware fields, smart validation, biome mod presets, and recommended settings engine.",
+      "author": "M12Labs",
+      "icon": "settings",
+      "route": "minecraft_property_editor",
+      "settingsSchema": []
+    },
+    {
       "id": "minecraft_startup_editor",
       "versions": [
         {
