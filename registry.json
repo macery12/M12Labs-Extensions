@@ -79,8 +79,8 @@
         {
           "version": "1.0.0",
           "archive": "packages/minecraft_startup_editor/1.0.0/minecraft_startup_editor.M12LabsExtension",
-          "sha256": "91ebad56c6b174bcfd1456828b1050cd255ffc7687f73a294ec569e08eaf8c3a",
-          "publishedAt": "2026-04-25T23:30:01Z",
+          "sha256": "7ec7d4a01a2ca83f591e5bd3440f94c3ad84b5e3c86136684885d4f6a6ae33a1",
+          "publishedAt": "2026-04-26T00:36:29Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]

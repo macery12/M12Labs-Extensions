@@ -71,6 +71,12 @@ class MinecraftStartupOptions
             'loader_compat' => null,
             'min_java'     => 21,
         ],
+        'zgc_java25' => [
+            'jvm_flags'    => '-XX:+UseZGC -XX:+ZGenerational -XX:+UseCompactObjectHeaders -XX:+UseStringDeduplication',
+            'server_args'  => '',
+            'loader_compat' => null,
+            'min_java'     => 25,
+        ],
         'shenandoah' => [
             'jvm_flags'    => '-XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu',
             'server_args'  => '',
@@ -113,6 +119,14 @@ class MinecraftStartupOptions
             'server_args'  => '',
             'loader_compat' => null,
             'min_java'     => 8,
+        ],
+
+        // ── Native Access ─────────────────────────────────────────────────
+        'native_access' => [
+            'jvm_flags'    => '--enable-native-access=ALL-UNNAMED',
+            'server_args'  => '',
+            'loader_compat' => null,
+            'min_java'     => 21,
         ],
 
         // ── Security ──────────────────────────────────────────────────────
