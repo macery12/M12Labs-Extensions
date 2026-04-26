@@ -25,6 +25,8 @@ export interface FieldDef {
     serverTypes?: ServerType[];
     basicHide?: boolean;
     required?: boolean;
+    /** When true the field is controlled by the panel and must not be edited by the user. */
+    panelManaged?: boolean;
 }
 
 export interface BiomePreset {
@@ -74,20 +76,22 @@ export const FIELD_DEFS: FieldDef[] = [
     {
         key: 'server-port',
         label: 'Server Port',
-        description: 'The TCP port the server listens on. Default is 25565.',
+        description: 'The TCP port the server listens on. Managed by the panel — do not change.',
         section: 'general',
         type: 'port',
         defaultValue: '25565',
         min: 1,
         max: 65535,
+        panelManaged: true,
     },
     {
         key: 'server-ip',
         label: 'Server IP',
-        description: 'Bind to a specific IP address. Leave blank to bind to all interfaces.',
+        description: 'The IP address the server binds to. Managed by the panel — do not change.',
         section: 'general',
         type: 'text',
         defaultValue: '',
+        panelManaged: true,
     },
     {
         key: 'motd',

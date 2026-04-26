@@ -211,6 +211,20 @@ function FieldRow({ field, value, onChange, disabled, mcVersion, errors }: Field
     ].join(' ');
 
     const renderInput = () => {
+        // Panel-managed fields are fully locked — users must not edit them.
+        if (field.panelManaged) {
+            return (
+                <div className={'flex items-center gap-2'}>
+                    <span className={'rounded-lg border border-zinc-600 bg-zinc-900 px-2.5 py-1.5 text-sm text-zinc-400 opacity-60 select-none'}>
+                        {value || <span className={'italic text-zinc-600'}>not set</span>}
+                    </span>
+                    <span className={'rounded-full border border-amber-700 bg-amber-900/40 px-2 py-px text-[10px] font-medium text-amber-300'} title={'This value is managed by the panel and cannot be changed here.'}>
+                        🔒 Panel Managed
+                    </span>
+                </div>
+            );
+        }
+
         if (field.type === 'boolean') {
             return (
                 <Toggle
@@ -338,7 +352,7 @@ function FieldRow({ field, value, onChange, disabled, mcVersion, errors }: Field
     };
 
     return (
-        <div className={`flex flex-col gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 ${availability !== 'available' ? 'opacity-60' : ''}`}>
+        <div className={`flex flex-col gap-1 rounded-lg border px-3 py-2 ${field.panelManaged ? 'border-amber-800/50 bg-amber-950/20' : 'border-zinc-700 bg-zinc-900'} ${availability !== 'available' ? 'opacity-60' : ''}`}>
             <div className={'flex items-center justify-between gap-3'}>
                 <div className={'flex min-w-0 flex-1 items-center gap-1.5'}>
                     <span className={'text-sm font-medium text-white'}>{field.label}</span>
