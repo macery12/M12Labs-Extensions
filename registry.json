@@ -79,8 +79,8 @@
         {
           "version": "1.0.0",
           "archive": "packages/minecraft_property_editor/1.0.0/minecraft_property_editor.M12LabsExtension",
-          "sha256": "eca346b2b765437a5afb9896ae018445dfe04990eb2db03f53b5f8772a97aa88",
-          "publishedAt": "2026-04-26T01:25:54Z",
+          "sha256": "6998c34fe2121ed7d35b9df08f2f3107f603f972e9b74cf7c399d0a4358abc4a",
+          "publishedAt": "2026-04-26T02:42:17Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]

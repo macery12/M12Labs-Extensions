@@ -824,7 +824,14 @@ export default () => {
                         </div>
                     )}
 
-                    {/* ── Recommendations (persistent collapsible banner, above tab bar) ── */}
+                    {/* ── Horizontal tab bar ── */}
+                    <TabBar
+                        tabs={tabs}
+                        activeTab={activeTab}
+                        onSelect={id => setActiveTab(id as SectionId | 'raw')}
+                    />
+
+                    {/* ── Recommendations (persistent collapsible banner, below tab bar) ── */}
                     {recommendations.length > 0 && (
                         <Collapsible
                             id={'recommendations'}
@@ -848,13 +855,6 @@ export default () => {
                             </div>
                         </Collapsible>
                     )}
-
-                    {/* ── Horizontal tab bar ── */}
-                    <TabBar
-                        tabs={tabs}
-                        activeTab={activeTab}
-                        onSelect={id => setActiveTab(id as SectionId | 'raw')}
-                    />
 
                     {/* ── Active tab content ── */}
                     <div className={'rounded-xl border border-zinc-700 bg-zinc-800 p-4'}>
