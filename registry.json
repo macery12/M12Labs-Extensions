@@ -99,8 +99,8 @@
         {
           "version": "1.0.0",
           "archive": "packages/minecraft_version_changer/1.0.0/minecraft_version_changer.M12LabsExtension",
-          "sha256": "2989734e8a7b6910dc6a662e4b5e7b68f983a31d0560d020f093b8e2c5e47115",
-          "publishedAt": "2026-04-27T00:50:34Z",
+          "sha256": "2808598ecfbba9027dfb69f6b57907df536fddbaa39498403f89de373a71df9c",
+          "publishedAt": "2026-04-27T00:51:55Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
           ]

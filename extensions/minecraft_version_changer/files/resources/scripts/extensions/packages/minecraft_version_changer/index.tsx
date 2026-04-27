@@ -811,7 +811,7 @@ export default function MinecraftVersionChanger() {
                                         {LOADER_LABELS[switchResult.loader] ?? switchResult.loader} {switchResult.mcVersion} — <span className={'font-mono'}>{switchResult.jar}</span>
                                     </p>
                                     <p className={'mt-2 text-xs text-zinc-400'}>
-                                        Restart your server to apply the change. The new jar is in your server&apos;s root directory and the startup variable has been updated.
+                                        Restart your server to apply the change. The new jar is in your server{"'"}s root directory and the startup variable has been updated.
                                     </p>
                                     <button
                                         type={'button'}
