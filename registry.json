@@ -37,6 +37,15 @@
       "id": "minecraft_icon_builder",
       "versions": [
         {
+          "version": "1.0.1",
+          "archive": "packages/minecraft_icon_builder/1.0.1/minecraft_icon_builder.M12LabsExtension",
+          "sha256": "636a1c3b72e72765a71009a89658280d3886f9797af4656bc64d95ae3269b673",
+          "publishedAt": "2026-04-28T00:24:24Z",
+          "compatiblePanelVersions": [
+            "2.0.0-m12-alpha-2.7"
+          ]
+        },
+        {
           "version": "1.0.0",
           "archive": "packages/minecraft_icon_builder/1.0.0/minecraft_icon_builder.M12LabsExtension",
           "sha256": "337654991268177c87e0722b564c964c28df2ebb2e0b3d7531b028734d3c888c",
