@@ -1,0 +1,24 @@
+{
+  "package": {
+    "id": "minecraft_log_uploader",
+    "version": "1.0.0"
+  },
+  "extension": {
+    "id": "minecraft_log_uploader",
+    "name": "Minecraft Log Uploader",
+    "description": "Read, preview, and upload your Minecraft server logs to mclo.gs directly from the panel.",
+    "author": "M12Labs",
+    "icon": "file-text",
+    "route": "minecraft_log_uploader",
+    "settingsSchema": [],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [1],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-m12-alpha-2.7"
+  ]
+}

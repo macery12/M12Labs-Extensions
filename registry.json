@@ -63,6 +63,26 @@
       "settingsSchema": []
     },
     {
+      "id": "minecraft_log_uploader",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/minecraft_log_uploader/1.0.0/minecraft_log_uploader.M12LabsExtension",
+          "sha256": "80f5aef94ba17a3413524803d943ee76b451d48bf04c19bf8dfbebf9ea26bad0",
+          "publishedAt": "2026-04-28T03:12:33Z",
+          "compatiblePanelVersions": [
+            "2.0.0-m12-alpha-2.7"
+          ]
+        }
+      ],
+      "name": "Minecraft Log Uploader",
+      "description": "Read, preview, and upload your Minecraft server logs to mclo.gs directly from the panel.",
+      "author": "M12Labs",
+      "icon": "file-text",
+      "route": "minecraft_log_uploader",
+      "settingsSchema": []
+    },
+    {
       "id": "minecraft_player_manager",
       "versions": [
         {
