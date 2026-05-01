@@ -1,0 +1,97 @@
+name: Bug Report
+description: Report a bug or unexpected behaviour with an extension or the repository tooling.
+title: "[Bug] <short description>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the sections below as completely as you can so we can reproduce and fix the issue quickly.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected area
+      description: What part of the project is this bug in?
+      options:
+        - Extension – discordsrv_helper
+        - Extension – minecraft_icon_builder
+        - Extension – minecraft_log_uploader
+        - Extension – minecraft_player_manager
+        - Extension – minecraft_startup_editor
+        - Repository tooling (publish/build scripts)
+        - Registry / registry.json
+        - Panel install / uninstall commands
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Extension / tool version
+      description: Which version of the extension or tool are you using? (e.g. `1.0.1`)
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I install the extension and navigate to …, the panel shows …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the exact steps needed to reproduce the bug.
+      placeholder: |
+        1. Run `php artisan install minecraft_player_manager`
+        2. Navigate to …
+        3. Click on …
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened? Include any error messages, stack traces, or screenshots.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Please fill in the details below.
+      value: |
+        - OS: 
+        - PHP version: 
+        - Node / npm version: 
+        - Panel version: 
+        - Python version (if using tooling): 
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other information that might be relevant (logs, config snippets, related issues, etc.).
+    validations:
+      required: false

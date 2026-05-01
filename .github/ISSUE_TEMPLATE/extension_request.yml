@@ -1,0 +1,57 @@
+name: Extension Request
+description: Suggest a new extension to be added to the M12Labs Extensions registry.
+title: "[Extension Request] <extension name>"
+labels: ["extension request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for a new extension? Describe it below and we'll consider adding it to the registry.
+
+  - type: input
+    id: name
+    attributes:
+      label: Proposed extension name / ID
+      description: A short, snake_case identifier for the extension (e.g. `minecraft_scheduler`).
+      placeholder: "my_extension_id"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What would this extension do?
+      description: A clear description of the feature or functionality the extension would provide.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem it solves / use case
+      description: Explain the problem or workflow this extension would address.
+    validations:
+      required: true
+
+  - type: textarea
+    id: similar
+    attributes:
+      label: Similar tools or prior art
+      description: Are there existing plugins, mods, or tools that do something similar? Link them if possible.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to help build or contribute to this extension.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any mockups, references, or extra details that would help us understand the request.
+    validations:
+      required: false

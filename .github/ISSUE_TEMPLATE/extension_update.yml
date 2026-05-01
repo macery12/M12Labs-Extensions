@@ -1,0 +1,77 @@
+name: Extension Update / New Version
+description: Request an update, new release, or new feature for an existing extension.
+title: "[Update] <extension name> – <brief change>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to request an update to an extension already in the registry — for example a new version, a compatibility fix, or an added feature.
+
+  - type: dropdown
+    id: extension
+    attributes:
+      label: Extension
+      description: Which extension does this update request apply to?
+      options:
+        - discordsrv_helper
+        - minecraft_icon_builder
+        - minecraft_log_uploader
+        - minecraft_player_manager
+        - minecraft_startup_editor
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: current_version
+    attributes:
+      label: Current version
+      description: Which version are you currently running?
+      placeholder: "1.0.0"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of update
+      options:
+        - Bug fix / patch
+        - New feature / enhancement
+        - Compatibility update (PHP / panel version)
+        - Dependency update
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the requested change
+      description: What should change or be added? Be as specific as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why is this change needed?
+      description: Explain the motivation, use case, or problem this update would solve.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a pull request for this change.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Relevant logs, screenshots, links, or any other information.
+    validations:
+      required: false
