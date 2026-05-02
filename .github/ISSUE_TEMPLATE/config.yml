@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://discord.com/users/macery12
+    about: Please report security vulnerabilities privately by contacting macery12 on Discord or via email at contact@macery12.xyz rather than opening a public issue.

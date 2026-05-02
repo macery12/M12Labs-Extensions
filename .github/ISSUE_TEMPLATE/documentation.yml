@@ -1,0 +1,55 @@
+name: Documentation Improvement
+description: Report missing, incorrect, or unclear documentation.
+title: "[Docs] <short description>"
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us keep the docs accurate and easy to follow. Fill out the details below.
+
+  - type: input
+    id: location
+    attributes:
+      label: Document / page affected
+      description: Which file or section needs attention? (e.g. `docs/creating-an-extension.md`, `README.md`)
+      placeholder: "docs/creating-an-extension.md"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of issue
+      options:
+        - Incorrect or outdated information
+        - Missing information
+        - Unclear or confusing wording
+        - Broken link or example
+        - Typo / grammar
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the problem
+      description: What is wrong or missing? Quote the relevant section if possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix or improvement
+      description: What should the documentation say instead?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a pull request to fix this.
