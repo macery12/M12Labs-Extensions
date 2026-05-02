@@ -59,7 +59,7 @@ body:
       label: Why is this change needed?
       description: Explain the motivation, use case, or problem this update would solve.
     validations:
-      required: true
+      required: false
 
   - type: checkboxes
     id: contribution
