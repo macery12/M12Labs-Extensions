@@ -1,0 +1,24 @@
+{
+  "package": {
+    "id": "palworld_server_manager",
+    "version": "1.0.0"
+  },
+  "extension": {
+    "id": "palworld_server_manager",
+    "name": "Palworld Server Manager",
+    "description": "Configure your Palworld dedicated server settings directly from the panel. Edit all PalWorldSettings.ini options with labeled inputs, apply presets for casual/normal/hardcore play, and auto-backup before every save.",
+    "author": "M12Labs",
+    "icon": "gamepad-2",
+    "route": "palworld_server_manager",
+    "settingsSchema": [],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-m12-alpha-2.7"
+  ]
+}
