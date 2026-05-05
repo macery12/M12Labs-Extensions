@@ -121,6 +121,26 @@
       "icon": "terminal",
       "route": "minecraft_startup_editor",
       "settingsSchema": []
+    },
+    {
+      "id": "minecraft_version_changer",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/minecraft_version_changer/1.0.0/minecraft_version_changer.M12LabsExtension",
+          "sha256": "2808598ecfbba9027dfb69f6b57907df536fddbaa39498403f89de373a71df9c",
+          "publishedAt": "2026-04-27T00:51:55Z",
+          "compatiblePanelVersions": [
+            "2.0.0-m12-alpha-2.7"
+          ]
+        }
+      ],
+      "name": "Minecraft Version Changer",
+      "description": "Switch your Minecraft server version directly from the panel. Supports Vanilla, Paper, Fabric, and Forge with live version lists, changelog previews, and automatic jar download.",
+      "author": "M12Labs",
+      "icon": "layers",
+      "route": "minecraft_version_changer",
+      "settingsSchema": []
     }
   ]
 }

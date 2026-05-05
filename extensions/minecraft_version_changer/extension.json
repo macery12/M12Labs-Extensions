@@ -1,0 +1,24 @@
+{
+  "package": {
+    "id": "minecraft_version_changer",
+    "version": "1.0.0"
+  },
+  "extension": {
+    "id": "minecraft_version_changer",
+    "name": "Minecraft Version Changer",
+    "description": "Switch your Minecraft server version directly from the panel. Supports Vanilla, Paper, Fabric, and Forge with live version lists, changelog previews, and automatic jar download.",
+    "author": "M12Labs",
+    "icon": "layers",
+    "route": "minecraft_version_changer",
+    "settingsSchema": [],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [1],
+      "allowedEggs": [],
+      "settings": {}
+    }
+  },
+  "compatiblePanelVersions": [
+    "2.0.0-m12-alpha-2.7"
+  ]
+}
