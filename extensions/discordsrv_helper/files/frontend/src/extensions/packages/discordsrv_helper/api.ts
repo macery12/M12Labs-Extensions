@@ -1,5 +1,8 @@
-import http from '@/api/http';
+import http from '@/lib/http';
 
+// Per-server client API for the DiscordSRV Helper, mounted by the panel under
+// /api/client/servers/<uuid>/extensions/discordsrv_helper (gated by the
+// `extensions.access:discordsrv_helper` middleware).
 const base = (uuid: string) => `/api/client/servers/${uuid}/extensions/discordsrv_helper`;
 
 export interface DiscordSrvHelperStatus {
@@ -55,6 +58,10 @@ export const getDiscordSrvSubusers = async (uuid: string): Promise<DiscordSrvHel
     return data.data || [];
 };
 
-export const setDiscordSrvSubuserAccess = async (uuid: string, subuserUuid: string, enabled: boolean): Promise<void> => {
+export const setDiscordSrvSubuserAccess = async (
+    uuid: string,
+    subuserUuid: string,
+    enabled: boolean,
+): Promise<void> => {
     await http.post(`${base(uuid)}/subusers/${subuserUuid}`, { enabled });
 };

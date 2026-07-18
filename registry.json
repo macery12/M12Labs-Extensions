@@ -9,6 +9,15 @@
       "id": "discordsrv_helper",
       "versions": [
         {
+          "version": "2.0.0",
+          "archive": "packages/discordsrv_helper/2.0.0/discordsrv_helper.M12LabsExtension",
+          "sha256": "bc78fadea21896d73d685e920a684be95e1049bd80b1bcfff4723b9b899d5bf1",
+          "publishedAt": "2026-07-18T05:11:28Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
+        {
           "version": "1.0.0",
           "archive": "packages/discordsrv_helper/1.0.0/discordsrv_helper.M12LabsExtension",
           "sha256": "7252b1f3618334368ed48efc33830caca9d79e0a3cc6baf05f0f3be86d328f07",
@@ -31,7 +40,11 @@
           "placeholder": "https://github.com/DiscordSRV/DiscordSRV/releases/download/.../DiscordSRV.jar",
           "help": "Optional. If set, the install action uses this URL instead of auto-detecting the latest release."
         }
-      ]
+      ],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_icon_builder",
