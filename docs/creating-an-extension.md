@@ -1,5 +1,24 @@
 # Creating and Publishing an Extension
 
+> **⚠️ V2 panel update.** This guide predates the V2 panel cutover and the
+> stage-1 capability expansion. Two things in the examples below are now
+> **wrong**, and several new capabilities are not covered here:
+>
+> - **Frontend files now install to `frontend/src/extensions/packages/<id>/`**,
+>   NOT `resources/scripts/extensions/packages/<id>/`. The V2 installer's path
+>   allowlist rejects the old `resources/scripts/...` path.
+> - **`compatiblePanelVersions` is an exact string match** against the panel's
+>   `config('app.version')` — currently **`Alpha 3.0`**, not `2.0.0-Rc2.6`.
+>
+> For the current surfaces and capabilities, read these first:
+> [admin-pages](admin-pages.md), [database-migrations](database-migrations.md),
+> [scheduled-tasks](scheduled-tasks.md), [settings-schema](settings-schema.md),
+> [scanner](scanner.md), and the
+> [security-review-checklist](security-review-checklist.md). The
+> `node_health_history` extension in this repo is the reference for all of them.
+> The workflow (fork → build → publish → PR) and packaging tool below are still
+> accurate.
+
 This guide covers the full workflow for contributing an extension to the M12Labs extension repository:
 
 1. Fork the repository.

@@ -9,6 +9,15 @@
       "id": "discordsrv_helper",
       "versions": [
         {
+          "version": "2.0.0",
+          "archive": "packages/discordsrv_helper/2.0.0/discordsrv_helper.M12LabsExtension",
+          "sha256": "bc78fadea21896d73d685e920a684be95e1049bd80b1bcfff4723b9b899d5bf1",
+          "publishedAt": "2026-07-18T05:11:28Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
+        {
           "version": "1.0.0",
           "archive": "packages/discordsrv_helper/1.0.0/discordsrv_helper.M12LabsExtension",
           "sha256": "7252b1f3618334368ed48efc33830caca9d79e0a3cc6baf05f0f3be86d328f07",
@@ -31,11 +40,24 @@
           "placeholder": "https://github.com/DiscordSRV/DiscordSRV/releases/download/.../DiscordSRV.jar",
           "help": "Optional. If set, the install action uses this URL instead of auto-detecting the latest release."
         }
-      ]
+      ],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_icon_builder",
       "versions": [
+        {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_icon_builder/2.0.0/minecraft_icon_builder.M12LabsExtension",
+          "sha256": "0f32f1259ded92a2cb38e4e36d992cccfc366d28700c728d1c41e220dd101724",
+          "publishedAt": "2026-07-18T05:15:07Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
         {
           "version": "1.0.1",
           "archive": "packages/minecraft_icon_builder/1.0.1/minecraft_icon_builder.M12LabsExtension",
@@ -60,11 +82,24 @@
       "author": "M12Labs",
       "icon": "image",
       "route": "minecraft_icon_builder",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_log_uploader",
       "versions": [
+        {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_log_uploader/2.0.0/minecraft_log_uploader.M12LabsExtension",
+          "sha256": "14d800d4d9fca1a9f5cf3746d2065417d74ec74e362a726002f77b8cc5d697ce",
+          "publishedAt": "2026-07-18T05:53:34Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
         {
           "version": "1.0.0",
           "archive": "packages/minecraft_log_uploader/1.0.0/minecraft_log_uploader.M12LabsExtension",
@@ -80,11 +115,24 @@
       "author": "M12Labs",
       "icon": "file-text",
       "route": "minecraft_log_uploader",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_player_manager",
       "versions": [
+        {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_player_manager/2.0.0/minecraft_player_manager.M12LabsExtension",
+          "sha256": "ab6390c59dd6b5c3b2434e85e4c65e9f55b63368d90f7b2eca7bc3da5c1b03e5",
+          "publishedAt": "2026-07-18T05:29:11Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
         {
           "version": "1.0.1",
           "archive": "packages/minecraft_player_manager/1.0.1/minecraft_player_manager.M12LabsExtension",
@@ -100,11 +148,24 @@
       "author": "M12Labs",
       "icon": "users",
       "route": "minecraft_player_manager",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_startup_editor",
       "versions": [
+        {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_startup_editor/2.0.0/minecraft_startup_editor.M12LabsExtension",
+          "sha256": "741a7c818b73d989f28ab98a2d06893c306b0e54d2282f7e0b9a4afb7b4afbae",
+          "publishedAt": "2026-07-18T05:53:34Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
         {
           "version": "1.0.0",
           "archive": "packages/minecraft_startup_editor/1.0.0/minecraft_startup_editor.M12LabsExtension",
@@ -120,7 +181,11 @@
       "author": "M12Labs",
       "icon": "terminal",
       "route": "minecraft_startup_editor",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     }
   ]
 }

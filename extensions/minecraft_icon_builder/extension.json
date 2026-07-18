@@ -1,7 +1,7 @@
 {
   "package": {
     "id": "minecraft_icon_builder",
-    "version": "1.0.1"
+    "version": "2.0.0"
   },
   "extension": {
     "id": "minecraft_icon_builder",
@@ -19,6 +19,6 @@
     }
   },
   "compatiblePanelVersions": [
-    "2.0.0-m12-alpha-2.7"
+    "Alpha 3.0"
   ]
 }
