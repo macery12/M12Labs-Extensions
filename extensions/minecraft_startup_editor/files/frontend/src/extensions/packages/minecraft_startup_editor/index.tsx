@@ -54,11 +54,13 @@ const BADGE_DANGER = `${BADGE} border border-[var(--color-danger)] bg-[var(--col
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
 
 function Tooltip({ text, children }: { text: string; children: ReactNode }) {
+    // Named group (`group/tt`) so the tooltip only reveals on hover of its own
+    // trigger — an ancestor card that also uses a bare `group` must not open it.
     return (
-        <span className="group relative inline-flex">
+        <span className="group/tt relative inline-flex">
             {children}
             <span
-                className="pointer-events-none invisible absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-canvas)] px-3 py-2 text-xs leading-relaxed text-[var(--color-ink)] shadow-xl group-hover:visible"
+                className="pointer-events-none invisible absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-canvas)] px-3 py-2 text-xs leading-relaxed text-[var(--color-ink)] opacity-0 shadow-xl transition-opacity group-hover/tt:visible group-hover/tt:opacity-100"
                 role="tooltip"
             >
                 {text}

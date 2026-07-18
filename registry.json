@@ -94,8 +94,8 @@
         {
           "version": "2.0.0",
           "archive": "packages/minecraft_log_uploader/2.0.0/minecraft_log_uploader.M12LabsExtension",
-          "sha256": "9356c9408edc8cf3f49ff3afa725339547f484353c2c48fad0d0496af639af4f",
-          "publishedAt": "2026-07-18T05:07:39Z",
+          "sha256": "14d800d4d9fca1a9f5cf3746d2065417d74ec74e362a726002f77b8cc5d697ce",
+          "publishedAt": "2026-07-18T05:53:34Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
           ]
@@ -160,8 +160,8 @@
         {
           "version": "2.0.0",
           "archive": "packages/minecraft_startup_editor/2.0.0/minecraft_startup_editor.M12LabsExtension",
-          "sha256": "42c14abf6bbc3b6f5b1dc5f22dadc793faf138a5bcf97fabd666bbe597f960a0",
-          "publishedAt": "2026-07-18T05:21:13Z",
+          "sha256": "741a7c818b73d989f28ab98a2d06893c306b0e54d2282f7e0b9a4afb7b4afbae",
+          "publishedAt": "2026-07-18T05:53:34Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
           ]
