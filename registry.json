@@ -66,6 +66,15 @@
       "id": "minecraft_log_uploader",
       "versions": [
         {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_log_uploader/2.0.0/minecraft_log_uploader.M12LabsExtension",
+          "sha256": "9356c9408edc8cf3f49ff3afa725339547f484353c2c48fad0d0496af639af4f",
+          "publishedAt": "2026-07-18T05:07:39Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
+        {
           "version": "1.0.0",
           "archive": "packages/minecraft_log_uploader/1.0.0/minecraft_log_uploader.M12LabsExtension",
           "sha256": "80f5aef94ba17a3413524803d943ee76b451d48bf04c19bf8dfbebf9ea26bad0",
@@ -80,7 +89,11 @@
       "author": "M12Labs",
       "icon": "file-text",
       "route": "minecraft_log_uploader",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_player_manager",

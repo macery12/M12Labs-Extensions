@@ -1,5 +1,8 @@
-import http from '@/api/http';
+import http from '@/lib/http';
 
+// Talks to this extension's per-server client API, mounted by the panel under
+// /api/client/servers/<uuid>/extensions/<id> (session same-origin, gated by the
+// `extensions.access:<id>` middleware).
 const extensionId = 'minecraft_log_uploader';
 const base = (uuid: string) => `/api/client/servers/${uuid}/extensions/${extensionId}`;
 
@@ -25,9 +28,7 @@ export interface UploadResponse {
 }
 
 export const listLogs = (uuid: string): Promise<LogListResponse> =>
-    http
-        .get(`${base(uuid)}/logs`)
-        .then(({ data }) => data.attributes as LogListResponse);
+    http.get(`${base(uuid)}/logs`).then(({ data }) => data.attributes as LogListResponse);
 
 export const getLog = (uuid: string, file: string): Promise<LogContentResponse> =>
     http
@@ -35,6 +36,4 @@ export const getLog = (uuid: string, file: string): Promise<LogContentResponse> 
         .then(({ data }) => data.attributes as LogContentResponse);
 
 export const uploadLog = (uuid: string, file: string): Promise<UploadResponse> =>
-    http
-        .post(`${base(uuid)}/logs/upload`, { file })
-        .then(({ data }) => data.attributes as UploadResponse);
+    http.post(`${base(uuid)}/logs/upload`, { file }).then(({ data }) => data.attributes as UploadResponse);
