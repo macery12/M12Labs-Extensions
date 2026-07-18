@@ -1,4 +1,4 @@
-import http from '@/api/http';
+import http from '@/lib/http';
 
 const extensionId = 'minecraft_player_manager';
 

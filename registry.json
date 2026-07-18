@@ -125,6 +125,15 @@
       "id": "minecraft_player_manager",
       "versions": [
         {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_player_manager/2.0.0/minecraft_player_manager.M12LabsExtension",
+          "sha256": "ab6390c59dd6b5c3b2434e85e4c65e9f55b63368d90f7b2eca7bc3da5c1b03e5",
+          "publishedAt": "2026-07-18T05:29:11Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
+        {
           "version": "1.0.1",
           "archive": "packages/minecraft_player_manager/1.0.1/minecraft_player_manager.M12LabsExtension",
           "sha256": "a564b3a086273001453bbf2cc915fbb2bf5bc6e55572140e45182f3853386622",
@@ -139,7 +148,11 @@
       "author": "M12Labs",
       "icon": "users",
       "route": "minecraft_player_manager",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_startup_editor",
