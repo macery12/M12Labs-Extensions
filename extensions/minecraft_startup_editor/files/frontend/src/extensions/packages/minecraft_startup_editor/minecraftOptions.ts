@@ -510,10 +510,10 @@ export function inferStateFromCommand(rawCommand: string): {
     }
 
     // Parse Xms and Xmx values from command (e.g. -Xms256M, -Xmx1024M)
-    const xmsMatch = rawCommand.match(/-Xms(\d+)[Mm]/);
-    const xmxMatch = rawCommand.match(/-Xmx(\d+)[Mm]/);
-    const xmsMb = xmsMatch ? parseInt(xmsMatch[1], 10) : 256;
-    const xmxMb = xmxMatch ? parseInt(xmxMatch[1], 10) : 0; // 0 = not found; caller should substitute suggested value
+    const xmsRaw = rawCommand.match(/-Xms(\d+)[Mm]/)?.[1];
+    const xmxRaw = rawCommand.match(/-Xmx(\d+)[Mm]/)?.[1];
+    const xmsMb = xmsRaw ? parseInt(xmsRaw, 10) : 256;
+    const xmxMb = xmxRaw ? parseInt(xmxRaw, 10) : 0; // 0 = not found; caller should substitute suggested value
 
     return { gcId, selectedIds, xmsMb, xmxMb, javaVersionTier };
 }

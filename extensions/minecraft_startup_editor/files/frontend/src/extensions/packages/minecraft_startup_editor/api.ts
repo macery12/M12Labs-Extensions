@@ -1,4 +1,9 @@
-import http from '@/api/http';
+import http from '@/lib/http';
+
+// Per-server client API for the startup editor, mounted by the panel under
+// /api/client/servers/<uuid>/extensions/minecraft_startup_editor (gated by the
+// `extensions.access:minecraft_startup_editor` middleware).
+const base = (uuid: string) => `/api/client/servers/${uuid}/extensions/minecraft_startup_editor`;
 
 export interface StartupEditorData {
     rawStartup: string | null;
@@ -17,16 +22,14 @@ export interface StartupSaveResult {
 }
 
 export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> => {
-    return http
-        .get(`/api/client/servers/${uuid}/extensions/minecraft_startup_editor`)
-        .then(({ data }) => ({
-            rawStartup:        data.attributes.raw_startup,
-            eggDefault:        data.attributes.egg_default,
-            renderedCommand:   data.attributes.rendered_command,
-            isUsingEggDefault: data.attributes.is_using_egg_default,
-            eggName:           data.attributes.egg_name,
-            detectedLoader:    data.attributes.detected_loader ?? null,
-        }));
+    return http.get(base(uuid)).then(({ data }) => ({
+        rawStartup: data.attributes.raw_startup,
+        eggDefault: data.attributes.egg_default,
+        renderedCommand: data.attributes.rendered_command,
+        isUsingEggDefault: data.attributes.is_using_egg_default,
+        eggName: data.attributes.egg_name,
+        detectedLoader: data.attributes.detected_loader ?? null,
+    }));
 };
 
 /**
@@ -45,25 +48,23 @@ export const saveStartupOptions = (
     xmxMb: number,
 ): Promise<StartupSaveResult> => {
     return http
-        .post(`/api/client/servers/${uuid}/extensions/minecraft_startup_editor/save`, {
+        .post(`${base(uuid)}/save`, {
             selected_options: selectedOptions,
-            xms_mb:           xmsMb,
-            xmx_mb:           xmxMb,
+            xms_mb: xmsMb,
+            xmx_mb: xmxMb,
         })
         .then(({ data }) => ({
-            renderedCommand:   data.attributes.rendered_command,
-            rawStartup:        data.attributes.raw_startup,
+            renderedCommand: data.attributes.rendered_command,
+            rawStartup: data.attributes.raw_startup,
             isUsingEggDefault: data.attributes.is_using_egg_default,
         }));
 };
 
 export const resetStartupCommand = (uuid: string): Promise<StartupSaveResult> => {
-    return http
-        .post(`/api/client/servers/${uuid}/extensions/minecraft_startup_editor/reset`, {})
-        .then(({ data }) => ({
-            renderedCommand:   data.attributes.rendered_command,
-            rawStartup:        data.attributes.raw_startup,
-            isUsingEggDefault: data.attributes.is_using_egg_default,
-            eggDefault:        data.attributes.egg_default,
-        }));
+    return http.post(`${base(uuid)}/reset`, {}).then(({ data }) => ({
+        renderedCommand: data.attributes.rendered_command,
+        rawStartup: data.attributes.raw_startup,
+        isUsingEggDefault: data.attributes.is_using_egg_default,
+        eggDefault: data.attributes.egg_default,
+    }));
 };

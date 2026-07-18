@@ -145,6 +145,15 @@
       "id": "minecraft_startup_editor",
       "versions": [
         {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_startup_editor/2.0.0/minecraft_startup_editor.M12LabsExtension",
+          "sha256": "42c14abf6bbc3b6f5b1dc5f22dadc793faf138a5bcf97fabd666bbe597f960a0",
+          "publishedAt": "2026-07-18T05:21:13Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
+        {
           "version": "1.0.0",
           "archive": "packages/minecraft_startup_editor/1.0.0/minecraft_startup_editor.M12LabsExtension",
           "sha256": "7ec7d4a01a2ca83f591e5bd3440f94c3ad84b5e3c86136684885d4f6a6ae33a1",
@@ -159,7 +168,11 @@
       "author": "M12Labs",
       "icon": "terminal",
       "route": "minecraft_startup_editor",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     }
   ]
 }
