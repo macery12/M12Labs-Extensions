@@ -50,6 +50,15 @@
       "id": "minecraft_icon_builder",
       "versions": [
         {
+          "version": "2.0.0",
+          "archive": "packages/minecraft_icon_builder/2.0.0/minecraft_icon_builder.M12LabsExtension",
+          "sha256": "0f32f1259ded92a2cb38e4e36d992cccfc366d28700c728d1c41e220dd101724",
+          "publishedAt": "2026-07-18T05:15:07Z",
+          "compatiblePanelVersions": [
+            "Alpha 3.0"
+          ]
+        },
+        {
           "version": "1.0.1",
           "archive": "packages/minecraft_icon_builder/1.0.1/minecraft_icon_builder.M12LabsExtension",
           "sha256": "636a1c3b72e72765a71009a89658280d3886f9797af4656bc64d95ae3269b673",
@@ -73,7 +82,11 @@
       "author": "M12Labs",
       "icon": "image",
       "route": "minecraft_icon_builder",
-      "settingsSchema": []
+      "settingsSchema": [],
+      "surfaces": [
+        "server"
+      ],
+      "admin": null
     },
     {
       "id": "minecraft_log_uploader",

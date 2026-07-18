@@ -1,5 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
+// Self-contained 64x64 pixel-art editor. UI chrome uses theme CSS variables;
+// the MINECRAFT_PALETTE values are literal paint colours (image content, not
+// theme surfaces) and are intentionally hardcoded.
+
 const GRID_SIZE = 64;
 const CELL_SIZE = 10; // 64 * 10 = 640px intrinsic size
 
@@ -95,7 +99,7 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
 
         if (targetPixel[0] === fr && targetPixel[1] === fg && targetPixel[2] === fb) return;
 
-        const stack = [[startX, startY]];
+        const stack: [number, number][] = [[startX, startY]];
         const visited = new Set<string>();
 
         while (stack.length > 0) {
@@ -171,47 +175,50 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
     }));
 
     return (
-        <div className={'flex flex-col gap-4'}>
+        <div className="flex flex-col gap-4">
             {/* Toolbar */}
-            <div className={'flex flex-wrap items-center gap-3'}>
-                <div className={'flex gap-1'}>
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex gap-1">
                     {(['paint', 'erase', 'fill'] as const).map(t => (
                         <button
                             key={t}
-                            type={'button'}
+                            type="button"
                             onClick={() => setTool(t)}
-                            className={`rounded px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                            className={`rounded-lg px-3 py-1 text-xs font-medium capitalize transition-colors ${
                                 tool === t
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-zinc-700 text-neutral-300 hover:bg-zinc-600'
+                                    ? 'bg-[var(--brand)] text-[var(--color-brand-ink)]'
+                                    : 'bg-[var(--color-surface-2)] text-[var(--color-ink-muted)] hover:bg-[var(--color-border-strong)]'
                             }`}
                         >
                             {t}
                         </button>
                     ))}
                 </div>
-                <label className={'flex items-center gap-2 text-xs text-neutral-400'}>
+                <label className="flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
                     Custom colour
                     <input
-                        type={'color'}
+                        type="color"
                         value={selectedColor}
                         onChange={e => setSelectedColor(e.target.value)}
-                        className={'h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0'}
+                        className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
                     />
                 </label>
             </div>
 
             {/* Minecraft palette */}
-            <div className={'flex flex-wrap gap-1'}>
+            <div className="flex flex-wrap gap-1">
                 {MINECRAFT_PALETTE.map(color => (
                     <button
                         key={color}
-                        type={'button'}
-                        onClick={() => { setSelectedColor(color); setTool('paint'); }}
+                        type="button"
+                        onClick={() => {
+                            setSelectedColor(color);
+                            setTool('paint');
+                        }}
                         title={color}
                         className={`h-6 w-6 rounded border-2 transition-transform hover:scale-110 ${
                             selectedColor === color && tool === 'paint'
-                                ? 'border-white'
+                                ? 'border-[var(--color-ink)]'
                                 : 'border-transparent'
                         }`}
                         style={{ backgroundColor: color }}
@@ -220,8 +227,8 @@ const PixelEditor = forwardRef<PixelEditorHandle, Props>(({ disabled = false }, 
             </div>
 
             {/* Canvas */}
-            <div className={'flex justify-center'}>
-                <div className={'relative w-full max-w-xl rounded border border-zinc-600'}>
+            <div className="flex justify-center">
+                <div className="relative w-full max-w-xl rounded-lg border border-[var(--color-border-strong)]">
                     <canvas
                         ref={canvasRef}
                         width={GRID_SIZE * CELL_SIZE}

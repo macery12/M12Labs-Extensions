@@ -1,5 +1,8 @@
-import http from '@/api/http';
+import http from '@/lib/http';
 
+// Per-server client API for the icon builder, mounted by the panel under
+// /api/client/servers/<uuid>/extensions/minecraft_icon_builder (gated by the
+// `extensions.access:minecraft_icon_builder` middleware).
 const base = (uuid: string) => `/api/client/servers/${uuid}/extensions/minecraft_icon_builder`;
 
 export interface IconData {
