@@ -68,6 +68,72 @@ def resolve_extension_dir(raw_path: str) -> Path:
     return candidate
 
 
+def derive_v2_features(extension_id: str, files_dir: Path, descriptor: dict) -> dict:
+    """Detect manifest-v2 surfaces from the files tree and validate that the
+    descriptor's declarations agree with what actually ships.
+
+    Returns {'backend': {...}, 'manifest_version': int, 'surfaces': [...]}.
+    Raises SystemExit on any declaration/files mismatch so a package can never
+    be built with a manifest the panel installer would reject.
+    """
+    backend_root = files_dir / 'app' / 'Extensions' / 'Packages' / extension_id
+    frontend_root = files_dir / 'frontend' / 'src' / 'extensions' / 'packages' / extension_id
+
+    has_migrations = bool(list((backend_root / 'database' / 'migrations').glob('*.php'))) \
+        if (backend_root / 'database' / 'migrations').is_dir() else False
+    has_schedule = (backend_root / 'schedule.php').is_file()
+    has_admin_routes = (backend_root / 'routes' / 'admin.php').is_file()
+    has_admin_page = (frontend_root / 'admin.tsx').is_file()
+    has_server_page = (frontend_root / 'index.tsx').is_file()
+
+    extension_meta = descriptor.get('extension', {})
+    declared_admin = extension_meta.get('admin')
+
+    meta_json_path = frontend_root / 'meta.json'
+    meta_admin = None
+    if meta_json_path.is_file():
+        meta_admin = load_json(meta_json_path).get('admin')
+
+    if declared_admin is not None:
+        if not has_admin_page:
+            raise SystemExit('extension.json declares extension.admin but files/ ships no admin.tsx entry.')
+        if meta_admin is None:
+            raise SystemExit('extension.json declares extension.admin but the frontend meta.json has no matching "admin" block (the panel loader discovers admin pages through meta.json).')
+        for key in ('route', 'label'):
+            if declared_admin.get(key) != meta_admin.get(key):
+                raise SystemExit(f'extension.admin.{key} in extension.json does not match the "admin" block in meta.json.')
+    elif has_admin_page or meta_admin is not None:
+        raise SystemExit('files/ ships an admin page (admin.tsx / meta.json admin block) but extension.json does not declare extension.admin.')
+
+    declared_backend = descriptor.get('backend', {})
+    for key, actual in (('migrations', has_migrations), ('schedule', has_schedule)):
+        declared = bool(declared_backend.get(key, False))
+        if declared_backend and key in declared_backend and declared != actual:
+            raise SystemExit(f'extension.json declares backend.{key}={str(declared).lower()} but the files tree says otherwise.')
+
+    backend = {}
+    if has_migrations:
+        backend['migrations'] = True
+    if has_schedule:
+        backend['schedule'] = True
+    if declared_backend.get('commands'):
+        backend['commands'] = declared_backend['commands']
+
+    surfaces = []
+    if has_server_page:
+        surfaces.append('server')
+    if declared_admin is not None:
+        surfaces.append('admin')
+
+    uses_v2 = bool(backend or declared_admin is not None or has_admin_routes)
+    declared_version = descriptor.get('manifestVersion')
+    manifest_version = declared_version or (2 if uses_v2 else 1)
+    if uses_v2 and manifest_version < 2:
+        raise SystemExit('This extension uses admin pages, migrations, or scheduled tasks and must declare "manifestVersion": 2.')
+
+    return {'backend': backend, 'manifest_version': manifest_version, 'surfaces': surfaces}
+
+
 def stage_extension(extension_dir: Path, debug: bool = False, publish_to_packages: bool = True) -> dict:
     descriptor_path = extension_dir / 'extension.json'
     files_dir = extension_dir / 'files'
@@ -117,8 +183,14 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
         manifest_files.append({'path': relative_path, 'sha256': checksum})
         copied_files.append(relative_path)
 
+    features = derive_v2_features(extension_id, files_dir, descriptor)
+
     manifest = dict(descriptor)
     manifest['files'] = manifest_files
+    if features['manifest_version'] >= 2:
+        manifest['manifestVersion'] = features['manifest_version']
+        if features['backend']:
+            manifest['backend'] = features['backend']
     dump_json(stage_root / MANIFEST_FILENAME, manifest)
 
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -140,6 +212,7 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
         'version': version,
         'descriptor': descriptor,
         'manifest': manifest,
+        'surfaces': features['surfaces'],
         'stage_root': stage_root,
         'archive_path': archive_path,
         'archive_checksum': archive_checksum,
@@ -193,6 +266,9 @@ def update_registry(build_result: dict, debug: bool = False) -> dict:
             'icon': extension_meta.get('icon', 'puzzle'),
             'route': extension_meta.get('route', extension_id),
             'settingsSchema': extension_meta.get('settingsSchema', []),
+            # v2 metadata; panels that predate it ignore unknown keys.
+            'surfaces': build_result.get('surfaces', ['server']),
+            'admin': extension_meta.get('admin'),
         }
     )
 
@@ -232,11 +308,30 @@ def inspect_package(package_path: str, debug: bool = False) -> int:
     name = manifest.get('extension', {}).get('name', extension_id)
     files = manifest.get('files', [])
 
+    file_paths = [entry.get('path', '') for entry in files]
+    backend_prefix = f'app/Extensions/Packages/{extension_id}/'
+    frontend_prefix = f'frontend/src/extensions/packages/{extension_id}/'
+    surfaces = []
+    if f'{frontend_prefix}index.tsx' in file_paths:
+        surfaces.append('server page')
+    if f'{frontend_prefix}admin.tsx' in file_paths:
+        surfaces.append('admin page')
+    if f'{backend_prefix}routes/client.php' in file_paths:
+        surfaces.append('client routes')
+    if f'{backend_prefix}routes/admin.php' in file_paths:
+        surfaces.append('admin routes')
+    if any(p.startswith(f'{backend_prefix}database/migrations/') for p in file_paths):
+        surfaces.append('migrations')
+    if f'{backend_prefix}schedule.php' in file_paths:
+        surfaces.append('scheduled tasks')
+
     print(f'Extension: {name}')
     print(f'Id:        {extension_id}')
     print(f'Version:   {version}')
+    print(f'Manifest:  v{manifest.get("manifestVersion", 1)}')
     print(f'Archive:   {path}')
     print(f'Files:     {len(files)}')
+    print(f'Surfaces:  {", ".join(surfaces) if surfaces else "none detected"}')
 
     if debug:
         print('[debug] manifest:')
@@ -298,7 +393,23 @@ def make_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument('--debug', action='store_true', help='Show full manifest contents')
     inspect_parser.set_defaults(func=lambda args: inspect_package(args.package_file, debug=args.debug))
 
+    scan_parser = subparsers.add_parser(
+        'scan',
+        help='Scan a .M12LabsExtension archive or an extensions/<id> source dir for common security problems (manual-review aid)',
+    )
+    scan_parser.add_argument('target', help='Path to a .M12LabsExtension archive or an extension source directory')
+    scan_parser.add_argument('--fail-on', choices=['warn', 'block'], default='block', help='Exit non-zero when findings of this severity or higher exist (default: block)')
+    scan_parser.add_argument('--json', action='store_true', help='Emit findings as JSON (for CI or tooling)')
+    scan_parser.set_defaults(func=scan_command)
+
     return parser
+
+
+def scan_command(args: argparse.Namespace) -> int:
+    from extension_scanner import scan_target, render_report
+
+    findings = scan_target(Path(args.target))
+    return render_report(findings, fail_on=args.fail_on, as_json=args.json)
 
 
 def main(argv: list[str] | None = None) -> int:

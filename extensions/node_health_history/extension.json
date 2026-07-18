@@ -1,0 +1,43 @@
+{
+  "package": { "id": "node_health_history", "version": "1.0.0" },
+  "extension": {
+    "id": "node_health_history",
+    "name": "Node Health History",
+    "description": "Periodically records the reachability and system information of every wings node, and charts the recent history on an admin page.",
+    "author": "M12Labs",
+    "icon": "server",
+    "route": null,
+    "admin": {
+      "route": "node_health_history",
+      "label": "Node Health",
+      "icon": "server"
+    },
+    "settingsSchema": [
+      {
+        "key": "poll_interval_minutes",
+        "label": "Poll interval (minutes)",
+        "type": "number",
+        "help": "How often each node's health is sampled. Takes effect on the next scheduler run after saving."
+      },
+      {
+        "key": "retention_days",
+        "label": "Retention (days)",
+        "type": "number",
+        "help": "Snapshots older than this are pruned during each poll."
+      }
+    ],
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [],
+      "allowedEggs": [],
+      "settings": { "poll_interval_minutes": 5, "retention_days": 30 }
+    }
+  },
+  "manifestVersion": 2,
+  "backend": {
+    "migrations": true,
+    "schedule": true,
+    "commands": ["p:ext:node-health-history:poll"]
+  },
+  "compatiblePanelVersions": ["Alpha 3.0"]
+}

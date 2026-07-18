@@ -1,0 +1,8 @@
+{
+  "id": "node_health_history",
+  "admin": {
+    "route": "node_health_history",
+    "label": "Node Health",
+    "icon": "server"
+  }
+}
