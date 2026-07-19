@@ -346,6 +346,64 @@ This is the minimum useful frontend example:
 - it calls the package client API route
 - it renders returned data
 
+## Localizing an Extension
+
+Extension UI can be translated through the panel's Paraglide catalog — the same
+system the core panel pages use. You ship message fragments alongside your
+frontend code and the panel merges them into its compile input at build time.
+
+**1. Ship a fragment per locale** at
+`files/frontend/src/extensions/packages/<id>/messages/<locale>.json`.
+A base `en.json` is required (it is the fallback for every other locale). Every
+key **must** be namespaced `ext.<id>.` — the packaging tool rejects any that are
+not, and the namespace is what keeps your keys from colliding with the core panel
+or another extension.
+
+```json
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "ext.example_extension.title": "Example Extension",
+  "ext.example_extension.loading": "Loading…"
+}
+```
+
+Non-base locales may only translate keys that already exist in `en.json`
+(no new keys). Interpolation via Paraglide `{var}` inputs is not available through
+the reader below — interpolate around the returned string in TypeScript instead.
+
+**2. Read the keys with `td(id, fallback)`** — the panel's dynamic-id helper.
+Do **not** use the typed `m['…']()` accessor: your keys do not exist in the
+panel's compiled `m` surface at package time, and `td`'s English fallback keeps
+the UI readable in any locale you have not translated (or before the panel has
+rebuilt its catalog).
+
+```tsx
+import { td } from '@/i18n';
+
+const t = (key: string, fallback: string) => td(`ext.example_extension.${key}`, fallback);
+
+export default function ExampleExtensionPage() {
+    return (
+        <div style={{ padding: '1.5rem' }}>
+            <h2>{t('title', 'Example Extension')}</h2>
+            <p>{t('loading', 'Loading…')}</p>
+        </div>
+    );
+}
+```
+
+**How it works:** on install/update/enable/disable the panel rebuilds, and its
+`frontend/scripts/merge-extension-messages.mjs` step scans every installed
+package's `messages/` directory, validates the `ext.<id>.` namespace, and writes
+the union to the panel's `messages/extensions/<locale>.json` (a second Paraglide
+`pathPattern`). The core catalog is never touched, so your fragment can never
+overwrite a panel string. You do **not** declare anything in `extension.json` —
+the `messages/` directory is discovered by convention, just like `meta.json`.
+
+Each batch of translations for an extension is committed to this repository as its
+own change (rebuild the artifact with `m12labs_extension_tool.py` so the packaged
+`files[]` checksums include the new fragments).
+
 ## How To Copy Files From an Existing Extension
 
 If the extension already exists in your local panel checkout, copy the files into the repo using the exact install paths they should land in.

@@ -29,7 +29,11 @@ Accepts either an `extensions/<id>` source directory or a built
   `base64_decode` near `eval`, `withoutMiddleware()`, `document.cookie`,
   `eval`/`new Function` in JS, remote dynamic `import()`, `Schema::create`
   outside the `ext_<id>_` namespace, path-allowlist violations, archive/manifest
-  mismatches (undeclared files, checksum mismatch).
+  mismatches (undeclared files, checksum mismatch), closure route handlers in
+  `routes/*.php` (`php.route-closure`), public controller actions without a
+  FormRequest parameter (`php.action-without-formrequest`), admin FormRequests
+  (extending `ApplicationApiRequest`) that lack a `permission()` method
+  (`php.admin-request-without-permission`).
 - **warn** — review carefully: external HTTP/network calls (hosts listed), raw
   SQL with interpolation, `$_GET/$_POST` use, controllers taking a bare
   `Request`, `Route::` outside `routes/*.php`, token-like web-storage reads,

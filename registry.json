@@ -186,6 +186,47 @@
         "server"
       ],
       "admin": null
+    },
+    {
+      "id": "node_health_history",
+      "versions": [
+        {
+          "version": "1.0.1",
+          "archive": "packages/node_health_history/1.0.1/node_health_history.M12LabsExtension",
+          "sha256": "1dcf9d62c25ae9442e11031a08892a27cc00f41b1c9c5e65b687594d829d3797",
+          "publishedAt": "2026-07-19T20:29:53Z",
+          "compatiblePanelVersions": [
+            ">=Alpha 3.0 <Alpha 4.0"
+          ]
+        }
+      ],
+      "name": "Node Health History",
+      "description": "Periodically records the reachability and system information of every wings node, and charts the recent history on an admin page.",
+      "author": "M12Labs",
+      "icon": "server",
+      "route": null,
+      "settingsSchema": [
+        {
+          "key": "poll_interval_minutes",
+          "label": "Poll interval (minutes)",
+          "type": "number",
+          "help": "How often each node's health is sampled. Takes effect on the next scheduler run after saving."
+        },
+        {
+          "key": "retention_days",
+          "label": "Retention (days)",
+          "type": "number",
+          "help": "Snapshots older than this are pruned during each poll."
+        }
+      ],
+      "surfaces": [
+        "admin"
+      ],
+      "admin": {
+        "route": "node_health_history",
+        "label": "Node Health",
+        "icon": "server"
+      }
     }
   ]
 }

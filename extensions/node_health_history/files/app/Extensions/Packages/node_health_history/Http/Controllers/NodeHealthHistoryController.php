@@ -6,11 +6,14 @@ use Everest\Extensions\Packages\node_health_history\Http\Requests\GetNodeHealthH
 use Everest\Extensions\Packages\node_health_history\Services\NodeHealthPoller;
 use Everest\Http\Controllers\Api\Application\ApplicationApiController;
 use Everest\Models\Node;
+use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class NodeHealthHistoryController extends ApplicationApiController
 {
+    use RespondsWithExtensionEnvelope;
+
     /**
      * Per-node current status + uptime, plus a recent time series for charting.
      */
@@ -62,10 +65,6 @@ class NodeHealthHistoryController extends ApplicationApiController
 
         usort($nodes, fn ($a, $b) => strcmp($a['name'], $b['name']));
 
-        return new JsonResponse([
-            'object' => 'list',
-            'data' => $nodes,
-            'meta' => ['hours' => $hours],
-        ]);
+        return $this->extensionListResponse($nodes, ['hours' => $hours]);
     }
 }

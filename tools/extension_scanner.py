@@ -191,6 +191,23 @@ PHP_WITHOUT_MW = re.compile(r'withoutMiddleware')
 PHP_ROUTE_CALL = re.compile(r'(?<![\w$>])Route::')
 PHP_BARE_REQUEST = re.compile(r'function\s+\w+\s*\([^)]*(?<![\w\\])(Illuminate\\Http\\)?Request\s+\$')
 PHP_SCHEMA_CREATE = re.compile(r'''Schema::create\(\s*['"]([^'"]+)['"]''')
+# A verb route whose handler is a closure (fn/function after the argument
+# comma, or as sole fallback() argument). Route::group() closures are fine.
+PHP_ROUTE_CLOSURE = re.compile(
+    r'Route::(?:get|post|put|patch|delete|options|any|match|fallback)'
+    r'\s*\(\s*(?:[^;]{0,200}?,\s*)?(?:static\s+)?(?:fn\s*\(|function\s*\()', re.S)
+PHP_PUBLIC_METHOD = re.compile(r'public\s+(?:static\s+)?function\s+(\w+)\s*\(([^)]*)\)', re.S)
+PHP_TYPED_PARAM = re.compile(r'([\w\\]+)\s+\$\w+')
+
+
+def has_form_request_param(params: str) -> bool:
+    """True when any parameter's type is a FormRequest subclass by naming
+    convention (ends in "Request" but is not the bare Illuminate Request)."""
+    for match in PHP_TYPED_PARAM.finditer(params):
+        basename = match.group(1).rsplit('\\', 1)[-1]
+        if basename.endswith('Request') and basename != 'Request':
+            return True
+    return False
 
 
 def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
@@ -199,6 +216,7 @@ def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
     is_route_file = path.startswith(f'{backend_root}routes/') and path.endswith('.php')
     is_migration = path.startswith(f'{backend_root}database/migrations/')
     is_controller = '/Http/Controllers/' in path
+    is_form_request = '/Http/Requests/' in path
 
     for i, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
@@ -239,6 +257,28 @@ def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
         if is_controller and PHP_BARE_REQUEST.search(line):
             findings.append(Finding('warn', 'php.bare-request', path, i,
                                     'Controller action takes a bare Request; use a FormRequest with permission()/authorize() instead.', stripped[:160]))
+
+    if is_route_file:
+        for match in PHP_ROUTE_CLOSURE.finditer(text):
+            line_no = text[:match.start()].count('\n') + 1
+            findings.append(Finding('block', 'php.route-closure', path, line_no,
+                                    'Route handler is a closure — extension routes must use [Controller::class, \'method\'] so the action goes through a reviewable FormRequest and survives route:cache.',
+                                    text.splitlines()[line_no - 1].strip()[:160]))
+
+    if is_controller:
+        for match in PHP_PUBLIC_METHOD.finditer(text):
+            method, params = match.group(1), match.group(2)
+            if method.startswith('__') and method != '__invoke':
+                continue
+            if not has_form_request_param(params):
+                line_no = text[:match.start()].count('\n') + 1
+                findings.append(Finding('block', 'php.action-without-formrequest', path, line_no,
+                                        f'Public controller method "{method}" has no FormRequest parameter — every action must validate/authorize through a FormRequest (make non-action helpers protected/private).',
+                                        f'public function {method}({params.strip()[:100]})'))
+
+    if is_form_request and 'extends ApplicationApiRequest' in text and 'function permission(' not in text:
+        findings.append(Finding('block', 'php.admin-request-without-permission', path, 0,
+                                'Admin FormRequest (extends ApplicationApiRequest) does not define permission() — every admin endpoint needs an explicit admin-permission gate.'))
 
     if PHP_B64_NEAR_EVAL.search(text):
         findings.append(Finding('block', 'php.b64-near-eval', path, 0,
@@ -318,6 +358,20 @@ def scan_target(target: Path) -> list[Finding]:
 
     if not extension_id:
         return findings
+
+    # Localization fragments are data, not code — no allowed-root exception is
+    # needed (they live under the frontend package root) — but flag their presence
+    # so a reviewer knows the panel will merge them into its Paraglide catalog.
+    _, frontend_root = allowed_roots(extension_id)
+    messages_prefix = f'{frontend_root}messages/'
+    fragment_locales = sorted(
+        Path(path).stem for path in files
+        if path.startswith(messages_prefix) and path.endswith('.json')
+    )
+    if fragment_locales:
+        findings.append(Finding('info', 'i18n.message-fragments', f'{messages_prefix}*.json', 0,
+                                f'Ships Paraglide message fragments (locales: {", ".join(fragment_locales)}) '
+                                f'merged into the panel catalog under the ext.{extension_id}. namespace.'))
 
     for path, content in files.items():
         suffix = Path(path).suffix

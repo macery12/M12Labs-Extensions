@@ -1,14 +1,22 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { td } from '@/i18n';
 import { getNodeHealth, type NodeHealth } from './api';
 
-// Extension UI: strings are literal English (extensions cannot contribute
-// Paraglide messages) and every colour is a theme CSS variable.
+// Extension UI: strings are localized through the panel's Paraglide catalog.
+// This extension ships message fragments under ./messages/<locale>.json (keys
+// namespaced `ext.node_health_history.*`); the panel merges them into its compile
+// input at build time. We read them via td(id, fallback) — the dynamic-id helper —
+// because the keys don't exist in the panel's typed `m` surface at package time,
+// and the English fallback covers any locale that hasn't translated a key. Every
+// colour is a theme CSS variable.
+
+const t = (key: string, fallback: string) => td(`ext.node_health_history.${key}`, fallback);
 
 const RANGES = [
-    { label: '24 hours', hours: 24 },
-    { label: '3 days', hours: 72 },
-    { label: '7 days', hours: 168 },
+    { key: 'range.24h', fallback: '24 hours', hours: 24 },
+    { key: 'range.3d', fallback: '3 days', hours: 72 },
+    { key: 'range.7d', fallback: '7 days', hours: 168 },
 ];
 
 export default function NodeHealthHistoryPage() {
@@ -23,9 +31,9 @@ export default function NodeHealthHistoryPage() {
         <div style={{ padding: '1.5rem', color: 'var(--color-ink)' }}>
             <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Node Health History</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>{t('title', 'Node Health History')}</h1>
                     <p style={{ fontSize: '0.85rem', color: 'var(--color-ink-muted)', marginTop: '0.25rem' }}>
-                        Reachability and latency of each wings node, sampled on a schedule.
+                        {t('subtitle', 'Reachability and latency of each wings node, sampled on a schedule.')}
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -44,20 +52,20 @@ export default function NodeHealthHistoryPage() {
                                 color: hours === r.hours ? 'var(--color-brand-ink)' : 'var(--color-ink-muted)',
                             }}
                         >
-                            {r.label}
+                            {t(r.key, r.fallback)}
                         </button>
                     ))}
                 </div>
             </header>
 
             <div style={{ marginTop: '1.5rem' }}>
-                {isLoading && <p style={{ color: 'var(--color-ink-muted)' }}>Loading node health…</p>}
-                {isError && <p style={{ color: 'var(--color-danger)' }}>Could not load node health. Is the extension enabled and has the poller run yet?</p>}
+                {isLoading && <p style={{ color: 'var(--color-ink-muted)' }}>{t('loading', 'Loading node health…')}</p>}
+                {isError && <p style={{ color: 'var(--color-danger)' }}>{t('error', 'Could not load node health. Is the extension enabled and has the poller run yet?')}</p>}
                 {data && data.length === 0 && (
                     <p style={{ color: 'var(--color-ink-muted)' }}>
-                        No snapshots recorded yet. The scheduler polls on the configured interval, or run
+                        {t('empty.before', 'No snapshots recorded yet. The scheduler polls on the configured interval, or run')}
                         <code style={{ margin: '0 0.35rem', color: 'var(--color-ink)' }}>php artisan p:ext:node-health-history:poll</code>
-                        to collect data now.
+                        {t('empty.after', 'to collect data now.')}
                     </p>
                 )}
                 {data && data.length > 0 && (
@@ -95,9 +103,9 @@ function NodeCard({ node }: { node: NodeHealth }) {
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.8rem', color: 'var(--color-ink-muted)' }}>
-                    <Stat label="Uptime" value={`${node.uptimePercent}%`} />
-                    <Stat label="Latency" value={node.latestLatencyMs != null ? `${node.latestLatencyMs} ms` : '—'} />
-                    <Stat label="Samples" value={String(node.sampleCount)} />
+                    <Stat label={t('stat.uptime', 'Uptime')} value={`${node.uptimePercent}%`} />
+                    <Stat label={t('stat.latency', 'Latency')} value={node.latestLatencyMs != null ? `${node.latestLatencyMs} ms` : '—'} />
+                    <Stat label={t('stat.samples', 'Samples')} value={String(node.sampleCount)} />
                 </div>
             </div>
             <LatencyChart node={node} />
@@ -143,20 +151,20 @@ function LatencyChart({ node }: { node: NodeHealth }) {
 
     return (
         <div style={{ marginTop: '0.75rem', overflowX: 'auto' }}>
-            <svg width={width} height={height} role="img" aria-label={`Latency history for ${node.name}`} style={{ maxWidth: '100%' }}>
+            <svg width={width} height={height} role="img" aria-label={`${t('chartAria', 'Latency history')} — ${node.name}`} style={{ maxWidth: '100%' }}>
                 <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="var(--color-border)" strokeWidth={1} />
                 {linePath && <path d={linePath} fill="none" stroke="var(--brand)" strokeWidth={1.5} />}
-                {ticks.map((t, i) => (
+                {ticks.map((pt, i) => (
                     <circle
                         key={i}
-                        cx={t.x}
-                        cy={t.healthy ? t.y : height - pad}
+                        cx={pt.x}
+                        cy={pt.healthy ? pt.y : height - pad}
                         r={2}
-                        fill={t.healthy ? 'var(--color-accent)' : 'var(--color-danger)'}
+                        fill={pt.healthy ? 'var(--color-accent)' : 'var(--color-danger)'}
                     />
                 ))}
                 <text x={pad} y={12} fontSize={10} fill="var(--color-ink-faint)">
-                    peak {maxLatency} ms
+                    {t('peak', 'peak')} {maxLatency} ms
                 </text>
             </svg>
         </div>

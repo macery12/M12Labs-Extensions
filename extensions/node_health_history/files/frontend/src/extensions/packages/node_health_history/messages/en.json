@@ -1,0 +1,17 @@
+{
+    "$schema": "https://inlang.com/schema/inlang-message-format",
+    "ext.node_health_history.title": "Node Health History",
+    "ext.node_health_history.subtitle": "Reachability and latency of each wings node, sampled on a schedule.",
+    "ext.node_health_history.range.24h": "24 hours",
+    "ext.node_health_history.range.3d": "3 days",
+    "ext.node_health_history.range.7d": "7 days",
+    "ext.node_health_history.loading": "Loading node health…",
+    "ext.node_health_history.error": "Could not load node health. Is the extension enabled and has the poller run yet?",
+    "ext.node_health_history.empty.before": "No snapshots recorded yet. The scheduler polls on the configured interval, or run",
+    "ext.node_health_history.empty.after": "to collect data now.",
+    "ext.node_health_history.stat.uptime": "Uptime",
+    "ext.node_health_history.stat.latency": "Latency",
+    "ext.node_health_history.stat.samples": "Samples",
+    "ext.node_health_history.peak": "peak",
+    "ext.node_health_history.chartAria": "Latency history"
+}

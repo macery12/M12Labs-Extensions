@@ -1,5 +1,5 @@
 {
-  "package": { "id": "node_health_history", "version": "1.0.0" },
+  "package": { "id": "node_health_history", "version": "1.0.1" },
   "extension": {
     "id": "node_health_history",
     "name": "Node Health History",
@@ -39,5 +39,5 @@
     "schedule": true,
     "commands": ["p:ext:node-health-history:poll"]
   },
-  "compatiblePanelVersions": ["Alpha 3.0"]
+  "compatiblePanelVersions": [">=Alpha 3.0 <Alpha 4.0"]
 }

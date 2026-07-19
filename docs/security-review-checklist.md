@@ -19,15 +19,28 @@ then work through this list. Scanner rule ids are noted where they map.
       `database/migrations/` (`php.schema-create-unprefixed`).
 - [ ] All file paths are inside the two install roots for this extension id
       (`path.*`); archive matches its manifest (`manifest.*`).
+- [ ] Route files register `[Controller::class, 'method']` only — no closure
+      handlers (`php.route-closure`).
+- [ ] Every public controller action takes a FormRequest
+      (`php.action-without-formrequest`); admin FormRequests extending
+      `ApplicationApiRequest` define `permission()`
+      (`php.admin-request-without-permission`).
 
 ## Manual
 
 - [ ] **Routes**: `routes/admin.php` / `routes/client.php` set no prefix or
       middleware of their own and never strip inherited middleware. Admin routes
       inherit admin auth; client routes go through `extensions.access:<id>`.
-- [ ] **Requests**: every controller action uses a FormRequest extending the
-      right base with a `permission()`/`authorize()` — no bare `Request`, no
-      direct `$_GET/$_POST` (`php.superglobal`, `php.bare-request`).
+- [ ] **Requests**: each FormRequest extends the base matching its surface
+      (`ApplicationApiRequest` for admin, the client base for client routes) —
+      the scanner checks the admin side by name only, not the class hierarchy.
+      No bare `Request`, no direct `$_GET/$_POST` (`php.superglobal`,
+      `php.bare-request`).
+- [ ] **Responses**: admin endpoints use the
+      `RespondsWithExtensionEnvelope` helpers (`{object, data|attributes}`
+      envelope); errors are thrown, not hand-rolled JSON. Admin pages poll
+      gently — every extension admin route sits behind the per-user,
+      per-extension `throttle:api.ext-admin` budget (default 60/min).
 - [ ] **SQL**: no raw SQL with interpolated user input; queries use bindings
       (`php.raw-sql-interpolated`).
 - [ ] **External calls**: any backend HTTP or frontend network call to an
@@ -41,9 +54,13 @@ then work through this list. Scanner rule ids are noted where they map.
 - [ ] **Scheduler/commands**: commands early-exit when the extension is
       disabled; `schedule.php` only wires the scheduler (no side effects).
 - [ ] **Secrets**: no hardcoded credentials, API keys, or tokens.
-- [ ] **Manifest**: `compatiblePanelVersions` targets the real panel version
-      (exact match, e.g. `Alpha 3.0`); `manifestVersion: 2` if it uses any v2
-      feature; `backend`/`admin` declarations match the files.
+- [ ] **Manifest**: `compatiblePanelVersions` targets the real panel version —
+      exact (`Alpha 3.0`) or a semver range (`>=Alpha 3.0 <Alpha 4.0`); the
+      range is not so wide it claims panels the extension was never tested on.
+      `manifestVersion: 2` if it uses any v2 feature; `backend`/`admin`
+      declarations match the files.
 - [ ] **UI**: colours are theme CSS variables (works in light + dark); strings
-      are literal English (extensions can't use Paraglide yet).
+      are literal English or Paraglide fragments under `messages/<locale>.json`
+      namespaced `ext.<id>.` (fragment keys outside the namespace are rejected
+      at build).
 - [ ] **Overall**: the code does what the description says and nothing more.

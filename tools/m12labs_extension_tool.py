@@ -134,6 +134,72 @@ def derive_v2_features(extension_id: str, files_dir: Path, descriptor: dict) -> 
     return {'backend': backend, 'manifest_version': manifest_version, 'surfaces': surfaces}
 
 
+def validate_message_fragments(extension_id: str, files_dir: Path) -> None:
+    """Validate any Paraglide message fragments the extension ships.
+
+    Extensions may localize their UI by shipping catalogs at
+        files/frontend/src/extensions/packages/<id>/messages/<locale>.json
+    which the panel merges into its compile input at build time (see the panel's
+    frontend/scripts/merge-extension-messages.mjs). Enforce the same contract the
+    merge step relies on, so a non-conforming fragment fails at package time rather
+    than silently breaking the panel build:
+
+      - a base `en.json` must exist (it is the fallback for every other locale)
+      - each file is a valid JSON object carrying the inlang `$schema` marker
+      - every key is prefixed `ext.<id>.` (collision-proof namespacing)
+      - non-base locales introduce no key absent from `en.json` (parity)
+
+    A fragmentless extension is fine — this is a no-op then.
+    """
+    messages_dir = files_dir / 'frontend' / 'src' / 'extensions' / 'packages' / extension_id / 'messages'
+    if not messages_dir.is_dir():
+        return
+
+    locale_files = sorted(messages_dir.glob('*.json'))
+    if not locale_files:
+        return
+
+    prefix = f'ext.{extension_id}.'
+
+    def keys_of(path: Path) -> set[str]:
+        try:
+            doc = load_json(path)
+        except json.JSONDecodeError as err:
+            raise SystemExit(f'{path.name} is not valid JSON: {err}')
+        if not isinstance(doc, dict):
+            raise SystemExit(f'{path.name} must be a JSON object of message keys.')
+        if doc.get('$schema') != 'https://inlang.com/schema/inlang-message-format':
+            raise SystemExit(
+                f'{path.name} must include "$schema": "https://inlang.com/schema/inlang-message-format".'
+            )
+        keys = {k for k in doc if k != '$schema'}
+        for key in keys:
+            if not key.startswith(prefix):
+                raise SystemExit(
+                    f'{path.name} key "{key}" must be prefixed "{prefix}" '
+                    f'(all extension message keys are namespaced to the extension id).'
+                )
+        return keys
+
+    en_path = messages_dir / 'en.json'
+    if not en_path.is_file():
+        raise SystemExit(
+            'Extension ships a messages/ directory but no messages/en.json — '
+            'en is the base locale every other locale falls back to.'
+        )
+
+    base_keys = keys_of(en_path)
+    for path in locale_files:
+        if path.name == 'en.json':
+            continue
+        extra = keys_of(path) - base_keys
+        if extra:
+            raise SystemExit(
+                f'{path.name} defines key(s) absent from en.json: {", ".join(sorted(extra))}. '
+                'Every localized key must exist in the base en catalog.'
+            )
+
+
 def stage_extension(extension_dir: Path, debug: bool = False, publish_to_packages: bool = True) -> dict:
     descriptor_path = extension_dir / 'extension.json'
     files_dir = extension_dir / 'files'
@@ -184,6 +250,7 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
         copied_files.append(relative_path)
 
     features = derive_v2_features(extension_id, files_dir, descriptor)
+    validate_message_fragments(extension_id, files_dir)
 
     manifest = dict(descriptor)
     manifest['files'] = manifest_files
