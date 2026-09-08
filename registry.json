@@ -9,6 +9,22 @@
       "id": "custom_domains",
       "versions": [
         {
+          "version": "1.0.1",
+          "archive": "packages/custom_domains/1.0.1/custom_domains.M12LabsExtension",
+          "sha256": "bd6d6863a004d11dffe46246dc310710931ae32388323cec6c2b00ccb55d0fef",
+          "publishedAt": "2026-09-08T18:02:26Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "JeplTkNS9xMM/x5s/E97CoMRHfw0AX0xZ6+8qtPWM3C4MDpq28ukhVTcPJoPfy1YfG+fdQ1o0VJkaCPuIuU2CQ==",
+            "canonicalManifestSha256": "e7026bd23e28f3b2ae4c939a810aaf466c8cd2d26e696ef9a82d000b151c61da"
+          }
+        },
+        {
           "version": "1.0.0",
           "archive": "packages/custom_domains/1.0.0/custom_domains.M12LabsExtension",
           "sha256": "da7652e8e8d9795b077816804acd80f280f88a3d2c41ceda47a0744348c1fe26",

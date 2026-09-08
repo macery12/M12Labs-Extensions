@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "custom_domains",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -26,9 +26,14 @@
       }
     }
   },
-  "compatiblePanelVersions": [">=Alpha 4.0 <Alpha 5.0"],
+  "compatiblePanelVersions": [
+    ">=Alpha 4.0 <Alpha 5.0"
+  ],
   "capabilities": {
-    "routes": { "client": true, "admin": true },
+    "routes": {
+      "client": true,
+      "admin": true
+    },
     "pages": {
       "server": [
         {
@@ -98,7 +103,11 @@
         "name": "dns",
         "maxAttempts": 5,
         "timeoutSeconds": 120,
-        "backoffSeconds": [10, 60, 300],
+        "backoffSeconds": [
+          10,
+          60,
+          300
+        ],
         "rateLimit": "60/minute",
         "maxConcurrent": 4,
         "maxOutstanding": 5000
@@ -170,7 +179,12 @@
     }
   },
   "requirements": {
-    "panelServices": ["http-client", "queue", "secrets", "hooks"],
+    "panelServices": [
+      "http-client",
+      "queue",
+      "secrets",
+      "hooks"
+    ],
     "extensions": []
   }
 }
