@@ -1,0 +1,36 @@
+name: Extension security
+
+on:
+  pull_request:
+  push:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extension-security:
+    name: Extension security gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scanner and packaging regression tests
+        run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
+      - name: Validate sources, built packages, registry and changed releases
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        shell: bash
+        run: |
+          if [[ -n "$BASE_SHA" && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            python3 tools/check_extensions.py --base "$BASE_SHA"
+          else
+            python3 tools/check_extensions.py
+          fi

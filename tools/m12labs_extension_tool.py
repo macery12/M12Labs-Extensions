@@ -209,6 +209,11 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
     if not files_dir.exists():
         raise SystemExit(f'Missing files directory: {files_dir}')
 
+    from extension_scanner import render_report, scan_target
+
+    if render_report(scan_target(extension_dir)):
+        raise SystemExit('Extension scanner blocked this package; no release was written.')
+
     descriptor = load_json(descriptor_path)
     package_meta = descriptor.get('package', {})
     extension_meta = descriptor.get('extension', {})
