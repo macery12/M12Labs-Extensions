@@ -6,6 +6,47 @@
   },
   "packages": [
     {
+      "id": "custom_domains",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/custom_domains/1.0.0/custom_domains.M12LabsExtension",
+          "sha256": "da7652e8e8d9795b077816804acd80f280f88a3d2c41ceda47a0744348c1fe26",
+          "publishedAt": "2026-09-08T17:39:33Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "cDpaBghOC3W/TmO5vyB1h7H0aEm8qwFHvLu8Lo8TAn246v44PBCGDliZoE+TMFgKphoQpT/4PFaf3euzZvFHDA==",
+            "canonicalManifestSha256": "475d2b4e56d8df2bdef14887734b20960524a0cb47929fb8f4e3f5c48f7604d6"
+          }
+        }
+      ],
+      "name": "Custom Domains",
+      "description": "Offer branded subdomains on domains you curate. Server owners map a subdomain to an allocation and the panel provisions the real Cloudflare DNS records for it.",
+      "author": "M12Labs",
+      "icon": "globe",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 1,
+        "clientRoutes": true,
+        "adminRoutes": true,
+        "migrations": true,
+        "schedule": false,
+        "commands": 0,
+        "hooks": [
+          "server.pre_delete"
+        ],
+        "queues": 1,
+        "permissions": 4,
+        "secrets": 1,
+        "settings": 6
+      }
+    },
+    {
       "id": "discordsrv_helper",
       "versions": [
         {
@@ -74,7 +115,7 @@
         }
       ],
       "name": "Minecraft Icon Builder",
-      "description": "Paint and save a custom 64×64 server-icon.png directly from the panel using a built-in pixel editor.",
+      "description": "Paint and save a custom 64\u00d764 server-icon.png directly from the panel using a built-in pixel editor.",
       "author": "M12Labs",
       "icon": "image"
     },
@@ -167,7 +208,7 @@
         }
       ],
       "name": "Minecraft Startup Editor",
-      "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input — all options are validated against a secure server-side allowlist.",
+      "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input \u2014 all options are validated against a secure server-side allowlist.",
       "author": "M12Labs",
       "icon": "terminal"
     },
