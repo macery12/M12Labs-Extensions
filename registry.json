@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "repository": {
     "name": "M12Labs Official Repository",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -15,7 +15,9 @@
           "publishedAt": "2026-07-18T05:11:28Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         },
         {
           "version": "1.0.0",
@@ -24,27 +26,15 @@
           "publishedAt": "2026-04-18T15:27:39Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         }
       ],
       "name": "DiscordSRV Helper",
       "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls.",
       "author": "M12Labs",
-      "icon": "server",
-      "route": "discordsrv_helper",
-      "settingsSchema": [
-        {
-          "key": "jar_url",
-          "label": "DiscordSRV Jar URL",
-          "type": "text",
-          "placeholder": "https://github.com/DiscordSRV/DiscordSRV/releases/download/.../DiscordSRV.jar",
-          "help": "Optional. If set, the install action uses this URL instead of auto-detecting the latest release."
-        }
-      ],
-      "surfaces": [
-        "server"
-      ],
-      "admin": null
+      "icon": "server"
     },
     {
       "id": "minecraft_icon_builder",
@@ -56,7 +46,9 @@
           "publishedAt": "2026-07-18T05:15:07Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         },
         {
           "version": "1.0.1",
@@ -65,7 +57,9 @@
           "publishedAt": "2026-04-28T00:24:24Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         },
         {
           "version": "1.0.0",
@@ -74,19 +68,15 @@
           "publishedAt": "2026-04-19T01:01:43Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         }
       ],
       "name": "Minecraft Icon Builder",
-      "description": "Paint and save a custom 64\u00d764 server-icon.png directly from the panel using a built-in pixel editor.",
+      "description": "Paint and save a custom 64×64 server-icon.png directly from the panel using a built-in pixel editor.",
       "author": "M12Labs",
-      "icon": "image",
-      "route": "minecraft_icon_builder",
-      "settingsSchema": [],
-      "surfaces": [
-        "server"
-      ],
-      "admin": null
+      "icon": "image"
     },
     {
       "id": "minecraft_log_uploader",
@@ -98,7 +88,9 @@
           "publishedAt": "2026-07-18T05:53:34Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         },
         {
           "version": "1.0.0",
@@ -107,19 +99,15 @@
           "publishedAt": "2026-04-28T03:12:33Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         }
       ],
       "name": "Minecraft Log Uploader",
       "description": "Read, preview, and upload your Minecraft server logs to mclo.gs directly from the panel.",
       "author": "M12Labs",
-      "icon": "file-text",
-      "route": "minecraft_log_uploader",
-      "settingsSchema": [],
-      "surfaces": [
-        "server"
-      ],
-      "admin": null
+      "icon": "file-text"
     },
     {
       "id": "minecraft_player_manager",
@@ -131,7 +119,9 @@
           "publishedAt": "2026-07-18T05:29:11Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         },
         {
           "version": "1.0.1",
@@ -140,19 +130,15 @@
           "publishedAt": "2026-04-18T15:27:14Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         }
       ],
       "name": "Minecraft Player Manager",
       "description": "Manage Minecraft Java Edition players directly from M12Labs with whitelist, operator, ban, kick, inventory, and attribute tools.",
       "author": "M12Labs",
-      "icon": "users",
-      "route": "minecraft_player_manager",
-      "settingsSchema": [],
-      "surfaces": [
-        "server"
-      ],
-      "admin": null
+      "icon": "users"
     },
     {
       "id": "minecraft_startup_editor",
@@ -164,7 +150,9 @@
           "publishedAt": "2026-07-18T05:53:34Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         },
         {
           "version": "1.0.0",
@@ -173,23 +161,35 @@
           "publishedAt": "2026-04-26T00:36:29Z",
           "compatiblePanelVersions": [
             "2.0.0-m12-alpha-2.7"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         }
       ],
       "name": "Minecraft Startup Editor",
-      "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input \u2014 all options are validated against a secure server-side allowlist.",
+      "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input — all options are validated against a secure server-side allowlist.",
       "author": "M12Labs",
-      "icon": "terminal",
-      "route": "minecraft_startup_editor",
-      "settingsSchema": [],
-      "surfaces": [
-        "server"
-      ],
-      "admin": null
+      "icon": "terminal"
     },
     {
       "id": "node_health_history",
       "versions": [
+        {
+          "version": "2.0.0",
+          "archive": "packages/node_health_history/2.0.0/node_health_history.M12LabsExtension",
+          "sha256": "0d4f289fde5e656742eded8fba901f13713f1c8cc5ee6be00c8bc99a782d6e84",
+          "publishedAt": "2026-09-08T06:33:43Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "FHtLZFgZkSOq/FR+OZG76hUI6wyS0Ro2eQ6cHPkJwBDaKRa0Cg/AjopnMaex4BBdJRyMgQ9DMGvyERlvKlEkAQ==",
+            "canonicalManifestSha256": "8982bc5b2757907c76280ab4c7c791c98ef09c60d67518a105a9afd847402f9f"
+          }
+        },
         {
           "version": "1.0.1",
           "archive": "packages/node_health_history/1.0.1/node_health_history.M12LabsExtension",
@@ -197,36 +197,40 @@
           "publishedAt": "2026-07-19T20:29:53Z",
           "compatiblePanelVersions": [
             ">=Alpha 3.0 <Alpha 4.0"
-          ]
+          ],
+          "manifestVersion": 2,
+          "revoked": false
         }
       ],
       "name": "Node Health History",
       "description": "Periodically records the reachability and system information of every wings node, and charts the recent history on an admin page.",
       "author": "M12Labs",
       "icon": "server",
-      "route": null,
-      "settingsSchema": [
-        {
-          "key": "poll_interval_minutes",
-          "label": "Poll interval (minutes)",
-          "type": "number",
-          "help": "How often each node's health is sampled. Takes effect on the next scheduler run after saving."
-        },
-        {
-          "key": "retention_days",
-          "label": "Retention (days)",
-          "type": "number",
-          "help": "Snapshots older than this are pruned during each poll."
-        }
-      ],
-      "surfaces": [
-        "admin"
-      ],
-      "admin": {
-        "route": "node_health_history",
-        "label": "Node Health",
-        "icon": "server"
+      "capabilitySummary": {
+        "serverPages": 0,
+        "adminPages": 1,
+        "clientRoutes": false,
+        "adminRoutes": true,
+        "migrations": true,
+        "schedule": true,
+        "commands": 1,
+        "hooks": [],
+        "queues": 0,
+        "permissions": 1,
+        "secrets": 0,
+        "settings": 2
       }
+    }
+  ],
+  "keys": [
+    {
+      "keyId": "m12labs-release-2026a",
+      "publicKey": "4KqvHDMnrEbDSrNnnQq5YTIpk7VCFOoxf+Tvr0Y+aAk=",
+      "label": "M12Labs CI release key (2026)",
+      "validFrom": "2026-09-08T00:00:00Z",
+      "validUntil": "2027-09-08T00:00:00Z",
+      "revoked": false,
+      "rootSignature": "HqNeWpP23YDXUJ4tawp/rP3pyqPm5mNzeC9w2f29YzE6xJSVlBLGuGwr3SMMqOuRw4dL+7cVMxEMZqrzT1r3DQ=="
     }
   ]
 }

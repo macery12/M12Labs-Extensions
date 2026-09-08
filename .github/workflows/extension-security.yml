@@ -22,8 +22,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install signing dependencies
+        run: python3 -m pip install --disable-pip-version-check 'cryptography>=41'
       - name: Scanner and packaging regression tests
         run: python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
+      # No release key is supplied here on purpose. The gate re-verifies every
+      # published signature against the root pinned in tools/signing.py, which
+      # needs only public material; it never re-signs. Signing happens in the
+      # release job, which is the only place M12LABS_RELEASE_KEY is exposed —
+      # so a pull request from a fork cannot reach the key, and a compromised
+      # test cannot sign anything.
       - name: Validate sources, built packages, registry and changed releases
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}

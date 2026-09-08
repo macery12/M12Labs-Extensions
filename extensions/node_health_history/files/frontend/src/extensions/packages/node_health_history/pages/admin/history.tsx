@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { td } from '@/i18n';
-import { getNodeHealth, type NodeHealth } from './api';
+import { createTranslator, extensionQueryKey } from '@/extensions-sdk';
+import { getNodeHealth, type NodeHealth } from '../../api';
 
 // Extension UI: strings are localized through the panel's Paraglide catalog.
-// This extension ships message fragments under ./messages/<locale>.json (keys
-// namespaced `ext.node_health_history.*`); the panel merges them into its compile
-// input at build time. We read them via td(id, fallback) — the dynamic-id helper —
-// because the keys don't exist in the panel's typed `m` surface at package time,
-// and the English fallback covers any locale that hasn't translated a key. Every
-// colour is a theme CSS variable.
+// This extension ships message fragments under ../../messages/<locale>.json
+// (keys namespaced `ext.node_health_history.*`); the panel merges them into its
+// compile input at build time. The SDK translator binds that prefix and takes
+// an English fallback, which covers any locale that has not translated a key.
+// Every colour is a theme CSS variable.
+//
+// Every '@/' import is from '@/extensions-sdk'. The installer rejects a package
+// that reaches into panel internals, so this is the supported surface.
 
-const t = (key: string, fallback: string) => td(`ext.node_health_history.${key}`, fallback);
+const t = createTranslator('node_health_history');
+
+// Namespaces the query cache by package version, so an upgrade never serves
+// a previous release's cached shape.
+const VERSION = '2.0.0';
 
 const RANGES = [
     { key: 'range.24h', fallback: '24 hours', hours: 24 },
@@ -22,7 +28,7 @@ const RANGES = [
 export default function NodeHealthHistoryPage() {
     const [hours, setHours] = useState(24);
     const { data, isLoading, isError } = useQuery({
-        queryKey: ['ext', 'node_health_history', hours],
+        queryKey: extensionQueryKey('node_health_history', VERSION, 'history', hours),
         queryFn: () => getNodeHealth(hours),
         refetchInterval: 60_000,
     });

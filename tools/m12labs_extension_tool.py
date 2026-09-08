@@ -11,12 +11,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+import signing
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / 'registry.json'
 BUILD_ROOT = REPO_ROOT / '.build'
 PACKAGES_ROOT = REPO_ROOT / 'packages'
 MANIFEST_FILENAME = 'm12labs-extension.json'
+MANIFEST_VERSION = 3
+REGISTRY_SCHEMA_VERSION = 2
+
+# Mirrors ExtensionCapabilityVocabulary::CAPABILITY_KEYS. The panel rejects a
+# manifest naming anything outside this set, so the packager must too.
+CAPABILITY_KEYS = {
+    'routes', 'pages', 'permissions', 'database', 'hooks',
+    'queues', 'schedule', 'commands', 'secrets', 'settings',
+}
 
 
 def package_filename(extension_id: str) -> str:
@@ -46,11 +57,16 @@ def dump_json(path: Path, payload: dict) -> None:
 def ensure_registry() -> dict:
     if not REGISTRY_PATH.exists():
         return {
-            'schemaVersion': 1,
+            'schemaVersion': REGISTRY_SCHEMA_VERSION,
             'repository': {
                 'name': 'M12Labs Official Repository',
                 'homepage': 'https://github.com/macery12/M12Labs-Extensions',
             },
+            # Release keys, each authorized by a root signature over its own
+            # record. A panel admits a key only when that signature verifies
+            # against the root fingerprint it pins, so this block is safe to
+            # serve over plain HTTPS from an untrusted mirror.
+            'keys': [],
             'packages': [],
         }
 
@@ -68,70 +84,169 @@ def resolve_extension_dir(raw_path: str) -> Path:
     return candidate
 
 
-def derive_v2_features(extension_id: str, files_dir: Path, descriptor: dict) -> dict:
-    """Detect manifest-v2 surfaces from the files tree and validate that the
-    descriptor's declarations agree with what actually ships.
+def derive_v3_capabilities(extension_id: str, files_dir: Path, descriptor: dict) -> dict:
+    """Cross-check the descriptor's capability block against the files tree.
 
-    Returns {'backend': {...}, 'manifest_version': int, 'surfaces': [...]}.
-    Raises SystemExit on any declaration/files mismatch so a package can never
-    be built with a manifest the panel installer would reject.
+    Capabilities are DECLARED, never inferred: the panel's parser refuses to
+    install a surface the manifest does not name, precisely so an administrator
+    approves a fixed list rather than whatever happens to be on disk. This
+    function therefore does not build the block — it verifies that what the
+    author declared and what the package ships agree in both directions, and
+    fails the build when they do not.
+
+    The panel enforces the same pairing at install time
+    (ExtensionCapabilityFileValidator). Duplicating it here is deliberate: a
+    publisher should learn about a mismatch when packaging, not from an
+    operator's failed install.
+
+    Returns {'capabilities': {...}, 'summary': {...}} where the summary is the
+    untrusted display hint carried by the registry.
     """
+    capabilities = descriptor.get('capabilities')
+    if not isinstance(capabilities, dict):
+        raise SystemExit(
+            'extension.json must declare a "capabilities" object (manifest v3). '
+            'An empty object is valid for a package with no privileged surface.'
+        )
+
+    unknown = sorted(set(capabilities) - CAPABILITY_KEYS)
+    if unknown:
+        raise SystemExit(
+            f'Unknown capability key(s): {", ".join(unknown)}. '
+            f'The panel rejects a manifest naming anything outside {", ".join(sorted(CAPABILITY_KEYS))}.'
+        )
+
     backend_root = files_dir / 'app' / 'Extensions' / 'Packages' / extension_id
     frontend_root = files_dir / 'frontend' / 'src' / 'extensions' / 'packages' / extension_id
 
-    has_migrations = bool(list((backend_root / 'database' / 'migrations').glob('*.php'))) \
-        if (backend_root / 'database' / 'migrations').is_dir() else False
-    has_schedule = (backend_root / 'schedule.php').is_file()
-    has_admin_routes = (backend_root / 'routes' / 'admin.php').is_file()
-    has_admin_page = (frontend_root / 'admin.tsx').is_file()
-    has_server_page = (frontend_root / 'index.tsx').is_file()
+    def ships(*parts: str) -> bool:
+        return (backend_root.joinpath(*parts)).is_file()
 
-    extension_meta = descriptor.get('extension', {})
-    declared_admin = extension_meta.get('admin')
+    def ships_any_under(root: Path) -> bool:
+        return root.is_dir() and any(p.is_file() for p in root.rglob('*'))
 
-    meta_json_path = frontend_root / 'meta.json'
-    meta_admin = None
-    if meta_json_path.is_file():
-        meta_admin = load_json(meta_json_path).get('admin')
+    routes = capabilities.get('routes') or {}
+    database = capabilities.get('database') or {}
 
-    if declared_admin is not None:
-        if not has_admin_page:
-            raise SystemExit('extension.json declares extension.admin but files/ ships no admin.tsx entry.')
-        if meta_admin is None:
-            raise SystemExit('extension.json declares extension.admin but the frontend meta.json has no matching "admin" block (the panel loader discovers admin pages through meta.json).')
-        for key in ('route', 'label'):
-            if declared_admin.get(key) != meta_admin.get(key):
-                raise SystemExit(f'extension.admin.{key} in extension.json does not match the "admin" block in meta.json.')
-    elif has_admin_page or meta_admin is not None:
-        raise SystemExit('files/ ships an admin page (admin.tsx / meta.json admin block) but extension.json does not declare extension.admin.')
+    pairs = [
+        ('capabilities.routes.client', bool(routes.get('client')),
+         ships('routes', 'client.php'), f'app/Extensions/Packages/{extension_id}/routes/client.php'),
+        ('capabilities.routes.admin', bool(routes.get('admin')),
+         ships('routes', 'admin.php'), f'app/Extensions/Packages/{extension_id}/routes/admin.php'),
+        ('capabilities.schedule', bool(capabilities.get('schedule')),
+         ships('schedule.php'), f'app/Extensions/Packages/{extension_id}/schedule.php'),
+        ('capabilities.database.migrations', bool(database.get('migrations')),
+         ships_any_under(backend_root / 'database' / 'migrations'),
+         f'app/Extensions/Packages/{extension_id}/database/migrations/'),
+        ('capabilities.commands', bool(capabilities.get('commands')),
+         ships_any_under(backend_root / 'Console' / 'Commands'),
+         f'app/Extensions/Packages/{extension_id}/Console/Commands/'),
+        ('capabilities.queues', bool(capabilities.get('queues')),
+         ships_any_under(backend_root / 'Jobs'),
+         f'app/Extensions/Packages/{extension_id}/Jobs/'),
+    ]
 
-    declared_backend = descriptor.get('backend', {})
-    for key, actual in (('migrations', has_migrations), ('schedule', has_schedule)):
-        declared = bool(declared_backend.get(key, False))
-        if declared_backend and key in declared_backend and declared != actual:
-            raise SystemExit(f'extension.json declares backend.{key}={str(declared).lower()} but the files tree says otherwise.')
+    for capability, declared, shipped, path in pairs:
+        if declared and not shipped:
+            raise SystemExit(f'extension.json declares "{capability}" but files/ ships no {path}.')
+        if shipped and not declared:
+            raise SystemExit(f'files/ ships {path} but extension.json does not declare "{capability}".')
 
-    backend = {}
-    if has_migrations:
-        backend['migrations'] = True
-    if has_schedule:
-        backend['schedule'] = True
-    if declared_backend.get('commands'):
-        backend['commands'] = declared_backend['commands']
+    # Hooks: every declared handler must ship, and every shipped handler must be
+    # declared. An undeclared hook class is inert on the panel, but it is still
+    # code the administrator was never shown.
+    declared_hooks = {str(hook.get('handler', '')) for hook in (capabilities.get('hooks') or [])}
+    for handler in sorted(declared_hooks):
+        if not ships('Hooks', f'{handler}.php'):
+            raise SystemExit(
+                f'extension.json declares the hook handler "{handler}" but files/ ships no '
+                f'app/Extensions/Packages/{extension_id}/Hooks/{handler}.php.'
+            )
+    hooks_dir = backend_root / 'Hooks'
+    if hooks_dir.is_dir():
+        for shipped_hook in sorted(hooks_dir.glob('*.php')):
+            if shipped_hook.stem not in declared_hooks:
+                raise SystemExit(
+                    f'files/ ships Hooks/{shipped_hook.name} but extension.json does not declare it '
+                    'under capabilities.hooks.'
+                )
 
-    surfaces = []
-    if has_server_page:
-        surfaces.append('server')
-    if declared_admin is not None:
-        surfaces.append('admin')
+    # Pages: declared slug <-> pages/<surface>/<slug>.tsx. Supporting components
+    # in a subdirectory beside a page need no declaration.
+    pages = capabilities.get('pages') or {}
+    for surface in ('server', 'admin'):
+        declared_slugs = {str(page.get('slug', '')) for page in (pages.get(surface) or [])}
+        surface_dir = frontend_root / 'pages' / surface
 
-    uses_v2 = bool(backend or declared_admin is not None or has_admin_routes)
-    declared_version = descriptor.get('manifestVersion')
-    manifest_version = declared_version or (2 if uses_v2 else 1)
-    if uses_v2 and manifest_version < 2:
-        raise SystemExit('This extension uses admin pages, migrations, or scheduled tasks and must declare "manifestVersion": 2.')
+        for slug in sorted(declared_slugs):
+            if not (surface_dir / f'{slug}.tsx').is_file():
+                raise SystemExit(
+                    f'extension.json declares the {surface} page "{slug}" but files/ ships no '
+                    f'frontend/src/extensions/packages/{extension_id}/pages/{surface}/{slug}.tsx.'
+                )
 
-    return {'backend': backend, 'manifest_version': manifest_version, 'surfaces': surfaces}
+        if surface_dir.is_dir():
+            for shipped_page in sorted(surface_dir.glob('*.tsx')):
+                if shipped_page.stem not in declared_slugs:
+                    raise SystemExit(
+                        f'files/ ships pages/{surface}/{shipped_page.name} but extension.json does not '
+                        f'declare it under capabilities.pages.{surface}.'
+                    )
+
+    # The v2 layout inferred surfaces from these filenames. Shipping one
+    # alongside a v3 manifest is rejected by the panel, so reject it here too.
+    for legacy in ('meta.json', 'index.tsx', 'admin.tsx'):
+        if (frontend_root / legacy).is_file():
+            raise SystemExit(
+                f'files/ ships frontend/src/extensions/packages/{extension_id}/{legacy}, which belongs to '
+                'the retired v2 layout. Declare pages under capabilities.pages and ship them as '
+                'pages/<surface>/<slug>.tsx.'
+            )
+
+    for retired in ('route', 'admin', 'settingsSchema'):
+        if retired in (descriptor.get('extension') or {}):
+            raise SystemExit(
+                f'extension.{retired} is a manifest v2 key and is rejected by the panel. '
+                'Routes are loader-derived, admin pages are declared under capabilities.pages.admin, '
+                'and settings fields under capabilities.settings.fields.'
+            )
+    if 'backend' in descriptor:
+        raise SystemExit(
+            'Top-level "backend" is a manifest v2 key and is rejected by the panel. '
+            'Declare migrations, schedule and commands under "capabilities".'
+        )
+
+    return {'capabilities': capabilities, 'summary': capability_summary(capabilities)}
+
+
+def capability_summary(capabilities: dict) -> dict:
+    """The display-only hint the registry carries for a package.
+
+    Deliberately counts and booleans rather than the capability block itself.
+    Registry metadata is untrusted until the signed artifact is verified, so
+    this exists to populate a catalog card and nothing else — the panel gates on
+    the manifest inside the archive, never on this.
+    """
+    routes = capabilities.get('routes') or {}
+    pages = capabilities.get('pages') or {}
+    database = capabilities.get('database') or {}
+    permissions = capabilities.get('permissions') or {}
+    settings = capabilities.get('settings') or {}
+
+    return {
+        'serverPages': len(pages.get('server') or []),
+        'adminPages': len(pages.get('admin') or []),
+        'clientRoutes': bool(routes.get('client')),
+        'adminRoutes': bool(routes.get('admin')),
+        'migrations': bool(database.get('migrations')),
+        'schedule': bool(capabilities.get('schedule')),
+        'commands': len(capabilities.get('commands') or []),
+        'hooks': sorted({str(hook.get('event', '')) for hook in (capabilities.get('hooks') or [])}),
+        'queues': len(capabilities.get('queues') or []),
+        'permissions': len(permissions.get('admin') or []),
+        'secrets': len(capabilities.get('secrets') or []),
+        'settings': len(settings.get('fields') or []),
+    }
 
 
 def validate_message_fragments(extension_id: str, files_dir: Path) -> None:
@@ -254,15 +369,46 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
         manifest_files.append({'path': relative_path, 'sha256': checksum})
         copied_files.append(relative_path)
 
-    features = derive_v2_features(extension_id, files_dir, descriptor)
+    features = derive_v3_capabilities(extension_id, files_dir, descriptor)
     validate_message_fragments(extension_id, files_dir)
 
+    declared_version = descriptor.get('manifestVersion')
+    if declared_version is not None and declared_version != MANIFEST_VERSION:
+        raise SystemExit(
+            f'extension.json declares manifestVersion {declared_version!r}. '
+            f'This tooling produces manifest version {MANIFEST_VERSION} only.'
+        )
+
     manifest = dict(descriptor)
+    manifest['manifestVersion'] = MANIFEST_VERSION
     manifest['files'] = manifest_files
-    if features['manifest_version'] >= 2:
-        manifest['manifestVersion'] = features['manifest_version']
-        if features['backend']:
-            manifest['backend'] = features['backend']
+
+    # Sign before the archive is written. The signature covers the canonical
+    # manifest, which carries a sha256 for every shipped file — and the panel
+    # installs only files the manifest lists, verifying each — so signing the
+    # manifest commits to the whole package without the archive hash, which
+    # could not be signed anyway (the signature ships inside the archive, so
+    # covering the archive's hash would change it).
+    #
+    # Note what is signed: the manifest AS SHIPPED, integrity block included,
+    # minus only `integrity.signature`. That is what the panel canonicalizes,
+    # so signing anything else produces a signature that verifies nowhere.
+    signature = None
+    release_key, key_id = signing.release_key_from_env()
+    if release_key is not None:
+        manifest['integrity'] = {'signatureAlgorithm': 'ed25519', 'keyId': key_id}
+        canonical = signing.canonicalize(manifest)
+        signature_value = signing.sign(
+            release_key,
+            signing.artifact_message(extension_id, version, canonical),
+        )
+        manifest['integrity']['signature'] = signature_value
+        signature = {
+            'keyId': key_id,
+            'value': signature_value,
+            'canonicalManifestSha256': hashlib.sha256(canonical.encode('utf-8')).hexdigest(),
+        }
+
     dump_json(stage_root / MANIFEST_FILENAME, manifest)
 
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -284,7 +430,8 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
         'version': version,
         'descriptor': descriptor,
         'manifest': manifest,
-        'surfaces': features['surfaces'],
+        'capabilities': features['capabilities'],
+        'capabilitySummary': features['summary'],
         'stage_root': stage_root,
         'archive_path': archive_path,
         'archive_checksum': archive_checksum,
@@ -295,7 +442,10 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
             'archive': f'packages/{extension_id}/{version}/{archive_name}',
             'sha256': archive_checksum,
             'publishedAt': published_at,
+            'manifestVersion': MANIFEST_VERSION,
             'compatiblePanelVersions': descriptor.get('compatiblePanelVersions', []),
+            'revoked': False,
+            **({'signature': signature} if signature is not None else {}),
         },
     }
 
@@ -329,6 +479,15 @@ def update_registry(build_result: dict, debug: bool = False) -> dict:
         package_entry = {'id': extension_id, 'versions': []}
         packages.append(package_entry)
 
+    # Registry schema 2 carries identity and display metadata ONLY.
+    #
+    # Everything a panel gates on — routes, pages, permissions, settings fields —
+    # was removed when the registry stopped being trusted: it is unauthenticated
+    # metadata a repository can rewrite at will, and the panel now reads all of
+    # it from the signed manifest inside the archive instead. `capabilitySummary`
+    # is what remains, and it exists to fill in a catalog card before anything is
+    # downloaded. The panel labels it as advertised-by-the-repository and
+    # verifies at install.
     package_entry.update(
         {
             'id': extension_id,
@@ -336,13 +495,12 @@ def update_registry(build_result: dict, debug: bool = False) -> dict:
             'description': extension_meta.get('description', ''),
             'author': extension_meta.get('author', 'M12Labs'),
             'icon': extension_meta.get('icon', 'puzzle'),
-            'route': extension_meta.get('route', extension_id),
-            'settingsSchema': extension_meta.get('settingsSchema', []),
-            # v2 metadata; panels that predate it ignore unknown keys.
-            'surfaces': build_result.get('surfaces', ['server']),
-            'admin': extension_meta.get('admin'),
+            'capabilitySummary': build_result['capabilitySummary'],
         }
     )
+
+    for retired in ('route', 'surfaces', 'admin', 'settingsSchema'):
+        package_entry.pop(retired, None)
 
     versions = [entry for entry in package_entry.get('versions', []) if entry.get('version') != version]
     versions.append(build_result['release_entry'])
@@ -350,6 +508,7 @@ def update_registry(build_result: dict, debug: bool = False) -> dict:
     package_entry['versions'] = versions
 
     packages.sort(key=lambda entry: entry.get('id', ''))
+    registry['schemaVersion'] = REGISTRY_SCHEMA_VERSION
     dump_json(REGISTRY_PATH, registry)
 
     if debug:
@@ -474,6 +633,20 @@ def make_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument('--json', action='store_true', help='Emit findings as JSON (for CI or tooling)')
     scan_parser.set_defaults(func=scan_command)
 
+    key_parser = subparsers.add_parser(
+        'authorize-key',
+        help='Sign a release key record with the offline root key and record it in registry.json',
+    )
+    key_parser.add_argument('key_id', help='Stable identifier for the release key, e.g. m12labs-release-2026a')
+    key_parser.add_argument('--root-key', required=True, help='Path to the offline root private key (base64)')
+    key_parser.add_argument('--public-key', help='Base64 public key being authorized (preferred: no private key needed)')
+    key_parser.add_argument('--release-key', help='Path to the release private key, when only it is at hand')
+    key_parser.add_argument('--label', help='Human-readable description shown to operators')
+    key_parser.add_argument('--valid-from', default='', help='ISO 8601 instant the key becomes usable')
+    key_parser.add_argument('--valid-until', default='', help='ISO 8601 instant the key stops being usable')
+    key_parser.add_argument('--revoke', action='store_true', help='Mark the key revoked instead of active')
+    key_parser.set_defaults(func=authorize_key_command)
+
     return parser
 
 
@@ -482,6 +655,58 @@ def scan_command(args: argparse.Namespace) -> int:
 
     findings = scan_target(Path(args.target))
     return render_report(findings, fail_on=args.fail_on, as_json=args.json)
+
+
+def authorize_key_command(args) -> int:
+    """Authorize (or revoke) a release key by signing its record with the root.
+
+    This is the only operation that touches the offline root key, and it is run
+    on the machine that holds it — never in CI. The output is a key record plus
+    a root signature over it, written into registry.json; a panel admits the key
+    only when that signature verifies against the root fingerprint it pins, so
+    the registry itself needs no authentication.
+
+    Revoking is the same operation with --revoke: the record is re-signed with
+    its status flipped. Revocation is one-way on the panel side, so a registry
+    that later stops advertising it cannot un-revoke the key.
+    """
+    root_key = signing.load_private_key(args.root_key)
+    root_public = signing.public_key_b64(root_key)
+
+    if args.public_key:
+        release_public = args.public_key.strip()
+    elif args.release_key:
+        release_public = signing.public_key_b64(signing.load_private_key(args.release_key))
+    else:
+        raise SystemExit('Pass --public-key (preferred) or --release-key to identify the key being authorized.')
+
+    record = {
+        'keyId': args.key_id,
+        'publicKey': release_public,
+        'label': args.label,
+        'validFrom': args.valid_from,
+        'validUntil': args.valid_until,
+        'revoked': bool(args.revoke),
+    }
+    record['rootSignature'] = signing.sign(root_key, signing.key_record_message(record))
+
+    registry = ensure_registry()
+    keys = [k for k in registry.get('keys', []) if k.get('keyId') != args.key_id]
+    keys.append(record)
+    keys.sort(key=lambda k: k.get('keyId', ''))
+    registry['keys'] = keys
+    registry['schemaVersion'] = REGISTRY_SCHEMA_VERSION
+    dump_json(REGISTRY_PATH, registry)
+
+    print(f'{"Revoked" if args.revoke else "Authorized"} release key {args.key_id} in registry.json')
+    print(f'  public key:      {release_public}')
+    print(f'  valid:           {args.valid_from or "(always)"} -> {args.valid_until or "(never expires)"}')
+    print()
+    print('Pin these on the panel (config/extensions.php reads them from the environment):')
+    print(f'  EXTENSIONS_SIGNING_ROOT_KEY={root_public}')
+    print(f'  EXTENSIONS_SIGNING_ROOT_FINGERPRINT={signing.fingerprint(root_public)}')
+
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,8 +1,10 @@
-import http from '@/lib/http';
+import { createExtensionAdminClient } from '@/extensions-sdk';
 
-// Talks to this extension's admin API, mounted by the panel under
-// /api/application/extensions/ext/<id> (admin-authed, session same-origin).
-const BASE = '/api/application/extensions/ext/node_health_history';
+// The SDK client is bound to this extension's own admin namespace, which the
+// panel mounts at /api/application/extensions/ext/node_health_history. The base
+// URL is derived from the extension id rather than written here, so a package
+// cannot address another extension's routes.
+const client = createExtensionAdminClient('node_health_history');
 
 export interface NodeHealthPoint {
     capturedAt: string;
@@ -22,6 +24,5 @@ export interface NodeHealth {
 }
 
 export async function getNodeHealth(hours = 24): Promise<NodeHealth[]> {
-    const { data } = await http.get(BASE, { params: { hours } });
-    return data.data as NodeHealth[];
+    return client.get<NodeHealth[]>('/', { params: { hours } });
 }

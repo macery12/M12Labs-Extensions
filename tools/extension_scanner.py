@@ -44,6 +44,15 @@ class Finding:
     excerpt: str = ''
 
 
+MANIFEST_VERSION = 3
+
+# Mirrors ExtensionCapabilityVocabulary::CAPABILITY_KEYS.
+CAPABILITY_KEYS = {
+    'routes', 'pages', 'permissions', 'database', 'hooks',
+    'queues', 'schedule', 'commands', 'secrets', 'settings',
+}
+
+
 def allowed_roots(extension_id: str) -> tuple[str, str]:
     return (
         f'app/Extensions/Packages/{extension_id}/',
@@ -145,32 +154,128 @@ def check_structure(manifest: dict, files: dict[str, bytes], is_archive: bool) -
                                     f'Path is outside the allowed install roots for "{extension_id}".'))
 
     backend_root, frontend_root = roots
-    has_migrations = any(p.startswith(f'{backend_root}database/migrations/') for p in declared_paths)
-    has_schedule = f'{backend_root}schedule.php' in declared_paths
-    has_admin_routes = f'{backend_root}routes/admin.php' in declared_paths
-    has_admin_page = f'{frontend_root}admin.tsx' in declared_paths
-    declared_admin = (manifest.get('extension') or {}).get('admin')
-    manifest_version = manifest.get('manifestVersion', 1)
+    manifest_version = manifest.get('manifestVersion')
+    capabilities = manifest.get('capabilities')
 
-    if (has_migrations or has_schedule or has_admin_routes or declared_admin) and manifest_version < 2:
-        findings.append(Finding('warn', 'manifest.version-too-low', MANIFEST_FILENAME, 0,
-                                'Uses v2 features (admin page / migrations / schedule / admin routes) without "manifestVersion": 2; the panel installer will reject this package.'))
-    if declared_admin and not has_admin_page:
-        findings.append(Finding('warn', 'manifest.admin-without-entry', MANIFEST_FILENAME, 0,
-                                'extension.admin is declared but no admin.tsx ships; the admin page will never render.'))
-    if has_admin_page and not declared_admin:
-        findings.append(Finding('warn', 'manifest.entry-without-admin', f'{frontend_root}admin.tsx', 0,
-                                'admin.tsx ships but extension.admin is not declared in the manifest.'))
+    if manifest_version != MANIFEST_VERSION:
+        findings.append(Finding('block', 'manifest.version-unsupported', MANIFEST_FILENAME, 0,
+                                f'Declares manifestVersion {manifest_version!r}; the panel accepts version '
+                                f'{MANIFEST_VERSION} only. v1 and v2 manifests carry no capability block, so every '
+                                'privileged surface would have to be inferred — which is exactly what v3 removes.'))
+        return extension_id, findings
+
+    if not isinstance(capabilities, dict):
+        findings.append(Finding('block', 'manifest.no-capabilities', MANIFEST_FILENAME, 0,
+                                'Declares no "capabilities" object. Missing means denied, so a manifest without one '
+                                'grants nothing — but the omission is more likely a mistake than an intent.'))
+        capabilities = {}
+
+    unknown = sorted(set(capabilities) - CAPABILITY_KEYS)
+    if unknown:
+        findings.append(Finding('block', 'manifest.unknown-capability', MANIFEST_FILENAME, 0,
+                                f'Declares unknown capability key(s): {", ".join(unknown)}. The panel rejects a '
+                                'manifest naming anything outside its vocabulary rather than ignoring it.'))
+
+    for retired, replacement in (
+        ('extension.route', 'routes are derived by the loader from capabilities.routes'),
+        ('extension.admin', 'declare admin pages under capabilities.pages.admin'),
+        ('extension.settingsSchema', 'declare settings under capabilities.settings.fields'),
+    ):
+        section, key = retired.split('.')
+        if key in (manifest.get(section) or {}):
+            findings.append(Finding('block', 'manifest.retired-key', MANIFEST_FILENAME, 0,
+                                    f'"{retired}" is a manifest v2 key the panel rejects; {replacement}.'))
+
+    if 'backend' in manifest:
+        findings.append(Finding('block', 'manifest.retired-key', MANIFEST_FILENAME, 0,
+                                'Top-level "backend" is a manifest v2 key the panel rejects; declare migrations, '
+                                'schedule and commands under "capabilities".'))
+
+    # Capability <-> files, in both directions. A declared surface with no file
+    # fails at runtime; a shipped file with no declaration is code the
+    # administrator was never shown. The panel enforces the same pairing at
+    # install (ExtensionCapabilityFileValidator).
+    routes = capabilities.get('routes') or {}
+    database = capabilities.get('database') or {}
+    pages = capabilities.get('pages') or {}
+
+    def ships(path: str) -> bool:
+        return path in declared_paths
+
+    def ships_under(prefix: str) -> bool:
+        return any(p.startswith(prefix) for p in declared_paths)
+
+    for capability, declared, shipped, where in (
+        ('capabilities.routes.client', bool(routes.get('client')),
+         ships(f'{backend_root}routes/client.php'), f'{backend_root}routes/client.php'),
+        ('capabilities.routes.admin', bool(routes.get('admin')),
+         ships(f'{backend_root}routes/admin.php'), f'{backend_root}routes/admin.php'),
+        ('capabilities.schedule', bool(capabilities.get('schedule')),
+         ships(f'{backend_root}schedule.php'), f'{backend_root}schedule.php'),
+        ('capabilities.database.migrations', bool(database.get('migrations')),
+         ships_under(f'{backend_root}database/migrations/'), f'{backend_root}database/migrations/'),
+        ('capabilities.commands', bool(capabilities.get('commands')),
+         ships_under(f'{backend_root}Console/Commands/'), f'{backend_root}Console/Commands/'),
+        ('capabilities.queues', bool(capabilities.get('queues')),
+         ships_under(f'{backend_root}Jobs/'), f'{backend_root}Jobs/'),
+    ):
+        if declared and not shipped:
+            findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                    f'Declares "{capability}" but ships no {where}.'))
+        elif shipped and not declared:
+            findings.append(Finding('block', 'capability.files-without-declaration', where, 0,
+                                    f'Ships {where} but does not declare "{capability}"; the panel will refuse to '
+                                    'install a package whose files exceed its manifest.'))
+
+    declared_handlers = {str(h.get('handler', '')) for h in (capabilities.get('hooks') or []) if isinstance(h, dict)}
+    for handler in sorted(declared_handlers):
+        if not ships(f'{backend_root}Hooks/{handler}.php'):
+            findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                    f'Declares the hook handler "{handler}" but ships no '
+                                    f'{backend_root}Hooks/{handler}.php.'))
+    for path in declared_paths:
+        if path.startswith(f'{backend_root}Hooks/') and path.endswith('.php'):
+            if path[len(f'{backend_root}Hooks/'):-len('.php')] not in declared_handlers:
+                findings.append(Finding('block', 'capability.files-without-declaration', path, 0,
+                                        'Ships a hook handler that capabilities.hooks does not declare. It would be '
+                                        'inert on the panel, but it is still unreviewed code on the deletion path.'))
+
+    for surface in ('server', 'admin'):
+        declared_slugs = {str(p.get('slug', '')) for p in (pages.get(surface) or []) if isinstance(p, dict)}
+        prefix = f'{frontend_root}pages/{surface}/'
+
+        for slug in sorted(declared_slugs):
+            if not ships(f'{prefix}{slug}.tsx'):
+                findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                        f'Declares the {surface} page "{slug}" but ships no {prefix}{slug}.tsx.'))
+
+        for path in declared_paths:
+            # Only the page entry itself needs declaring; supporting components
+            # may sit in a subdirectory beside it.
+            if path.startswith(prefix) and path.endswith('.tsx') and '/' not in path[len(prefix):]:
+                if path[len(prefix):-len('.tsx')] not in declared_slugs:
+                    findings.append(Finding('block', 'capability.files-without-declaration', path, 0,
+                                            f'Ships a {surface} page that capabilities.pages.{surface} does not '
+                                            'declare.'))
+
+    for legacy in ('meta.json', 'index.tsx', 'admin.tsx'):
+        if ships(f'{frontend_root}{legacy}'):
+            findings.append(Finding('block', 'layout.v2-remnant', f'{frontend_root}{legacy}', 0,
+                                    'Belongs to the retired v2 layout, which inferred surfaces from filenames. '
+                                    'Declare pages under capabilities.pages and ship them as '
+                                    'pages/<surface>/<slug>.tsx.'))
+
     if not manifest.get('compatiblePanelVersions'):
         findings.append(Finding('warn', 'manifest.no-compat-versions', MANIFEST_FILENAME, 0,
                                 'compatiblePanelVersions is empty; the package will install onto any panel version.'))
 
-    meta_path = f'{frontend_root}meta.json'
-    if meta_path in files:
-        try:
-            json.loads(files[meta_path].decode('utf-8'))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            findings.append(Finding('block', 'meta.invalid-json', meta_path, 0, 'meta.json is not valid JSON.'))
+    # Only meaningful for a built artifact. A source tree has no signature by
+    # construction — signing happens at build time, from a key the working copy
+    # does not hold.
+    if is_archive and not (manifest.get('integrity') or {}).get('signature'):
+        findings.append(Finding('warn', 'manifest.unsigned', MANIFEST_FILENAME, 0,
+                                'Carries no signature. A panel with a pinned root admits it only with an explicit '
+                                'operator acknowledgement, and blocks hooks, queues and dangerous permissions.'))
 
     return extension_id, findings
 

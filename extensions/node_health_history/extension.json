@@ -1,43 +1,80 @@
 {
-  "package": { "id": "node_health_history", "version": "1.0.1" },
+  "manifestVersion": 3,
+  "package": {
+    "id": "node_health_history",
+    "version": "2.0.0",
+    "publisher": "M12Labs",
+    "license": "MIT",
+    "homepage": "https://github.com/macery12/M12Labs-Extensions"
+  },
   "extension": {
     "id": "node_health_history",
     "name": "Node Health History",
     "description": "Periodically records the reachability and system information of every wings node, and charts the recent history on an admin page.",
-    "author": "M12Labs",
     "icon": "server",
-    "route": null,
-    "admin": {
-      "route": "node_health_history",
-      "label": "Node Health",
-      "icon": "server"
-    },
-    "settingsSchema": [
-      {
-        "key": "poll_interval_minutes",
-        "label": "Poll interval (minutes)",
-        "type": "number",
-        "help": "How often each node's health is sampled. Takes effect on the next scheduler run after saving."
-      },
-      {
-        "key": "retention_days",
-        "label": "Retention (days)",
-        "type": "number",
-        "help": "Snapshots older than this are pruned during each poll."
-      }
-    ],
     "defaults": {
       "enabled": false,
       "allowedNests": [],
       "allowedEggs": [],
-      "settings": { "poll_interval_minutes": 5, "retention_days": 30 }
+      "settings": { "poll_interval_minutes": "5", "retention_days": 30 }
     }
   },
-  "manifestVersion": 2,
-  "backend": {
-    "migrations": true,
+  "compatiblePanelVersions": [">=Alpha 4.0 <Alpha 5.0"],
+  "capabilities": {
+    "routes": { "admin": true },
+    "pages": {
+      "admin": [
+        {
+          "slug": "history",
+          "labelKey": "ext.node_health_history.nav.history",
+          "icon": "server",
+          "category": "management",
+          "order": 10,
+          "requiredExtensionPermission": "read"
+        }
+      ]
+    },
+    "permissions": {
+      "admin": [
+        {
+          "key": "read",
+          "labelKey": "ext.node_health_history.permission.read",
+          "descriptionKey": "ext.node_health_history.permission.read.description"
+        }
+      ]
+    },
+    "database": {
+      "migrations": true,
+      "tables": ["ext_node_health_history_snapshots"]
+    },
     "schedule": true,
-    "commands": ["p:ext:node-health-history:poll"]
+    "commands": ["p:ext:node-health-history:poll"],
+    "settings": {
+      "fields": [
+        {
+          "key": "poll_interval_minutes",
+          "type": "select",
+          "labelKey": "ext.node_health_history.setting.interval",
+          "helpKey": "ext.node_health_history.setting.interval.help",
+          "required": true,
+          "default": "5",
+          "enum": ["1", "5", "10", "15", "30", "60"]
+        },
+        {
+          "key": "retention_days",
+          "type": "number",
+          "labelKey": "ext.node_health_history.setting.retention",
+          "helpKey": "ext.node_health_history.setting.retention.help",
+          "required": true,
+          "default": 30,
+          "min": 1,
+          "max": 365
+        }
+      ]
+    }
   },
-  "compatiblePanelVersions": [">=Alpha 3.0 <Alpha 4.0"]
+  "requirements": {
+    "panelServices": ["schedule", "http-client"],
+    "extensions": []
+  }
 }
