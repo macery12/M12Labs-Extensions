@@ -1,10 +1,19 @@
-import http from '@/lib/http';
+import { createExtensionClient } from '@/extensions-sdk';
 
-// Talks to this extension's per-server client API, mounted by the panel under
-// /api/client/servers/<uuid>/extensions/<id> (session same-origin, gated by the
-// `extensions.access:<id>` middleware).
-const extensionId = 'minecraft_log_uploader';
-const base = (uuid: string) => `/api/client/servers/${uuid}/extensions/${extensionId}`;
+/*
+ * This package's per-server API.
+ *
+ * The base URL is derived from the extension id by the SDK rather than written
+ * here, so a package cannot address another extension's routes:
+ *   /api/client/servers/{server}/extensions/ext/minecraft_log_uploader
+ *
+ * Responses arrive in the panel's extension envelope, which the SDK client
+ * unwraps for us.
+ */
+
+const EXTENSION_ID = 'minecraft_log_uploader';
+
+const server = (uuid: string) => createExtensionClient(EXTENSION_ID, uuid);
 
 export interface LogFile {
     name: string;
@@ -25,15 +34,15 @@ export interface LogContentResponse {
 export interface UploadResponse {
     url: string;
     id: string;
+    /** True when only the tail of the file was published. */
+    truncated: boolean;
 }
 
-export const listLogs = (uuid: string): Promise<LogListResponse> =>
-    http.get(`${base(uuid)}/logs`).then(({ data }) => data.attributes as LogListResponse);
+export const listLogs = (uuid: string, signal?: AbortSignal): Promise<LogListResponse> =>
+    server(uuid).get<LogListResponse>('/logs', { signal });
 
-export const getLog = (uuid: string, file: string): Promise<LogContentResponse> =>
-    http
-        .get(`${base(uuid)}/logs/content`, { params: { file } })
-        .then(({ data }) => data.attributes as LogContentResponse);
+export const getLog = (uuid: string, file: string, signal?: AbortSignal): Promise<LogContentResponse> =>
+    server(uuid).get<LogContentResponse>('/logs/content', { params: { file }, signal });
 
 export const uploadLog = (uuid: string, file: string): Promise<UploadResponse> =>
-    http.post(`${base(uuid)}/logs/upload`, { file }).then(({ data }) => data.attributes as UploadResponse);
+    server(uuid).post<UploadResponse>('/logs/upload', { file });

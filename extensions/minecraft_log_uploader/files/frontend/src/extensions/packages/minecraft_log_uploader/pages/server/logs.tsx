@@ -13,14 +13,32 @@ import {
     ArrowUpToLine,
     X,
 } from 'lucide-react';
-import { useServer } from '@/components/server/ServerContext';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { listLogs, getLog, uploadLog, type LogFile } from './api';
+import {
+    Button,
+    ConfirmDialog,
+    Spinner,
+    createTranslator,
+    extensionErrorMessage,
+    useExtensionQueryKey,
+    useExtensionServerContext,
+} from '@/extensions-sdk';
+import { listLogs, getLog, uploadLog, type LogFile } from '../../api';
 
-// Extension UI: strings are literal English (extensions cannot contribute
-// Paraglide messages) and every colour comes from a theme CSS variable so the
-// page tracks the active panel theme.
+/*
+ * The log viewer, mounted by the panel as this package's server page.
+ * Everything it can reach comes from '@/extensions-sdk', and every colour is a
+ * theme variable so the page tracks the active panel theme.
+ *
+ * Upload is deliberately a two-step action. It publishes server logs to
+ * mclo.gs — a third party, outside the panel, readable by anyone holding the
+ * link — so the confirmation states that plainly rather than treating "Upload"
+ * as a button whose consequences the operator is assumed to know.
+ */
+
+const t = createTranslator('minecraft_log_uploader');
+
+/** Cache namespace for this release; an upgrade must not serve an old shape. */
+const VERSION = '3.0.0';
 
 /** Format a file size in bytes to a human-readable string. */
 function formatBytes(bytes: number): string {
@@ -103,10 +121,12 @@ function highlight(text: string, query: string) {
 }
 
 export default function MinecraftLogUploaderPage() {
-    const server = useServer();
+    const { server } = useExtensionServerContext();
     const uuid = server.uuid;
 
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
+    const [confirmingUpload, setConfirmingUpload] = useState(false);
+    const [uploadTruncated, setUploadTruncated] = useState(false);
     const [uploadUrl, setUploadUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [query, setQuery] = useState('');
@@ -115,9 +135,12 @@ export default function MinecraftLogUploaderPage() {
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Keys are namespaced by extension and version, so an upgrade never serves
+    // a previous release's cached shape; the signal cancels an in-flight read
+    // when the page unmounts or the selection changes.
     const { data: list, isLoading: loadingList } = useQuery({
-        queryKey: ['ext', 'minecraft_log_uploader', uuid, 'logs'],
-        queryFn: () => listLogs(uuid),
+        queryKey: useExtensionQueryKey('minecraft_log_uploader', VERSION, 'logs', uuid),
+        queryFn: ({ signal }) => listLogs(uuid, signal),
     });
 
     const logs: LogFile[] = list?.logs ?? [];
@@ -135,8 +158,8 @@ export default function MinecraftLogUploaderPage() {
         isLoading: loadingContent,
         isError: contentError,
     } = useQuery({
-        queryKey: ['ext', 'minecraft_log_uploader', uuid, 'content', selectedFile],
-        queryFn: () => getLog(uuid, selectedFile as string),
+        queryKey: useExtensionQueryKey('minecraft_log_uploader', VERSION, 'content', uuid, selectedFile ?? ''),
+        queryFn: ({ signal }) => getLog(uuid, selectedFile as string, signal),
         enabled: selectedFile !== null,
     });
 
@@ -144,13 +167,17 @@ export default function MinecraftLogUploaderPage() {
         mutationFn: () => uploadLog(uuid, selectedFile as string),
         onSuccess: res => {
             setUploadUrl(res.url);
+            setUploadTruncated(res.truncated);
             setCopied(false);
+            setConfirmingUpload(false);
         },
+        onError: () => setConfirmingUpload(false),
     });
 
     // Reset transient state whenever the selection changes.
     useEffect(() => {
         setUploadUrl(null);
+        setUploadTruncated(false);
         setCopied(false);
         setQuery('');
         setLevelFilter('all');
@@ -199,9 +226,14 @@ export default function MinecraftLogUploaderPage() {
         <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                    <h1 className="text-xl font-semibold text-[var(--color-ink)]">Minecraft Log Uploader</h1>
+                    <h1 className="text-xl font-semibold text-[var(--color-ink)]">
+                        {t('page.title', 'Minecraft Log Uploader')}
+                    </h1>
                     <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-                        Inspect server logs and share them to mclo.gs with one click.
+                        {t(
+                            'page.subtitle',
+                            'Inspect server logs, and publish one to mclo.gs when you need to share it.',
+                        )}
                     </p>
                 </div>
             </div>
@@ -215,12 +247,15 @@ export default function MinecraftLogUploaderPage() {
                         onChange={e => setSelectedFile(e.target.value || null)}
                         disabled={loadingList || logs.length === 0}
                         className="max-w-[16rem] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] py-1.5 pl-3 pr-8 text-sm font-medium text-[var(--color-ink)] focus:border-[var(--brand)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] disabled:opacity-50"
-                        aria-label="Select log file"
+                        aria-label={t('picker.aria', 'Select log file')}
                     >
-                        {logs.length === 0 && <option value="">No log files</option>}
+                        {logs.length === 0 && <option value="">{t('picker.empty', 'No log files')}</option>}
                         {logs.map(log => (
                             <option key={log.name} value={log.name}>
-                                {log.name} ({formatBytes(log.size)})
+                                {t('picker.option', '{name} ({size})', {
+                                    name: log.name,
+                                    size: formatBytes(log.size),
+                                })}
                             </option>
                         ))}
                     </select>
@@ -228,8 +263,11 @@ export default function MinecraftLogUploaderPage() {
 
                 {selectedMeta && (
                     <span className="hidden text-xs text-[var(--color-ink-faint)] sm:inline">
-                        {formatBytes(selectedMeta.size)} &middot; {formatDate(selectedMeta.modified_at)} &middot;{' '}
-                        {parsed.length.toLocaleString()} lines
+                        {t('meta.summary', '{size} · {modified} · {lines} lines', {
+                            size: formatBytes(selectedMeta.size),
+                            modified: formatDate(selectedMeta.modified_at),
+                            lines: parsed.length.toLocaleString(),
+                        })}
                     </span>
                 )}
 
@@ -241,7 +279,7 @@ export default function MinecraftLogUploaderPage() {
                             type="text"
                             value={query}
                             onChange={e => setQuery(e.target.value)}
-                            placeholder="Search log…"
+                            placeholder={t('search.placeholder', 'Search log…')}
                             disabled={!selectedFile}
                             className="w-40 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] py-1.5 pl-8 pr-7 text-sm text-[var(--color-ink)] focus:border-[var(--brand)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)] disabled:opacity-50"
                         />
@@ -250,7 +288,7 @@ export default function MinecraftLogUploaderPage() {
                                 type="button"
                                 onClick={() => setQuery('')}
                                 className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
-                                aria-label="Clear search"
+                                aria-label={t('search.clear', 'Clear search')}
                             >
                                 <X className="h-3.5 w-3.5" />
                             </button>
@@ -261,7 +299,12 @@ export default function MinecraftLogUploaderPage() {
                     <div className="flex overflow-hidden rounded-lg border border-[var(--color-border-strong)]">
                         {(['all', 'warn', 'error'] as const).map(lvl => {
                             const active = levelFilter === lvl;
-                            const label = lvl === 'all' ? 'All' : lvl === 'warn' ? 'Warn+' : 'Errors';
+                            const label =
+                                lvl === 'all'
+                                    ? t('filter.all', 'All')
+                                    : lvl === 'warn'
+                                      ? t('filter.warn', 'Warn+')
+                                      : t('filter.error', 'Errors');
                             return (
                                 <button
                                     key={lvl}
@@ -286,14 +329,14 @@ export default function MinecraftLogUploaderPage() {
                         type="button"
                         onClick={() => setWrap(w => !w)}
                         disabled={!selectedFile}
-                        title="Toggle line wrapping"
+                        title={t('toolbar.wrap', 'Toggle line wrapping')}
                         className={[
                             'rounded-lg border p-1.5 transition-colors disabled:opacity-50',
                             wrap
                                 ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-bright)]'
                                 : 'border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]',
                         ].join(' ')}
-                        aria-label="Toggle line wrapping"
+                        aria-label={t('toolbar.wrap', 'Toggle line wrapping')}
                         aria-pressed={wrap}
                     >
                         <WrapText className="h-4 w-4" />
@@ -305,9 +348,9 @@ export default function MinecraftLogUploaderPage() {
                             type="button"
                             onClick={() => scrollTo('top')}
                             disabled={!selectedFile}
-                            title="Scroll to top"
+                            title={t('toolbar.scrollTop', 'Scroll to top')}
                             className="bg-[var(--color-surface-2)] p-1.5 text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-50"
-                            aria-label="Scroll to top"
+                            aria-label={t('toolbar.scrollTop', 'Scroll to top')}
                         >
                             <ArrowUpToLine className="h-4 w-4" />
                         </button>
@@ -315,9 +358,9 @@ export default function MinecraftLogUploaderPage() {
                             type="button"
                             onClick={() => scrollTo('bottom')}
                             disabled={!selectedFile}
-                            title="Scroll to bottom"
+                            title={t('toolbar.scrollBottom', 'Scroll to bottom')}
                             className="border-l border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-1.5 text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-50"
-                            aria-label="Scroll to bottom"
+                            aria-label={t('toolbar.scrollBottom', 'Scroll to bottom')}
                         >
                             <ArrowDownToLine className="h-4 w-4" />
                         </button>
@@ -325,23 +368,50 @@ export default function MinecraftLogUploaderPage() {
 
                     <Button
                         size="sm"
-                        onClick={() => upload.mutate()}
+                        onClick={() => setConfirmingUpload(true)}
                         disabled={!selectedFile || upload.isPending || loadingContent}
                     >
                         <Upload className="h-4 w-4" />
-                        {upload.isPending ? 'Uploading…' : 'Upload to mclo.gs'}
+                        {upload.isPending
+                            ? t('upload.pending', 'Uploading…')
+                            : t('upload.action', 'Upload to mclo.gs')}
                     </Button>
                 </div>
             </div>
 
             {/* ── Upload result / error ── */}
+            <ConfirmDialog
+                open={confirmingUpload}
+                onClose={() => setConfirmingUpload(false)}
+                title={t('upload.confirmTitle', 'Publish this log to mclo.gs?')}
+                body={t(
+                    'upload.confirmBody',
+                    'This sends the contents of {file} to mclo.gs, a third-party paste service outside this panel. Anyone with the returned link can read it. Logs often contain IP addresses, usernames and occasionally credentials — obvious tokens are stripped first, but that is best-effort, not a guarantee. Only the last 10 MiB is sent if the file is larger.',
+                    { file: selectedFile ?? '' },
+                )}
+                confirmLabel={t('upload.confirmAction', 'Publish log')}
+                cancelLabel={t('upload.cancel', 'Cancel')}
+                busy={upload.isPending}
+                onConfirm={() => upload.mutate()}
+            />
+
             {upload.isError && (
                 <p className="rounded-[var(--radius-card)] border border-[var(--color-danger)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-danger)]">
-                    Upload failed. Please try again.
+                    {extensionErrorMessage(upload.error, t('upload.failed', 'Upload failed. Please try again.'))}
                 </p>
             )}
             {uploadUrl && (
-                <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3">
+                <div className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3">
+                    {uploadTruncated && (
+                        <p className="flex items-center gap-1.5 text-xs text-[var(--color-warning)]">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            {t(
+                                'upload.truncatedNotice',
+                                'The file was larger than 10 MiB, so only its last 10 MiB was published.',
+                            )}
+                        </p>
+                    )}
+                    <div className="flex items-center gap-3">
                     <a
                         href={uploadUrl}
                         target="_blank"
@@ -353,8 +423,9 @@ export default function MinecraftLogUploaderPage() {
                     </a>
                     <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0">
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        {copied ? 'Copied' : 'Copy'}
+                        {copied ? t('upload.copied', 'Copied') : t('upload.copy', 'Copy')}
                     </Button>
+                    </div>
                 </div>
             )}
 
@@ -363,13 +434,19 @@ export default function MinecraftLogUploaderPage() {
                 {logContent?.truncated && (
                     <div className="flex shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-warning)]">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                        File is large — showing the last 512 KB. Upload sends the full file.
+                        {t(
+                            'pane.truncated',
+                            'File is large — showing the last 512 KB. Upload publishes the last 10 MiB.',
+                        )}
                     </div>
                 )}
                 {filtering && selectedFile && (
                     <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-1.5 text-xs text-[var(--color-ink-faint)]">
                         <span>
-                            {visible.length.toLocaleString()} of {parsed.length.toLocaleString()} lines
+                            {t('pane.filterCount', '{visible} of {total} lines', {
+                                visible: visible.length.toLocaleString(),
+                                total: parsed.length.toLocaleString(),
+                            })}
                         </span>
                         <button
                             type="button"
@@ -379,7 +456,7 @@ export default function MinecraftLogUploaderPage() {
                             }}
                             className="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
                         >
-                            Clear filters
+                            {t('pane.clearFilters', 'Clear filters')}
                         </button>
                     </div>
                 )}
@@ -387,7 +464,7 @@ export default function MinecraftLogUploaderPage() {
                 <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
                     {!selectedFile ? (
                         <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-faint)]">
-                            {loadingList ? <Spinner className="h-6 w-6" /> : 'No log selected'}
+                            {loadingList ? <Spinner className="h-6 w-6" /> : t('pane.noSelection', 'No log selected')}
                         </div>
                     ) : loadingContent ? (
                         <div className="flex h-full items-center justify-center">
@@ -395,15 +472,15 @@ export default function MinecraftLogUploaderPage() {
                         </div>
                     ) : contentError ? (
                         <div className="flex h-full items-center justify-center text-sm text-[var(--color-danger)]">
-                            Could not load this log file.
+                            {t('pane.loadFailed', 'Could not load this log file.')}
                         </div>
                     ) : parsed.length === 0 ? (
                         <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-faint)]">
-                            (empty file)
+                            {t('pane.empty', '(empty file)')}
                         </div>
                     ) : visible.length === 0 ? (
                         <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-faint)]">
-                            No lines match the current filter.
+                            {t('pane.noMatches', 'No lines match the current filter.')}
                         </div>
                     ) : (
                         <div className={['py-2 font-mono text-xs leading-relaxed', wrap ? '' : 'w-max min-w-full'].join(' ')}>
