@@ -1,9 +1,41 @@
-import http from '@/lib/http';
+import { createExtensionClient } from '@/extensions-sdk';
 
-// Per-server client API for the startup editor, mounted by the panel under
-// /api/client/servers/<uuid>/extensions/minecraft_startup_editor (gated by the
-// `extensions.access:minecraft_startup_editor` middleware).
-const base = (uuid: string) => `/api/client/servers/${uuid}/extensions/minecraft_startup_editor`;
+/*
+ * This package's per-server API.
+ *
+ * The base URL is derived from the extension id by the SDK rather than written
+ * here, so a package cannot address another extension's routes:
+ *   /api/client/servers/{server}/extensions/ext/minecraft_startup_editor
+ *
+ * Responses come back in the panel's extension envelope, which the SDK client
+ * unwraps — these functions therefore see the plain attribute bag and only have
+ * to rename its snake_case keys.
+ *
+ * Every call takes the AbortSignal TanStack Query supplies, so a request in
+ * flight when the page unmounts is cancelled rather than resolving into a
+ * component that is gone.
+ */
+
+const EXTENSION_ID = 'minecraft_startup_editor';
+
+const server = (uuid: string) => createExtensionClient(EXTENSION_ID, uuid);
+
+interface StartupStatePayload {
+    raw_startup: string | null;
+    egg_default: string;
+    rendered_command: string;
+    is_using_egg_default: boolean;
+    egg_name: string;
+    detected_loader: string | null;
+    memory_mb: number;
+}
+
+interface StartupSavePayload {
+    rendered_command: string;
+    raw_startup: string | null;
+    is_using_egg_default: boolean;
+    egg_default?: string;
+}
 
 export interface StartupEditorData {
     rawStartup: string | null;
@@ -12,6 +44,8 @@ export interface StartupEditorData {
     isUsingEggDefault: boolean;
     eggName: string;
     detectedLoader: string | null;
+    /** The server's memory allocation in MB; 0 means unlimited. */
+    memoryMb: number;
 }
 
 export interface StartupSaveResult {
@@ -21,50 +55,52 @@ export interface StartupSaveResult {
     eggDefault?: string;
 }
 
-export const getStartupEditorData = (uuid: string): Promise<StartupEditorData> => {
-    return http.get(base(uuid)).then(({ data }) => ({
-        rawStartup: data.attributes.raw_startup,
-        eggDefault: data.attributes.egg_default,
-        renderedCommand: data.attributes.rendered_command,
-        isUsingEggDefault: data.attributes.is_using_egg_default,
-        eggName: data.attributes.egg_name,
-        detectedLoader: data.attributes.detected_loader ?? null,
-    }));
+export const getStartupEditorData = async (uuid: string, signal?: AbortSignal): Promise<StartupEditorData> => {
+    const data = await server(uuid).get<StartupStatePayload>('/', { signal });
+
+    return {
+        rawStartup: data.raw_startup,
+        eggDefault: data.egg_default,
+        renderedCommand: data.rendered_command,
+        isUsingEggDefault: data.is_using_egg_default,
+        eggName: data.egg_name,
+        detectedLoader: data.detected_loader ?? null,
+        memoryMb: data.memory_mb ?? 0,
+    };
 };
 
 /**
  * Save a startup configuration built from a curated list of option IDs.
- * No raw command text is accepted by the server; all command text is
- * generated server-side from the validated allowlist.
  *
- * @param selectedOptions  Option IDs to activate (including GC and core_flags).
- * @param xmsMb            Initial heap size in MB (-Xms).
- * @param xmxMb            Maximum heap size in MB (-Xmx).
+ * No raw command text is sent or accepted: the server renders the command from
+ * its own allowlist, and rejects an option ID it does not know.
  */
-export const saveStartupOptions = (
+export const saveStartupOptions = async (
     uuid: string,
     selectedOptions: string[],
     xmsMb: number,
     xmxMb: number,
 ): Promise<StartupSaveResult> => {
-    return http
-        .post(`${base(uuid)}/save`, {
-            selected_options: selectedOptions,
-            xms_mb: xmsMb,
-            xmx_mb: xmxMb,
-        })
-        .then(({ data }) => ({
-            renderedCommand: data.attributes.rendered_command,
-            rawStartup: data.attributes.raw_startup,
-            isUsingEggDefault: data.attributes.is_using_egg_default,
-        }));
+    const data = await server(uuid).post<StartupSavePayload>('/save', {
+        selected_options: selectedOptions,
+        xms_mb: xmsMb,
+        xmx_mb: xmxMb,
+    });
+
+    return {
+        renderedCommand: data.rendered_command,
+        rawStartup: data.raw_startup,
+        isUsingEggDefault: data.is_using_egg_default,
+    };
 };
 
-export const resetStartupCommand = (uuid: string): Promise<StartupSaveResult> => {
-    return http.post(`${base(uuid)}/reset`, {}).then(({ data }) => ({
-        renderedCommand: data.attributes.rendered_command,
-        rawStartup: data.attributes.raw_startup,
-        isUsingEggDefault: data.attributes.is_using_egg_default,
-        eggDefault: data.attributes.egg_default,
-    }));
+export const resetStartupCommand = async (uuid: string): Promise<StartupSaveResult> => {
+    const data = await server(uuid).post<StartupSavePayload>('/reset', {});
+
+    return {
+        renderedCommand: data.rendered_command,
+        rawStartup: data.raw_startup,
+        isUsingEggDefault: data.is_using_egg_default,
+        eggDefault: data.egg_default,
+    };
 };

@@ -1,12 +1,16 @@
 import { useEffect, useState, useId } from 'react';
 import type { ReactNode, ChangeEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useServer } from '@/components/server/ServerContext';
-import { useFlashes } from '@/state/flashes';
-import { can } from '@/lib/can';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { getStartupEditorData, saveStartupOptions, resetStartupCommand, type StartupEditorData } from './api';
+import {
+    Button,
+    Spinner,
+    createTranslator,
+    extensionErrorMessage,
+    notify,
+    useExtensionQueryKey,
+    useExtensionServerContext,
+} from '@/extensions-sdk';
+import { getStartupEditorData, saveStartupOptions, resetStartupCommand, type StartupEditorData } from '../../api';
 import {
     MINECRAFT_OPTIONS,
     PRESETS,
@@ -32,13 +36,45 @@ import {
     detectLoaderFromEggName,
     inferStateFromCommand,
     optionsByCategory,
-} from './minecraftOptions';
+} from '../../minecraftOptions';
 
-// Extension UI: strings are literal English (extensions cannot contribute
-// Paraglide messages) and every UI colour comes from a theme CSS variable.
-// Semantic mapping: brand=selection/recommended, accent=positive, warning=
-// caution/legacy, danger=incompatible. (Preset accent stripes in
-// minecraftOptions.ts keep distinct categorical hues by design.)
+/*
+ * The curated startup editor, mounted by the panel as this package's server
+ * page. Everything it can reach comes from '@/extensions-sdk' — the package
+ * has no access to panel internals — and every colour is a theme variable, so
+ * the page follows the operator's palette. Semantic mapping: brand=selection/
+ * recommended, accent=positive, warning=caution/legacy, danger=incompatible.
+ * (Preset accent stripes in minecraftOptions.ts keep distinct categorical hues
+ * by design.)
+ *
+ * Strings resolve through the package's own `ext.minecraft_startup_editor.*`
+ * namespace. The option catalog passes its English text as the fallback, so the
+ * page reads correctly in a locale that has not translated a flag description
+ * yet, and messages/en.json carries every key a translator can override.
+ */
+
+const t = createTranslator('minecraft_startup_editor');
+
+/** Cache namespace for this release; an upgrade must not serve an old shape. */
+const VERSION = '3.0.0';
+
+/**
+ * Share of a bounded allocation the heap may claim.
+ *
+ * Mirrors SaveStartupEditorRequest::HEAP_BUDGET_PERCENT. The server is the
+ * authority — this copy only stops the editor offering a value the save would
+ * reject.
+ */
+const HEAP_BUDGET_PERCENT = 85;
+
+const MIN_HEAP_MB = 64;
+const MAX_XMS_MB = 16384;
+const MAX_XMX_MB = 65536;
+
+/** The largest heap the given allocation supports; 0 means unlimited. */
+function heapBudgetMb(memoryMb: number): number {
+    return memoryMb > 0 ? Math.max(MIN_HEAP_MB, Math.floor((memoryMb * HEAP_BUDGET_PERCENT) / 100)) : 0;
+}
 
 /** Toggleable (checkbox) categories. The 'server' category is always-on and handled separately. */
 const TOGGLE_CATEGORIES: OptionCategory[] = ['performance', 'security'];
@@ -85,7 +121,7 @@ function InfoBadge({ text }: { text: string }) {
 
 function LoaderBadge({ loader }: { loader: string | null }) {
     if (!loader) return null;
-    const label = LOADER_LABELS[loader as LoaderSlug] ?? loader;
+    const label = t(`loader.${loader}`, LOADER_LABELS[loader as LoaderSlug] ?? loader);
     return (
         <span className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--color-ink)]">
             {label}
@@ -176,13 +212,21 @@ function GcCard({ option, selected, onSelect, disabled, recommended, legacy }: G
             </span>
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-medium text-[var(--color-ink)]">{option.name}</span>
-                    {recommended && <span className={BADGE_BRAND}>Recommended</span>}
-                    {legacy && <span className={BADGE_WARNING}>Legacy</span>}
-                    {option.minJava > 8 && <span className={BADGE_NEUTRAL}>Java {option.minJava}+</span>}
-                    <InfoBadge text={option.tooltip} />
+                    <span className="text-sm font-medium text-[var(--color-ink)]">
+                        {t(`option.${option.id}.name`, option.name)}
+                    </span>
+                    {recommended && <span className={BADGE_BRAND}>{t('badge.recommended', 'Recommended')}</span>}
+                    {legacy && <span className={BADGE_WARNING}>{t('badge.legacy', 'Legacy')}</span>}
+                    {option.minJava > 8 && (
+                        <span className={BADGE_NEUTRAL}>
+                            {t('badge.minJava', 'Java {version}+', { version: option.minJava })}
+                        </span>
+                    )}
+                    <InfoBadge text={t(`option.${option.id}.tooltip`, option.tooltip)} />
                 </div>
-                <p className="text-xs text-[var(--color-ink-muted)]">{option.description}</p>
+                <p className="text-xs text-[var(--color-ink-muted)]">
+                    {t(`option.${option.id}.description`, option.description)}
+                </p>
             </div>
         </div>
     );
@@ -216,9 +260,11 @@ function GcNoneCard({ selected, onSelect, disabled }: { selected: boolean; onSel
                 {selected && <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-brand-ink)]" />}
             </span>
             <div>
-                <span className="text-sm font-medium text-[var(--color-ink)]">No GC Selection</span>
+                <span className="text-sm font-medium text-[var(--color-ink)]">
+                    {t('gc.none.title', 'No GC Selection')}
+                </span>
                 <p className="text-xs text-[var(--color-ink-muted)]">
-                    Run with JVM defaults — no explicit GC flags applied.
+                    {t('gc.none.description', 'Run with JVM defaults — no explicit GC flags applied.')}
                 </p>
             </div>
         </div>
@@ -280,21 +326,33 @@ function OptionRow({ option, checked, disabled, incompatible, onToggle, alwaysOn
             </span>
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-medium text-[var(--color-ink)]">{option.name}</span>
-                    {alwaysOn && <span className={BADGE_BRAND}>Always on</span>}
+                    <span className="text-sm font-medium text-[var(--color-ink)]">
+                        {t(`option.${option.id}.name`, option.name)}
+                    </span>
+                    {alwaysOn && <span className={BADGE_BRAND}>{t('badge.alwaysOn', 'Always on')}</span>}
                     {!alwaysOn && option.recommended && !incompatible && (
-                        <span className={BADGE_BRAND}>Recommended</span>
+                        <span className={BADGE_BRAND}>{t('badge.recommended', 'Recommended')}</span>
                     )}
-                    {incompatible && <span className={BADGE_DANGER}>Incompatible</span>}
+                    {incompatible && <span className={BADGE_DANGER}>{t('badge.incompatible', 'Incompatible')}</span>}
                     {option.loaderCompat && (
                         <span className={BADGE_NEUTRAL}>
-                            {option.loaderCompat.map(l => LOADER_LABELS[l] ?? l).join(', ')} only
+                            {t('badge.loaderOnly', '{loaders} only', {
+                                loaders: option.loaderCompat
+                                    .map(l => t(`loader.${l}`, LOADER_LABELS[l] ?? l))
+                                    .join(', '),
+                            })}
                         </span>
                     )}
-                    {option.minJava > 8 && <span className={BADGE_NEUTRAL}>Java {option.minJava}+</span>}
-                    <InfoBadge text={option.tooltip} />
+                    {option.minJava > 8 && (
+                        <span className={BADGE_NEUTRAL}>
+                            {t('badge.minJava', 'Java {version}+', { version: option.minJava })}
+                        </span>
+                    )}
+                    <InfoBadge text={t(`option.${option.id}.tooltip`, option.tooltip)} />
                 </div>
-                <p className="text-xs text-[var(--color-ink-muted)]">{option.description}</p>
+                <p className="text-xs text-[var(--color-ink-muted)]">
+                    {t(`option.${option.id}.description`, option.description)}
+                </p>
             </div>
         </div>
     );
@@ -318,11 +376,15 @@ function CoreFlagRow({ option }: { option: MinecraftOption }) {
             </span>
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-medium text-[var(--color-ink)]">{option.name}</span>
-                    <span className={BADGE_BRAND}>Always on</span>
-                    <InfoBadge text={option.tooltip} />
+                    <span className="text-sm font-medium text-[var(--color-ink)]">
+                        {t(`option.${option.id}.name`, option.name)}
+                    </span>
+                    <span className={BADGE_BRAND}>{t('badge.alwaysOn', 'Always on')}</span>
+                    <InfoBadge text={t(`option.${option.id}.tooltip`, option.tooltip)} />
                 </div>
-                <p className="text-xs text-[var(--color-ink-muted)]">{option.description}</p>
+                <p className="text-xs text-[var(--color-ink-muted)]">
+                    {t(`option.${option.id}.description`, option.description)}
+                </p>
             </div>
         </div>
     );
@@ -359,17 +421,22 @@ function PresetCard({ preset, active, onApply }: PresetCardProps) {
                         <p
                             className={`text-sm font-medium leading-tight ${active ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-muted)] group-hover:text-[var(--color-ink)]'}`}
                         >
-                            {preset.name}
+                            {t(`preset.${preset.id}.name`, preset.name)}
                         </p>
                         {active && <span className="text-xs text-[var(--brand-bright)]">✓</span>}
                     </div>
                     {preset.recommendedLoader && (
                         <p className="text-[10px] text-[var(--color-ink-faint)]">
-                            Best for {LOADER_LABELS[preset.recommendedLoader]}
+                            {t('presets.bestFor', 'Best for {loader}', {
+                                loader: t(
+                                    `loader.${preset.recommendedLoader}`,
+                                    LOADER_LABELS[preset.recommendedLoader],
+                                ),
+                            })}
                         </p>
                     )}
                 </div>
-                <InfoBadge text={preset.tooltip} />
+                <InfoBadge text={t(`preset.${preset.id}.tooltip`, preset.tooltip)} />
             </div>
         </div>
     );
@@ -382,6 +449,8 @@ interface MemorySectionProps {
     xmxMb: number;
     suggestedXmsMb: number;
     suggestedXmxMb: number;
+    /** The server's allocation in MB; 0 when the server is unlimited. */
+    memoryMb: number;
     onXmsChange: (v: number) => void;
     onXmxChange: (v: number) => void;
     disabled: boolean;
@@ -392,6 +461,7 @@ function MemorySection({
     xmxMb,
     suggestedXmsMb,
     suggestedXmxMb,
+    memoryMb,
     onXmsChange,
     onXmxChange,
     disabled,
@@ -400,14 +470,21 @@ function MemorySection({
     const xmsId = `${baseId}-xms`;
     const xmxId = `${baseId}-xmx`;
 
+    // What the server will actually accept. Offering a spinner that runs to
+    // 64 GiB on a 2 GiB server just produces a save that 422s, so the input
+    // stops where SaveStartupEditorRequest stops.
+    const budget = heapBudgetMb(memoryMb);
+    const xmsMax = budget > 0 ? Math.min(MAX_XMS_MB, budget) : MAX_XMS_MB;
+    const xmxMax = budget > 0 ? Math.min(MAX_XMX_MB, budget) : MAX_XMX_MB;
+
     const handleXmsChange = (e: ChangeEvent<HTMLInputElement>) => {
         const v = parseInt(e.target.value, 10);
-        if (!isNaN(v) && v >= 64) onXmsChange(v);
+        if (!isNaN(v) && v >= MIN_HEAP_MB) onXmsChange(Math.min(v, xmsMax));
     };
 
     const handleXmxChange = (e: ChangeEvent<HTMLInputElement>) => {
         const v = parseInt(e.target.value, 10);
-        if (!isNaN(v) && v >= 64) onXmxChange(v);
+        if (!isNaN(v) && v >= MIN_HEAP_MB) onXmxChange(Math.min(v, xmxMax));
     };
 
     const inputClass = [
@@ -418,32 +495,46 @@ function MemorySection({
 
     return (
         <div className="space-y-2">
+            {budget > 0 && (
+                <p className="text-xs text-[var(--color-ink-faint)]">
+                    {t('memory.limit', 'This server is allocated {memory} MB, so the heap is capped at {budget} MB.', {
+                        memory: memoryMb,
+                        budget,
+                    })}
+                </p>
+            )}
+
             {/* Xms */}
             <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2">
                 <div>
                     <label htmlFor={xmsId} className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-ink)]">
-                        Xms — Initial Heap
-                        <InfoBadge text="The initial heap size the JVM allocates at startup. Lower values reduce startup memory; higher values reduce GC pressure early on. Recommended: 25% of allocated server RAM." />
+                        {t('memory.xms.label', 'Xms — Initial Heap')}
+                        <InfoBadge
+                            text={t(
+                                'memory.xms.tooltip',
+                                'The initial heap size the JVM allocates at startup. Lower values reduce startup memory; higher values reduce GC pressure early on. Recommended: 25% of allocated server RAM.',
+                            )}
+                        />
                     </label>
                     <p className="text-xs text-[var(--color-ink-faint)]">
-                        Suggested:{' '}
-                        <span className="font-mono text-[var(--color-ink-muted)]">{suggestedXmsMb} MB</span> (25% of
-                        container RAM)
+                        {t('memory.xms.suggested', 'Suggested: {value} MB (25% of container RAM)', {
+                            value: suggestedXmsMb,
+                        })}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <input
                         id={xmsId}
                         type="number"
-                        min={64}
-                        max={16384}
+                        min={MIN_HEAP_MB}
+                        max={xmsMax}
                         step={64}
                         value={xmsMb}
                         onChange={handleXmsChange}
                         disabled={disabled}
                         className={inputClass}
                     />
-                    <span className="text-xs text-[var(--color-ink-faint)]">MB</span>
+                    <span className="text-xs text-[var(--color-ink-faint)]">{t('memory.unit', 'MB')}</span>
                 </div>
             </div>
 
@@ -451,28 +542,33 @@ function MemorySection({
             <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2">
                 <div>
                     <label htmlFor={xmxId} className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-ink)]">
-                        Xmx — Maximum Heap
-                        <InfoBadge text="The maximum heap size the JVM is allowed to use. Should be set below the container memory limit to leave room for the OS and off-heap memory. Recommended: 85% of allocated server RAM." />
+                        {t('memory.xmx.label', 'Xmx — Maximum Heap')}
+                        <InfoBadge
+                            text={t(
+                                'memory.xmx.tooltip',
+                                'The maximum heap size the JVM may use. It is capped below the container memory limit so the JVM has room for metaspace, thread stacks and direct buffers — a heap sized to the whole allocation starts and then dies under load. Recommended: 85% of allocated server RAM.',
+                            )}
+                        />
                     </label>
                     <p className="text-xs text-[var(--color-ink-faint)]">
-                        Suggested:{' '}
-                        <span className="font-mono text-[var(--color-ink-muted)]">{suggestedXmxMb} MB</span> (85% of
-                        container RAM)
+                        {t('memory.xmx.suggested', 'Suggested: {value} MB (85% of container RAM)', {
+                            value: suggestedXmxMb,
+                        })}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <input
                         id={xmxId}
                         type="number"
-                        min={64}
-                        max={65536}
+                        min={MIN_HEAP_MB}
+                        max={xmxMax}
                         step={64}
                         value={xmxMb}
                         onChange={handleXmxChange}
                         disabled={disabled}
                         className={inputClass}
                     />
-                    <span className="text-xs text-[var(--color-ink-faint)]">MB</span>
+                    <span className="text-xs text-[var(--color-ink-faint)]">{t('memory.unit', 'MB')}</span>
                 </div>
             </div>
         </div>
@@ -497,7 +593,7 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
         <div className="flex min-w-0 flex-1 items-start gap-3">
             <div className="min-w-0 flex-1">
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
-                    Last saved command
+                    {t('command.lastSaved', 'Last saved command')}
                 </p>
                 <pre className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-[var(--color-ink-muted)]">
                     {displayText || '—'}
@@ -508,7 +604,11 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
                 onClick={handleCopy}
                 disabled={!displayText}
                 aria-live="polite"
-                aria-label={copied ? 'Copied to clipboard' : 'Copy command to clipboard'}
+                aria-label={
+                    copied
+                        ? t('command.copiedAria', 'Copied to clipboard')
+                        : t('command.copyAria', 'Copy command to clipboard')
+                }
                 className={[
                     'flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                     copied
@@ -517,7 +617,7 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
                     'disabled:cursor-not-allowed disabled:opacity-40',
                 ].join(' ')}
             >
-                {copied ? '✓ Copied' : 'Copy'}
+                {copied ? t('command.copied', '✓ Copied') : t('command.copy', 'Copy')}
             </button>
         </div>
     );
@@ -526,22 +626,29 @@ function CommandPreview({ command, raw }: { command?: string; raw?: string }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MinecraftStartupEditorPage() {
-    const server = useServer();
+    // The SDK hands a package its server plus the viewer's permissions on it.
+    // Hiding a control is not authorization — the FormRequest behind each call
+    // is — so this only avoids showing controls that would 403.
+    const { server, can } = useExtensionServerContext();
     const uuid = server.uuid;
-    // Server-allocated memory in MB (0 = unlimited / unknown)
-    const serverMemoryMb = server.limits?.memory ?? 0;
-    const push = useFlashes(s => s.push);
 
-    // Suggested Xms = 25%, Xmx = 85% of allocated RAM; fall back to safe defaults when unknown
-    const suggestedXmsMb = serverMemoryMb > 0 ? Math.max(64, Math.round(serverMemoryMb * 0.25)) : 256;
-    const suggestedXmxMb = serverMemoryMb > 0 ? Math.max(128, Math.round(serverMemoryMb * 0.85)) : 1024;
-
-    const held = server.permissions;
-    const canStartupRead = can(held, 'startup.read');
-    const canStartupUpdate = can(held, 'startup.update');
+    const canStartupRead = can('startup.read');
+    const canStartupUpdate = can('startup.update');
 
     const [data, setData] = useState<StartupEditorData | null>(null);
     const [saving, setSaving] = useState(false);
+
+    // The allocation reported by the API, which is the same number the save
+    // request validates against. 0 means the server is unlimited.
+    const serverMemoryMb = data?.memoryMb ?? 0;
+    const budgetMb = heapBudgetMb(serverMemoryMb);
+
+    // Suggested Xms = 25%, Xmx = 85% of the allocation, each held inside the
+    // budget; safe defaults until the allocation is known.
+    const suggestedXmsMb =
+        serverMemoryMb > 0 ? Math.min(budgetMb, Math.max(MIN_HEAP_MB, Math.round(serverMemoryMb * 0.25))) : 256;
+    const suggestedXmxMb =
+        serverMemoryMb > 0 ? Math.min(budgetMb, Math.max(128, Math.round(serverMemoryMb * 0.85))) : 1024;
 
     // Java version tier — controls GC recommendations and flag generation
     const [javaVersionTier, setJavaVersionTier] = useState<JavaVersionTier>(DEFAULT_JAVA_TIER);
@@ -560,15 +667,32 @@ export default function MinecraftStartupEditorPage() {
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set<string>());
 
     // Load the current startup configuration and seed the editor state from it.
-    const { data: loaded, isLoading } = useQuery({
-        queryKey: ['ext', 'minecraft_startup_editor', uuid],
-        queryFn: () => getStartupEditorData(uuid),
+    // The key is namespaced by extension and version, so an upgrade never
+    // serves a previous release's cached shape; the signal cancels the request
+    // when the page unmounts.
+    const queryKey = useExtensionQueryKey('minecraft_startup_editor', VERSION, 'state', uuid);
+    const {
+        data: loaded,
+        isLoading,
+        isError,
+    } = useQuery({
+        queryKey,
+        queryFn: ({ signal }) => getStartupEditorData(uuid, signal),
         enabled: canStartupRead,
     });
 
     useEffect(() => {
         if (!loaded) return;
         setData(loaded);
+
+        // Both branches clamp to the allocation. A command saved before the
+        // server was resized down would otherwise seed the editor with a heap
+        // the save endpoint now refuses, and the first Apply would 422 on a
+        // value the user never typed.
+        const budget = heapBudgetMb(loaded.memoryMb);
+        const clamp = (value: number, ceiling: number) =>
+            budget > 0 ? Math.min(value, budget, ceiling) : Math.min(value, ceiling);
+
         if (!loaded.isUsingEggDefault && loaded.rawStartup) {
             const {
                 gcId,
@@ -579,10 +703,19 @@ export default function MinecraftStartupEditorPage() {
             } = inferStateFromCommand(loaded.rawStartup);
             setSelectedGc(gcId);
             setSelected(new Set(selectedIds));
-            setXmsMb(inferredXms);
+            setXmsMb(clamp(inferredXms, MAX_XMS_MB));
             setJavaVersionTier(inferredTier);
             // If the saved command has an explicit -Xmx, restore it; otherwise keep the suggested value
-            if (inferredXmx > 0) setXmxMb(inferredXmx);
+            if (inferredXmx > 0) setXmxMb(clamp(inferredXmx, MAX_XMX_MB));
+
+            return;
+        }
+
+        // On the egg default there is nothing to infer, so start from what the
+        // allocation suggests rather than the pre-load placeholder.
+        if (loaded.memoryMb > 0) {
+            setXmsMb(clamp(Math.max(MIN_HEAP_MB, Math.round(loaded.memoryMb * 0.25)), MAX_XMS_MB));
+            setXmxMb(clamp(Math.max(128, Math.round(loaded.memoryMb * 0.85)), MAX_XMX_MB));
         }
     }, [loaded]);
 
@@ -591,9 +724,11 @@ export default function MinecraftStartupEditorPage() {
 
     const title = (
         <div>
-            <h1 className="text-xl font-semibold text-[var(--color-ink)]">Minecraft Startup Editor</h1>
+            <h1 className="text-xl font-semibold text-[var(--color-ink)]">
+                {t('page.title', 'Minecraft Startup Editor')}
+            </h1>
             <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-                Build a tuned JVM startup command from curated, validated flags.
+                {t('page.subtitle', 'Build a tuned JVM startup command from curated, validated flags.')}
             </p>
         </div>
     );
@@ -604,10 +739,12 @@ export default function MinecraftStartupEditorPage() {
                 {title}
                 <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-6">
                     <p className="text-sm text-[var(--color-ink)]">
-                        You do not have permission to view the startup command.
+                        {t('page.denied', 'You do not have permission to view the startup command.')}
                     </p>
                     <p className="mt-2 text-xs text-[var(--color-ink-faint)]">
-                        Required permission: <span className="font-mono text-[var(--color-ink-muted)]">startup.read</span>
+                        {t('page.deniedPermission', 'Required permission: {permission}', {
+                            permission: 'startup.read',
+                        })}
                     </p>
                 </div>
             </div>
@@ -718,9 +855,12 @@ export default function MinecraftStartupEditorPage() {
                       }
                     : prev,
             );
-            push({ type: 'success', message: 'Startup configuration saved.' });
-        } catch {
-            push({ type: 'error', message: 'Could not save the startup configuration.' });
+            notify('success', t('toast.saved', 'Startup configuration saved.'));
+        } catch (err) {
+            notify(
+                'error',
+                extensionErrorMessage(err, t('toast.saveFailed', 'Could not save the startup configuration.')),
+            );
         } finally {
             setSaving(false);
         }
@@ -747,9 +887,12 @@ export default function MinecraftStartupEditorPage() {
             setXmsMb(suggestedXmsMb);
             setXmxMb(suggestedXmxMb);
             setActivePreset(null);
-            push({ type: 'success', message: 'Reset to egg default.' });
-        } catch {
-            push({ type: 'error', message: 'Could not reset the startup command.' });
+            notify('success', t('toast.reset', 'Reset to egg default.'));
+        } catch (err) {
+            notify(
+                'error',
+                extensionErrorMessage(err, t('toast.resetFailed', 'Could not reset the startup command.')),
+            );
         } finally {
             setSaving(false);
         }
@@ -785,17 +928,25 @@ export default function MinecraftStartupEditorPage() {
                 <div className="flex items-center justify-center py-16">
                     <Spinner className="h-7 w-7" />
                 </div>
+            ) : isError ? (
+                <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-6">
+                    <p className="text-sm text-[var(--color-ink)]">
+                        {t('page.loadFailed', 'Could not load the startup configuration.')}
+                    </p>
+                </div>
             ) : (
                 <div className="space-y-4">
                     {/* ── Header ── */}
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <span aria-hidden>⛏️</span>
-                            <h2 className="text-base font-bold text-[var(--color-ink)]">Minecraft Startup Editor</h2>
+                            <h2 className="text-base font-bold text-[var(--color-ink)]">
+                                {t('page.title', 'Minecraft Startup Editor')}
+                            </h2>
                             {data?.isUsingEggDefault ? (
-                                <span className={BADGE_ACCENT}>Egg default</span>
+                                <span className={BADGE_ACCENT}>{t('badge.eggDefault', 'Egg default')}</span>
                             ) : (
-                                <span className={BADGE_WARNING}>Custom override</span>
+                                <span className={BADGE_WARNING}>{t('badge.customOverride', 'Custom override')}</span>
                             )}
                             <LoaderBadge loader={detectedLoader} />
                             {data?.eggName && <span className="text-xs text-[var(--color-ink-faint)]">{data.eggName}</span>}
@@ -810,7 +961,7 @@ export default function MinecraftStartupEditorPage() {
                                     : 'border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]',
                             ].join(' ')}
                         >
-                            {advancedMode ? '⚙ Advanced' : '✦ Basic'}
+                            {advancedMode ? t('mode.advanced', '⚙ Advanced') : t('mode.basic', '✦ Basic')}
                         </button>
                     </div>
 
@@ -820,7 +971,7 @@ export default function MinecraftStartupEditorPage() {
                         <aside className="lg:w-52 lg:flex-shrink-0">
                             <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
                                 <h3 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
-                                    Presets
+                                    {t('section.presets', 'Presets')}
                                 </h3>
                                 <div className="space-y-0.5">
                                     {PRESETS.map(preset => (
@@ -833,7 +984,7 @@ export default function MinecraftStartupEditorPage() {
                                     ))}
                                 </div>
                                 <p className="mt-2 px-1 text-[10px] leading-relaxed text-[var(--color-ink-faint)]">
-                                    Selecting a preset replaces your current selection.
+                                    {t('presets.hint', 'Selecting a preset replaces your current selection.')}
                                 </p>
                             </div>
                         </aside>
@@ -843,7 +994,7 @@ export default function MinecraftStartupEditorPage() {
                             {/* Memory */}
                             <CollapsibleSection
                                 id="memory"
-                                title="💾 Memory Configuration"
+                                title={t('section.memory', '💾 Memory Configuration')}
                                 collapsed={collapsedSections.has('memory')}
                                 onToggle={toggleSection}
                             >
@@ -852,6 +1003,7 @@ export default function MinecraftStartupEditorPage() {
                                     xmxMb={xmxMb}
                                     suggestedXmsMb={suggestedXmsMb}
                                     suggestedXmxMb={suggestedXmxMb}
+                                    memoryMb={serverMemoryMb}
                                     onXmsChange={setXmsMb}
                                     onXmxChange={setXmxMb}
                                     disabled={!canStartupUpdate || saving}
@@ -861,19 +1013,21 @@ export default function MinecraftStartupEditorPage() {
                             {/* Garbage Collector */}
                             <CollapsibleSection
                                 id="gc"
-                                title="🗑️ Garbage Collector"
+                                title={t('section.gc', '🗑️ Garbage Collector')}
                                 collapsed={collapsedSections.has('gc')}
                                 onToggle={toggleSection}
                                 badge={
                                     advancedMode && allGcOptions.length > gcOptions.length
-                                        ? `+${allGcOptions.length - gcOptions.length} hidden by tier`
+                                        ? t('badge.hiddenByTier', '+{count} hidden by tier', {
+                                              count: allGcOptions.length - gcOptions.length,
+                                          })
                                         : undefined
                                 }
                             >
                                 {/* Java version tier selector */}
                                 <div className="mb-3 flex items-center gap-2">
                                     <label className="text-xs font-medium text-[var(--color-ink-muted)]">
-                                        Java version:
+                                        {t('gc.javaVersion', 'Java version:')}
                                     </label>
                                     <select
                                         value={javaVersionTier}
@@ -884,17 +1038,25 @@ export default function MinecraftStartupEditorPage() {
                                             'focus:border-[var(--brand)] focus:outline-none focus:ring-1 focus:ring-[var(--brand)]',
                                             'disabled:cursor-not-allowed disabled:opacity-50',
                                         ].join(' ')}
-                                        aria-label="Java version tier"
+                                        aria-label={t('gc.javaVersionAria', 'Java version tier')}
                                     >
                                         {(Object.keys(JAVA_VERSION_TIER_LABELS) as JavaVersionTier[]).map(tier => (
                                             <option key={tier} value={tier}>
-                                                {JAVA_VERSION_TIER_LABELS[tier]}
+                                                {t(`javaTier.${tier}`, JAVA_VERSION_TIER_LABELS[tier])}
                                             </option>
                                         ))}
                                     </select>
-                                    {javaVersionTier === 'java25plus' && <span className={BADGE_BRAND}>Minecraft 26.1+</span>}
+                                    {javaVersionTier === 'java25plus' && (
+                                        <span className={BADGE_BRAND}>
+                                            {t('badge.modernMinecraft', 'Minecraft 26.1+')}
+                                        </span>
+                                    )}
                                 </div>
-                                <div role="radiogroup" aria-label="Garbage Collector" className="space-y-1.5">
+                                <div
+                                    role="radiogroup"
+                                    aria-label={t('section.gc', '🗑️ Garbage Collector')}
+                                    className="space-y-1.5"
+                                >
                                     {visibleGcOptions.map(option => (
                                         <GcCard
                                             key={option.id}
@@ -925,15 +1087,18 @@ export default function MinecraftStartupEditorPage() {
                             {/* Core JVM Performance Toggles */}
                             <CollapsibleSection
                                 id="core-toggles"
-                                title={CATEGORY_LABELS['server']}
+                                title={t('category.server', CATEGORY_LABELS['server'])}
                                 collapsed={collapsedSections.has('core-toggles')}
                                 onToggle={toggleSection}
                             >
                                 <p className="mb-2 text-xs text-[var(--color-ink-faint)]">
-                                    Always included. Required for container compatibility.
+                                    {t('core.hint', 'Always included. Required for container compatibility.')}
                                     {selectedGc === 'zgc' && (
                                         <span className="ml-1">
-                                            ParallelRefProcEnabled is hidden — not applicable under ZGC.
+                                            {t(
+                                                'core.zgcHint',
+                                                'ParallelRefProcEnabled is hidden — not applicable under ZGC.',
+                                            )}
                                         </span>
                                     )}
                                 </p>
@@ -954,10 +1119,16 @@ export default function MinecraftStartupEditorPage() {
                                     <CollapsibleSection
                                         key={category}
                                         id={category}
-                                        title={CATEGORY_LABELS[category]}
+                                        title={t(`category.${category}`, CATEGORY_LABELS[category])}
                                         collapsed={collapsedSections.has(category)}
                                         onToggle={toggleSection}
-                                        badge={hiddenCount > 0 ? `+${hiddenCount} in Advanced` : undefined}
+                                        badge={
+                                            hiddenCount > 0
+                                                ? t('badge.hiddenInAdvanced', '+{count} in Advanced', {
+                                                      count: hiddenCount,
+                                                  })
+                                                : undefined
+                                        }
                                     >
                                         <div className="space-y-1.5">
                                             {opts.map(option => {
@@ -994,18 +1165,20 @@ export default function MinecraftStartupEditorPage() {
                             <div className="flex flex-shrink-0 items-center gap-2">
                                 {!canStartupUpdate && (
                                     <p className="text-xs text-[var(--color-ink-faint)]">
-                                        Requires <span className="font-mono text-[var(--color-ink-muted)]">startup.update</span>
+                                        {t('footer.requires', 'Requires {permission}', {
+                                            permission: 'startup.update',
+                                        })}
                                     </p>
                                 )}
                                 <Button disabled={!canStartupUpdate || saving} onClick={handleSave}>
-                                    {saving ? 'Saving…' : 'Apply'}
+                                    {saving ? t('action.saving', 'Saving…') : t('action.apply', 'Apply')}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     disabled={!canStartupUpdate || saving || (data?.isUsingEggDefault ?? true)}
                                     onClick={handleReset}
                                 >
-                                    Reset
+                                    {t('action.reset', 'Reset')}
                                 </Button>
                             </div>
                         </div>
