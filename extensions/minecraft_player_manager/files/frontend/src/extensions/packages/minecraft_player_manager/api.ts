@@ -1,8 +1,19 @@
-import http from '@/lib/http';
+import { createExtensionClient } from '@/extensions-sdk';
 
-const extensionId = 'minecraft_player_manager';
+/*
+ * This package's per-server API.
+ *
+ * The base URL is derived from the extension id by the SDK rather than written
+ * here, so a package cannot address another extension's routes:
+ *   /api/client/servers/{server}/extensions/ext/minecraft_player_manager
+ *
+ * These endpoints answer with a bare `{ success, ... }` object rather than the
+ * panel envelope, which the SDK client passes through untouched.
+ */
 
-const getBasePath = (uuid: string): string => `/api/client/servers/${uuid}/extensions/${extensionId}`;
+const EXTENSION_ID = 'minecraft_player_manager';
+
+const client = (uuid: string) => createExtensionClient(EXTENSION_ID, uuid);
 
 export interface OnlinePlayer {
     name: string;
@@ -40,61 +51,58 @@ export interface PlayerManagerStatus {
     whitelistEnabled: boolean;
 }
 
-export const getPlayerManagerStatus = async (uuid: string): Promise<PlayerManagerStatus> => {
-    const { data } = await http.get(getBasePath(uuid));
-    // Handle case where API returns nested data structure
-    if (data && data.data) {
-        return data.data;
-    }
-    return data;
-};
+export const getPlayerManagerStatus = (uuid: string, signal?: AbortSignal): Promise<PlayerManagerStatus> =>
+    // The endpoint answers with a bare status object, and the SDK client
+    // already unwraps the panel envelope, so there is nothing left to unnest —
+    // the old `data.data` guard was reaching for a shape neither layer emits.
+    client(uuid).get<PlayerManagerStatus>('/', { signal });
 
 export const setWhitelistEnabled = async (uuid: string, enabled: boolean): Promise<void> => {
-    await http.post(`${getBasePath(uuid)}/whitelist`, { enabled });
+    await client(uuid).post('/whitelist', { enabled });
 };
 
 export const addToWhitelist = async (uuid: string, player: string): Promise<void> => {
-    await http.put(`${getBasePath(uuid)}/whitelist/${player}`);
+    await client(uuid).put(`/whitelist/${player}`);
 };
 
 export const removeFromWhitelist = async (uuid: string, player: string): Promise<void> => {
-    await http.delete(`${getBasePath(uuid)}/whitelist/${player}`);
+    await client(uuid).delete(`/whitelist/${player}`);
 };
 
 export const opPlayer = async (uuid: string, player: string): Promise<void> => {
-    await http.put(`${getBasePath(uuid)}/op/${player}`);
+    await client(uuid).put(`/op/${player}`);
 };
 
 export const deopPlayer = async (uuid: string, player: string): Promise<void> => {
-    await http.delete(`${getBasePath(uuid)}/op/${player}`);
+    await client(uuid).delete(`/op/${player}`);
 };
 
 export const banPlayer = async (uuid: string, player: string, reason: string): Promise<void> => {
-    await http.put(`${getBasePath(uuid)}/ban/${player}`, { reason });
+    await client(uuid).put(`/ban/${player}`, { reason });
 };
 
 export const unbanPlayer = async (uuid: string, player: string): Promise<void> => {
-    await http.delete(`${getBasePath(uuid)}/ban/${player}`);
+    await client(uuid).delete(`/ban/${player}`);
 };
 
 export const banIp = async (uuid: string, ip: string, reason: string): Promise<void> => {
-    await http.put(`${getBasePath(uuid)}/ban-ip/${ip}`, { reason });
+    await client(uuid).put(`/ban-ip/${ip}`, { reason });
 };
 
 export const unbanIp = async (uuid: string, ip: string): Promise<void> => {
-    await http.delete(`${getBasePath(uuid)}/ban-ip/${ip}`);
+    await client(uuid).delete(`/ban-ip/${ip}`);
 };
 
 export const kickPlayer = async (uuid: string, player: string, reason?: string): Promise<void> => {
-    await http.post(`${getBasePath(uuid)}/kick/${player}`, { reason });
+    await client(uuid).post(`/kick/${player}`, { reason });
 };
 
 export const whisperPlayer = async (uuid: string, player: string, message: string): Promise<void> => {
-    await http.post(`${getBasePath(uuid)}/whisper/${player}`, { message });
+    await client(uuid).post(`/whisper/${player}`, { message });
 };
 
 export const killPlayer = async (uuid: string, player: string): Promise<void> => {
-    await http.post(`${getBasePath(uuid)}/kill/${player}`);
+    await client(uuid).post(`/kill/${player}`);
 };
 
 // v1.0.1 - Server Version
@@ -113,9 +121,9 @@ export interface ServerVersionResponse {
     error?: string;
 }
 
-export const getServerVersion = async (uuid: string): Promise<ServerVersionResponse> => {
-    const { data } = await http.get(`${getBasePath(uuid)}/version`);
-    return data.data || data;
+export const getServerVersion = async (uuid: string, signal?: AbortSignal): Promise<ServerVersionResponse> => {
+    const data = await client(uuid).get<ServerVersionResponse>('/version', { signal });
+    return data;
 };
 
 // v1.0.1 - Player Data Types
@@ -189,15 +197,11 @@ export interface PlayerDataResponse {
     location?: PlayerLocation;
     stats?: PlayerStats;
     error?: string;
-    debug?: {
-        allSlots: { slot: number; id: string }[];
-        nbtKeys?: string[];
-    };
 }
 
 export const getPlayerData = async (uuid: string, player: string): Promise<PlayerDataResponse> => {
-    const { data } = await http.get(`${getBasePath(uuid)}/player/${player}/data`);
-    return data.data || data;
+    const data = await client(uuid).get<PlayerDataResponse>(`/player/${player}/data`);
+    return data;
 };
 
 // v1.0.1 - Attributes
@@ -222,8 +226,8 @@ export interface AttributesResponse {
 }
 
 export const getAttributes = async (uuid: string): Promise<AttributesResponse> => {
-    const { data } = await http.get(`${getBasePath(uuid)}/attributes`);
-    return data.data || data;
+    const data = await client(uuid).get<AttributesResponse>('/attributes');
+    return data;
 };
 
 export interface SetAttributeResponse {
@@ -234,8 +238,8 @@ export interface SetAttributeResponse {
 }
 
 export const setAttribute = async (uuid: string, player: string, attribute: string, value: number): Promise<SetAttributeResponse> => {
-    const { data } = await http.post(`${getBasePath(uuid)}/player/${player}/attribute/${attribute}`, { value });
-    return data.data || data;
+    const data = await client(uuid).post<SetAttributeResponse>(`/player/${player}/attribute/${attribute}`, { value });
+    return data;
 };
 
 export interface ResetAttributeResponse {
@@ -246,7 +250,7 @@ export interface ResetAttributeResponse {
 }
 
 export const resetAttribute = async (uuid: string, player: string, attribute: string): Promise<ResetAttributeResponse> => {
-    const { data } = await http.delete(`${getBasePath(uuid)}/player/${player}/attribute/${attribute}`);
-    return data.data || data;
+    const data = await client(uuid).delete<ResetAttributeResponse>(`/player/${player}/attribute/${attribute}`);
+    return data;
 };
 

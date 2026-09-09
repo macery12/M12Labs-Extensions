@@ -21,13 +21,17 @@ import {
     SlidersHorizontal,
     type LucideProps,
 } from 'lucide-react';
-import { useServer } from '@/components/server/ServerContext';
-import { useFlashes } from '@/state/flashes';
-import { can } from '@/lib/can';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { Modal } from '@/components/ui/Modal';
-import { Input, Field } from '@/components/ui/Input';
+import {
+    Button,
+    Field,
+    Input,
+    Modal,
+    Spinner,
+    createTranslator,
+    notify,
+    useExtensionQueryKey,
+    useExtensionServerContext,
+} from '@/extensions-sdk';
 import {
     getPlayerManagerStatus,
     setWhitelistEnabled,
@@ -45,18 +49,26 @@ import {
     getServerVersion,
     type PlayerManagerStatus,
     type ServerVersion,
-} from './api';
-import InventoryViewer from './InventoryViewer';
-import AttributeEditor from './AttributeEditor';
+} from '../../api';
+import InventoryViewer from '../../InventoryViewer';
+import AttributeEditor from '../../AttributeEditor';
 
-// Extension UI: strings are literal English (extensions cannot contribute
-// Paraglide messages) and every UI colour comes from a theme CSS variable.
-// (Minecraft-domain colours — enchantment purple, dimension hues, durability
-// gradient — stay literal in the inventory view; see InventoryViewer.tsx.)
+/*
+ * The player manager, mounted by the panel as this package's server page.
+ * Everything it can reach comes from '@/extensions-sdk', and every UI colour is
+ * a theme variable. (Minecraft-domain colours — enchantment purple, dimension
+ * hues, durability gradient — stay literal in the inventory view; see
+ * InventoryViewer.tsx.)
+ */
+
+const t = createTranslator('minecraft_player_manager');
+
+/** Cache namespace for this release; an upgrade must not serve an old shape. */
+const VERSION = '3.0.0';
 
 type IconType = ComponentType<LucideProps>;
 
-const GENERIC_ERROR = 'Something went wrong. Please try again.';
+const GENERIC_ERROR = () => t('common.genericError', 'Something went wrong. Please try again.');
 
 // ─── Player Actions Modal ─────────────────────────────────────────────────────
 
@@ -87,34 +99,40 @@ function PlayerActionsModal({
 }: PlayerActionsModalProps) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
-    const push = useFlashes(s => s.push);
 
     const handleAction = async (action: () => Promise<void>, actionName: string) => {
         setLoading(true);
         try {
             await action();
-            push({ type: 'success', message: `Action completed: ${actionName}` });
+            notify('success', t('actions.completed', 'Action completed: {action}', { action: actionName }));
             onAction();
             onClose();
         } catch {
-            push({ type: 'error', message: `Could not complete: ${actionName}` });
+            notify('error', t('actions.failed', 'Could not complete: {action}', { action: actionName }));
         } finally {
             setLoading(false);
         }
     };
 
-    const offlineTitle = !isOnline ? 'Player is offline' : !canManage ? 'Read-only access' : undefined;
+    const offlineTitle = !isOnline
+        ? t('common.playerOffline', 'Player is offline')
+        : !canManage
+          ? t('common.readOnly', 'Read-only access')
+          : undefined;
 
     return (
-        <Modal open onClose={onClose} title={`Actions for ${player}`}>
+        <Modal open onClose={onClose} title={t('actions.title', 'Actions for {player}', { player })}>
             {!isOnline && (
                 <div className="mb-4 rounded-lg border border-[var(--color-warning)] bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-warning)]">
-                    This player is offline. Kick, Kill, and Attribute editing are unavailable.
+                    {t(
+                        'actions.offlineNotice',
+                        'This player is offline. Kick, Kill, and Attribute editing are unavailable.',
+                    )}
                 </div>
             )}
             {!canManage && (
                 <div className="mb-4 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-3 text-sm text-[var(--color-ink-muted)]">
-                    You have read-only access. Management actions are disabled.
+                    {t('actions.readOnlyNotice', 'You have read-only access. Management actions are disabled.')}
                 </div>
             )}
 
@@ -129,7 +147,7 @@ function PlayerActionsModal({
                     }}
                 >
                     <Box className="h-4 w-4" />
-                    View Inventory
+                    {t('actions.viewInventory', 'View Inventory')}
                 </Button>
                 {supportsAttributes && (
                     <Button
@@ -143,13 +161,13 @@ function PlayerActionsModal({
                         }}
                     >
                         <SlidersHorizontal className="h-4 w-4" />
-                        Edit Attributes
+                        {t('actions.editAttributes', 'Edit Attributes')}
                     </Button>
                 )}
             </div>
 
             <div className="mb-3 border-t border-[var(--color-border)] pt-4">
-                <h3 className="text-sm text-[var(--color-ink-muted)]">Quick Actions</h3>
+                <h3 className="text-sm text-[var(--color-ink-muted)]">{t('actions.quick', 'Quick Actions')}</h3>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -158,57 +176,61 @@ function PlayerActionsModal({
                     className="w-full justify-center"
                     disabled={loading || !isOnline || !canManage}
                     title={offlineTitle}
-                    onClick={() => handleAction(() => kickPlayer(serverUuid, player), 'Kick')}
+                    onClick={() => handleAction(() => kickPlayer(serverUuid, player), t('actionName.kick', 'Kick'))}
                 >
                     <DoorOpen className="h-4 w-4" />
-                    Kick Player
+                    {t('actions.kick', 'Kick Player')}
                 </Button>
                 <Button
                     variant="outline"
                     className="w-full justify-center"
                     disabled={loading || !isOnline || !canManage}
                     title={offlineTitle}
-                    onClick={() => handleAction(() => killPlayer(serverUuid, player), 'Kill')}
+                    onClick={() => handleAction(() => killPlayer(serverUuid, player), t('actionName.kill', 'Kill'))}
                 >
                     <Skull className="h-4 w-4" />
-                    Kill Player
+                    {t('actions.kill', 'Kill Player')}
                 </Button>
                 <Button
                     variant="outline"
                     className="w-full justify-center"
                     disabled={loading || !canManage}
-                    title={!canManage ? 'Read-only access' : undefined}
+                    title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                     onClick={() =>
                         handleAction(
                             isOperator ? () => deopPlayer(serverUuid, player) : () => opPlayer(serverUuid, player),
-                            isOperator ? 'Deop' : 'Op',
+                            isOperator ? t('actionName.deop', 'Deop') : t('actionName.op', 'Op'),
                         )
                     }
                 >
                     <Crown className="h-4 w-4" />
-                    {isOperator ? 'Remove Operator' : 'Make Operator'}
+                    {isOperator
+                        ? t('actions.removeOperator', 'Remove Operator')
+                        : t('actions.makeOperator', 'Make Operator')}
                 </Button>
                 <Button
                     variant="outline"
                     className="w-full justify-center"
                     disabled={loading || !canManage}
-                    title={!canManage ? 'Read-only access' : undefined}
-                    onClick={() => handleAction(() => banPlayer(serverUuid, player, ''), 'Ban')}
+                    title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
+                    onClick={() => handleAction(() => banPlayer(serverUuid, player, ''), t('actionName.ban', 'Ban'))}
                 >
                     <Ban className="h-4 w-4" />
-                    Ban Player
+                    {t('actions.ban', 'Ban Player')}
                 </Button>
             </div>
 
             {/* Whisper */}
             <div className="mt-4 border-t border-[var(--color-border)] pt-4">
-                <h3 className="mb-2 text-sm font-medium text-[var(--color-ink)]">Send Private Message</h3>
+                <h3 className="mb-2 text-sm font-medium text-[var(--color-ink)]">
+                    {t('actions.whisperTitle', 'Send Private Message')}
+                </h3>
                 <div className="flex gap-2">
                     <div className="flex-1">
                         <Input
                             value={message}
                             onChange={e => setMessage(e.target.value)}
-                            placeholder="Enter message..."
+                            placeholder={t('actions.whisperPlaceholder', 'Enter message…')}
                             disabled={!canManage}
                         />
                     </div>
@@ -218,7 +240,7 @@ function PlayerActionsModal({
                             handleAction(async () => {
                                 await whisperPlayer(serverUuid, player, message.trim());
                                 setMessage('');
-                            }, 'Whisper')
+                            }, t('actionName.whisper', 'Whisper'))
                         }
                     >
                         <MessageCircle className="h-4 w-4" />
@@ -238,25 +260,31 @@ interface AddPlayerModalProps {
     onAction: () => void;
 }
 
-const ADD_TITLES: Record<AddPlayerModalProps['type'], string> = {
-    whitelist: 'Add to Whitelist',
-    op: 'Add Operator',
-    ban: 'Ban Player',
-    'ban-ip': 'Ban IP Address',
-};
+// Resolved per call rather than at module load, so the label follows the
+// viewer's locale.
+const addTitle = (type: AddPlayerModalProps['type']): string =>
+    ({
+        whitelist: () => t('add.whitelist', 'Add to Whitelist'),
+        op: () => t('add.op', 'Add Operator'),
+        ban: () => t('add.ban', 'Ban Player'),
+        'ban-ip': () => t('add.banIp', 'Ban IP Address'),
+    })[type]();
 
 function AddPlayerModal({ onClose, type, serverUuid, onAction }: AddPlayerModalProps) {
     const [target, setTarget] = useState('');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const push = useFlashes(s => s.push);
 
     const isIp = type === 'ban-ip';
 
     const validate = (): string | null => {
-        if (target.trim().length === 0) return isIp ? 'IP address is required' : 'Player name is required';
-        if (isIp && !/^[\d.]+$/.test(target.trim())) return 'Invalid IP format';
+        if (target.trim().length === 0) {
+            return isIp
+                ? t('add.ipRequired', 'IP address is required')
+                : t('add.playerRequired', 'Player name is required');
+        }
+        if (isIp && !/^[\d.]+$/.test(target.trim())) return t('add.ipInvalid', 'Invalid IP format');
         return null;
     };
 
@@ -284,11 +312,11 @@ function AddPlayerModal({ onClose, type, serverUuid, onAction }: AddPlayerModalP
                     await banIp(serverUuid, name, reason);
                     break;
             }
-            push({ type: 'success', message: `${ADD_TITLES[type]} successful` });
+            notify('success', t('add.succeeded', '{action} successful', { action: addTitle(type) }));
             onAction();
             onClose();
         } catch {
-            push({ type: 'error', message: GENERIC_ERROR });
+            notify('error', GENERIC_ERROR());
         } finally {
             setLoading(false);
         }
@@ -298,34 +326,37 @@ function AddPlayerModal({ onClose, type, serverUuid, onAction }: AddPlayerModalP
         <Modal
             open
             onClose={onClose}
-            title={ADD_TITLES[type]}
+            title={addTitle(type)}
             footer={
                 <>
                     <Button variant="ghost" onClick={onClose}>
-                        Cancel
+                        {t('common.cancel', 'Cancel')}
                     </Button>
                     <Button onClick={submit} disabled={loading}>
-                        {loading ? 'Working…' : ADD_TITLES[type]}
+                        {loading ? t('common.working', 'Working…') : addTitle(type)}
                     </Button>
                 </>
             }
         >
             <div className="space-y-4">
-                <Field label={isIp ? 'IP Address' : 'Player Name'} error={error ?? undefined}>
+                <Field
+                    label={isIp ? t('add.ipLabel', 'IP Address') : t('add.playerLabel', 'Player Name')}
+                    error={error ?? undefined}
+                >
                     <Input
                         value={target}
                         onChange={e => setTarget(e.target.value)}
-                        placeholder={isIp ? '192.168.1.1' : 'Enter player name...'}
+                        placeholder={isIp ? '192.168.1.1' : t('add.playerPlaceholder', 'Enter player name…')}
                         invalid={!!error}
                         onKeyDown={e => e.key === 'Enter' && submit()}
                     />
                 </Field>
                 {(type === 'ban' || type === 'ban-ip') && (
-                    <Field label="Reason (optional)">
+                    <Field label={t('add.reasonLabel', 'Reason (optional)')}>
                         <Input
                             value={reason}
                             onChange={e => setReason(e.target.value)}
-                            placeholder="Enter ban reason..."
+                            placeholder={t('add.reasonPlaceholder', 'Enter ban reason…')}
                         />
                     </Field>
                 )}
@@ -386,7 +417,9 @@ function PlayerList({ title, icon: Icon, players, emptyMessage, onRemove, onPlay
                                         </span>
                                     )}
                                     {player.reason && (
-                                        <p className="text-xs text-[var(--color-ink-muted)]">Reason: {player.reason}</p>
+                                        <p className="text-xs text-[var(--color-ink-muted)]">
+                                            {t('common.reason', 'Reason: {reason}', { reason: player.reason })}
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -414,12 +447,16 @@ function PlayerList({ title, icon: Icon, players, emptyMessage, onRemove, onPlay
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MinecraftPlayerManagerPage() {
-    const server = useServer();
+    // The SDK hands a package its server plus the viewer's permissions on it.
+    // Hiding a control is not authorization — the FormRequest behind each call
+    // is — so this only avoids showing controls that would 403.
+    const { server, can } = useExtensionServerContext();
     const uuid = server.uuid;
     const navigate = useNavigate();
-    const push = useFlashes(s => s.push);
     const qc = useQueryClient();
-    const canManage = can(server.permissions, 'extension.manage');
+    // Mutating actions need the extension permission and the underlying core
+    // permissions; the backend enforces all of them per operation.
+    const canManage = can('extension.manage');
 
     const [actionLoading, setActionLoading] = useState(false);
     const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
@@ -427,12 +464,18 @@ export default function MinecraftPlayerManagerPage() {
     const [inventoryPlayer, setInventoryPlayer] = useState<string | null>(null);
     const [attributePlayer, setAttributePlayer] = useState<string | null>(null);
 
+    const statusKey = useExtensionQueryKey('minecraft_player_manager', VERSION, 'status', uuid);
+
     const { data, isLoading, isFetching, refetch } = useQuery({
-        queryKey: ['ext', 'minecraft_player_manager', uuid],
-        queryFn: async (): Promise<{ status: PlayerManagerStatus; version: ServerVersion | null }> => {
+        queryKey: statusKey,
+        queryFn: async ({
+            signal,
+        }): Promise<{ status: PlayerManagerStatus; version: ServerVersion | null }> => {
+            // The signal cancels both in-flight reads when the page unmounts or
+            // the poll is superseded.
             const [status, versionData] = await Promise.all([
-                getPlayerManagerStatus(uuid),
-                getServerVersion(uuid).catch(() => ({ success: false as const, version: undefined })),
+                getPlayerManagerStatus(uuid, signal),
+                getServerVersion(uuid, signal).catch(() => ({ success: false as const, version: undefined })),
             ]);
             return { status, version: versionData.success && versionData.version ? versionData.version : null };
         },
@@ -445,17 +488,17 @@ export default function MinecraftPlayerManagerPage() {
     const isPlayerOnline = (playerName: string): boolean =>
         status?.server.players.list?.some(p => p.name.toLowerCase() === playerName.toLowerCase()) ?? false;
 
-    const refresh = () => qc.invalidateQueries({ queryKey: ['ext', 'minecraft_player_manager', uuid] });
+    const refresh = () => qc.invalidateQueries({ queryKey: statusKey });
 
     const runAction = async (action: () => Promise<void>, successMessage: string) => {
         if (!canManage) return;
         setActionLoading(true);
         try {
             await action();
-            push({ type: 'success', message: successMessage });
+            notify('success', successMessage);
             refresh();
         } catch {
-            push({ type: 'error', message: GENERIC_ERROR });
+            notify('error', GENERIC_ERROR());
         } finally {
             setActionLoading(false);
         }
@@ -465,7 +508,11 @@ export default function MinecraftPlayerManagerPage() {
         if (!status) return;
         runAction(
             () => setWhitelistEnabled(uuid, !status.whitelistEnabled),
-            `Whitelist ${status.whitelistEnabled ? 'disabled' : 'enabled'} successfully`,
+            t('list.whitelistToggled', 'Whitelist {state} successfully', {
+                state: status.whitelistEnabled
+                    ? t('list.stateDisabled', 'disabled')
+                    : t('list.stateEnabled', 'enabled'),
+            }),
         );
     };
 
@@ -485,13 +532,16 @@ export default function MinecraftPlayerManagerPage() {
                     await unbanIp(uuid, target);
                     break;
             }
-        }, 'Removed successfully');
+        }, t('common.removed', 'Removed successfully'));
 
     const title = (
         <div>
-            <h1 className="text-xl font-semibold text-[var(--color-ink)]">Player Manager</h1>
+            <h1 className="text-xl font-semibold text-[var(--color-ink)]">{t('page.title', 'Player Manager')}</h1>
             <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-                Whitelist, operators, bans, and live player actions for your Minecraft server.
+                {t(
+                    'page.subtitle',
+                    'Whitelist, operators, bans, and live player actions for your Minecraft server.',
+                )}
             </p>
         </div>
     );
@@ -512,9 +562,11 @@ export default function MinecraftPlayerManagerPage() {
             <div className="flex flex-col gap-6">
                 {title}
                 <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8 text-center">
-                    <p className="text-[var(--color-ink-muted)]">Failed to load player manager data.</p>
+                    <p className="text-[var(--color-ink-muted)]">
+                        {t('page.loadFailed', 'Failed to load player manager data.')}
+                    </p>
                     <Button className="mt-4" onClick={() => refetch()}>
-                        Try Again
+                        {t('page.tryAgain', 'Try Again')}
                     </Button>
                 </div>
             </div>
@@ -531,11 +583,11 @@ export default function MinecraftPlayerManagerPage() {
                     className="flex items-center gap-2 text-sm text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)]"
                 >
                     <ArrowLeft className="h-4 w-4" />
-                    Back to Extensions
+                    {t('common.back', 'Back to Extensions')}
                 </button>
                 <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
                     <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                    Refresh
+                    {t('common.refresh', 'Refresh')}
                 </Button>
             </div>
 
@@ -560,19 +612,24 @@ export default function MinecraftPlayerManagerPage() {
                     </div>
                     <div>
                         <h2 className="text-xl font-semibold text-[var(--color-ink)]">
-                            Server {status.server.online ? 'Online' : 'Offline'}
+                            {status.server.online
+                                ? t('status.online', 'Server Online')
+                                : t('status.offline', 'Server Offline')}
                         </h2>
                         {status.server.online && (
                             <>
                                 <p className="text-sm text-[var(--color-ink-muted)]">
-                                    {status.server.players.online}/{status.server.players.max} Players
+                                    {t('status.playerCount', '{online}/{max} Players', {
+                                        online: status.server.players.online,
+                                        max: status.server.players.max,
+                                    })}
                                 </p>
                                 {serverVersion && (
                                     <p className="text-xs text-[var(--color-ink-faint)]">
                                         {serverVersion.raw}
                                         {serverVersion.supportsAttributes && (
                                             <span className="ml-2 text-[var(--color-accent)]">
-                                                • Attributes supported
+                                                {t('status.attributesSupported', '• Attributes supported')}
                                             </span>
                                         )}
                                     </p>
@@ -584,7 +641,9 @@ export default function MinecraftPlayerManagerPage() {
 
                 {status.server.online && status.server.players.list.length > 0 && (
                     <div className="mt-4 border-t border-[var(--color-border)] pt-4">
-                        <h3 className="mb-2 text-sm font-medium text-[var(--color-ink-muted)]">Online Players</h3>
+                        <h3 className="mb-2 text-sm font-medium text-[var(--color-ink-muted)]">
+                            {t('status.onlinePlayers', 'Online Players')}
+                        </h3>
                         <div className="flex flex-wrap gap-2">
                             {status.server.players.list.map(player => (
                                 <button
@@ -616,31 +675,33 @@ export default function MinecraftPlayerManagerPage() {
                             onClick={handleToggleWhitelist}
                             disabled={actionLoading || !canManage}
                             className="flex items-center gap-2 text-sm text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] disabled:opacity-50"
-                            title={!canManage ? 'Read-only access' : undefined}
+                            title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                         >
                             {status.whitelistEnabled ? (
                                 <ToggleRight className="h-5 w-5 text-[var(--brand)]" />
                             ) : (
                                 <ToggleLeft className="h-5 w-5 text-[var(--color-ink-faint)]" />
                             )}
-                            Whitelist {status.whitelistEnabled ? 'Enabled' : 'Disabled'}
+                            {status.whitelistEnabled
+                                ? t('list.whitelistEnabled', 'Whitelist Enabled')
+                                : t('list.whitelistDisabled', 'Whitelist Disabled')}
                         </button>
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setAddModalType('whitelist')}
                             disabled={!canManage}
-                            title={!canManage ? 'Read-only access' : undefined}
+                            title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                         >
                             <Plus className="h-4 w-4" />
-                            Add
+                            {t('common.add', 'Add')}
                         </Button>
                     </div>
                     <PlayerList
-                        title="Whitelist"
+                        title={t('list.whitelist', 'Whitelist')}
                         icon={ListChecks}
                         players={status.whitelist.map(p => ({ name: p.name, uuid: p.uuid }))}
-                        emptyMessage="No players whitelisted"
+                        emptyMessage={t('list.whitelistEmpty', 'No players whitelisted')}
                         onRemove={canManage ? name => handleRemoveFromList('whitelist', name) : undefined}
                         onPlayerClick={name => setSelectedPlayer(name)}
                         loading={actionLoading}
@@ -655,17 +716,17 @@ export default function MinecraftPlayerManagerPage() {
                             size="sm"
                             onClick={() => setAddModalType('op')}
                             disabled={!canManage}
-                            title={!canManage ? 'Read-only access' : undefined}
+                            title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                         >
                             <Plus className="h-4 w-4" />
-                            Add
+                            {t('common.add', 'Add')}
                         </Button>
                     </div>
                     <PlayerList
-                        title="Operators"
+                        title={t('list.operators', 'Operators')}
                         icon={ShieldCheck}
                         players={status.operators.map(p => ({ name: p.name, uuid: p.uuid, level: p.level }))}
-                        emptyMessage="No operators configured"
+                        emptyMessage={t('list.operatorsEmpty', 'No operators configured')}
                         onRemove={canManage ? name => handleRemoveFromList('op', name) : undefined}
                         onPlayerClick={name => setSelectedPlayer(name)}
                         loading={actionLoading}
@@ -681,14 +742,14 @@ export default function MinecraftPlayerManagerPage() {
                             size="sm"
                             onClick={() => setAddModalType('ban')}
                             disabled={!canManage}
-                            title={!canManage ? 'Read-only access' : undefined}
+                            title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                         >
                             <Plus className="h-4 w-4" />
-                            Add
+                            {t('common.add', 'Add')}
                         </Button>
                     </div>
                     <PlayerList
-                        title="Banned Players"
+                        title={t('list.bannedPlayers', 'Banned Players')}
                         icon={Ban}
                         players={status.bannedPlayers.map(p => ({
                             name: p.name,
@@ -696,7 +757,7 @@ export default function MinecraftPlayerManagerPage() {
                             reason: p.reason,
                             source: p.source,
                         }))}
-                        emptyMessage="No players banned"
+                        emptyMessage={t('list.bannedPlayersEmpty', 'No players banned')}
                         onRemove={canManage ? name => handleRemoveFromList('ban', name) : undefined}
                         loading={actionLoading}
                     />
@@ -710,24 +771,26 @@ export default function MinecraftPlayerManagerPage() {
                             size="sm"
                             onClick={() => setAddModalType('ban-ip')}
                             disabled={!canManage}
-                            title={!canManage ? 'Read-only access' : undefined}
+                            title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                         >
                             <Plus className="h-4 w-4" />
-                            Add
+                            {t('common.add', 'Add')}
                         </Button>
                     </div>
                     <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4">
                         <div className="mb-4 flex items-center justify-between">
                             <h3 className="flex items-center gap-2 font-semibold text-[var(--color-ink)]">
                                 <Network className="h-4 w-4 text-[var(--brand)]" />
-                                Banned IPs
+                                {t('list.bannedIps', 'Banned IPs')}
                                 <span className="ml-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-xs text-[var(--color-ink-muted)]">
                                     {status.bannedIps.length}
                                 </span>
                             </h3>
                         </div>
                         {status.bannedIps.length === 0 ? (
-                            <p className="py-4 text-center text-sm text-[var(--color-ink-faint)]">No IPs banned</p>
+                            <p className="py-4 text-center text-sm text-[var(--color-ink-faint)]">
+                                {t('list.bannedIpsEmpty', 'No IPs banned')}
+                            </p>
                         ) : (
                             <div className="max-h-64 space-y-2 overflow-y-auto">
                                 {status.bannedIps.map((ip, index) => (
@@ -739,7 +802,7 @@ export default function MinecraftPlayerManagerPage() {
                                             <span className="font-mono text-sm text-[var(--color-ink)]">{ip.ip}</span>
                                             {ip.reason && (
                                                 <p className="text-xs text-[var(--color-ink-muted)]">
-                                                    Reason: {ip.reason}
+                                                    {t('common.reason', 'Reason: {reason}', { reason: ip.reason })}
                                                 </p>
                                             )}
                                         </div>
@@ -747,7 +810,7 @@ export default function MinecraftPlayerManagerPage() {
                                             type="button"
                                             onClick={() => handleRemoveFromList('ban-ip', ip.ip)}
                                             disabled={actionLoading || !canManage}
-                                            title={!canManage ? 'Read-only access' : undefined}
+                                            title={!canManage ? t('common.readOnly', 'Read-only access') : undefined}
                                             className="p-1 text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             <Trash2 className="h-4 w-4" />

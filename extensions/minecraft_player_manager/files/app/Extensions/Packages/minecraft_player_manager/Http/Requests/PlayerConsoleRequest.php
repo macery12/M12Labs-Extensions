@@ -5,13 +5,11 @@ namespace Everest\Extensions\Packages\minecraft_player_manager\Http\Requests;
 use Everest\Models\Permission;
 
 /**
- * Setting a player attribute.
+ * Killing a player, or resetting one of their attributes.
  *
- * Console only, but emphatically a mutation: the previous release declared
- * validation rules and no permission at all, which left the endpoint open to
- * any authenticated user who could reach it.
+ * Console only: no server file is rewritten.
  */
-class AttributeRequest extends PlayerManagerRequest
+class PlayerConsoleRequest extends PlayerManagerRequest
 {
     public function permission(): string
     {
@@ -29,8 +27,6 @@ class AttributeRequest extends PlayerManagerRequest
 
     public function rules(): array
     {
-        return [
-            'value' => 'required|numeric',
-        ];
+        return [];
     }
 }

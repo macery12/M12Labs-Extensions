@@ -5,9 +5,47 @@ namespace Everest\Extensions\Packages\minecraft_player_manager\Services;
 /**
  * Lightweight NBT (Named Binary Tag) parser for Minecraft player data files.
  * Parses compressed .dat files and extracts inventory, location, and other data.
+ *
+ * A playerdata file is written by the game, but it lives on a filesystem the
+ * server owner controls, so this treats it as untrusted input throughout. NBT
+ * is a self-describing format in which the file states its own array lengths
+ * and nesting, which means an unbounded reader can be told to allocate two
+ * billion elements or recurse until the stack gives out — from four bytes of
+ * input. Every limit below exists to make the cost of parsing a function of the
+ * limits rather than of what the file claims.
  */
 class NbtParser
 {
+    /**
+     * Ceiling on the decompressed document.
+     *
+     * gzdecode() expands whatever it is given, so bounding the compressed file
+     * alone bounds nothing: a few hundred kilobytes can expand to gigabytes.
+     */
+    private const MAX_UNCOMPRESSED_BYTES = 16_777_216;
+
+    /** Nesting depth, which is what bounds recursion into the stack. */
+    private const MAX_DEPTH = 64;
+
+    /** Total tags in one document, which bounds total parser work. */
+    private const MAX_TAGS = 500_000;
+
+    /**
+     * Elements in a single list or array.
+     *
+     * The length is read from the file as a signed 32-bit int, so without this
+     * a crafted length is a loop counter the caller chose.
+     */
+    private const MAX_ELEMENTS = 1_048_576;
+
+    private string $data;
+
+    private int $offset = 0;
+
+    private int $depth = 0;
+
+    private int $tags = 0;
+
     // NBT Tag Types
     private const TAG_END = 0;
     private const TAG_BYTE = 1;
@@ -23,9 +61,6 @@ class NbtParser
     private const TAG_INT_ARRAY = 11;
     private const TAG_LONG_ARRAY = 12;
 
-    private string $data;
-    private int $offset = 0;
-
     /**
      * Parse an NBT file (gzip compressed).
      */
@@ -35,35 +70,120 @@ class NbtParser
             throw new \Exception("NBT file not found: $filePath");
         }
 
-        $compressed = file_get_contents($filePath);
-        
-        // Check for gzip magic number
-        if (substr($compressed, 0, 2) === "\x1f\x8b") {
-            $this->data = gzdecode($compressed);
-        } else {
-            $this->data = $compressed;
+        $contents = file_get_contents($filePath);
+
+        if ($contents === false) {
+            throw new \Exception('Failed to read NBT file');
         }
 
-        if ($this->data === false) {
-            throw new \Exception("Failed to decompress NBT file");
-        }
-
-        $this->offset = 0;
-        return $this->readTag();
+        return $this->parse($contents);
     }
 
     /**
      * Parse NBT data from raw bytes.
      */
+    /**
+     * Parse an NBT document from raw bytes, gzipped or not.
+     *
+     * Callers that already hold the bytes should use this rather than writing a
+     * temporary file: there is no reason for a document that arrived over the
+     * network to touch the filesystem on its way to the parser, and no
+     * temporary file means no cleanup path to get wrong.
+     */
     public function parse(string $data): array
     {
-        $this->data = $data;
+        $this->data = $this->decompress($data);
+
+        return $this->reset()->readTag();
+    }
+
+    /**
+     * Decompress if gzipped, bounded either way.
+     *
+     * @throws \Exception
+     */
+    private function decompress(string $data): string
+    {
+        // Check for gzip magic number
+        if (substr($data, 0, 2) !== "\x1f\x8b") {
+            if (strlen($data) > self::MAX_UNCOMPRESSED_BYTES) {
+                throw new \Exception('NBT document is larger than this parser will read');
+            }
+
+            return $data;
+        }
+
+        // gzdecode() with a length argument stops at the ceiling instead of
+        // expanding whatever the archive claims.
+        $decoded = @gzdecode($data, self::MAX_UNCOMPRESSED_BYTES);
+
+        if ($decoded === false) {
+            throw new \Exception('Failed to decompress NBT document');
+        }
+
+        // gzdecode() truncates silently at the limit, so a document that
+        // reached it is rejected rather than parsed as a partial file.
+        if (strlen($decoded) >= self::MAX_UNCOMPRESSED_BYTES) {
+            throw new \Exception('NBT document is larger than this parser will decompress');
+        }
+
+        return $decoded;
+    }
+
+    /** Clear per-document counters so one instance can parse more than once. */
+    private function reset(): self
+    {
         $this->offset = 0;
-        return $this->readTag();
+        $this->depth = 0;
+        $this->tags = 0;
+
+        return $this;
+    }
+
+    /**
+     * Assert that $count bytes remain.
+     *
+     * Without this a truncated or crafted file walks the offset past the end of
+     * the string, where PHP yields empty reads and warnings rather than an
+     * error the caller can act on.
+     */
+    private function need(int $count): void
+    {
+        if ($count < 0 || $this->offset + $count > strlen($this->data)) {
+            throw new \Exception('Malformed NBT: read past end of document');
+        }
+    }
+
+    /** Count one tag against the document-wide ceiling. */
+    private function countTag(): void
+    {
+        if (++$this->tags > self::MAX_TAGS) {
+            throw new \Exception('Malformed NBT: document declares too many tags');
+        }
+    }
+
+    /**
+     * Validate a length read out of the document.
+     *
+     * A negative length is malformed; an enormous one is a loop counter the
+     * file chose. Both are refused before any allocation happens.
+     */
+    private function boundedLength(int $length): int
+    {
+        if ($length < 0) {
+            throw new \Exception('Malformed NBT: negative length');
+        }
+
+        if ($length > self::MAX_ELEMENTS) {
+            throw new \Exception('Malformed NBT: declared length exceeds the parser limit');
+        }
+
+        return $length;
     }
 
     private function readTag(): array
     {
+        $this->countTag();
         $type = $this->readByte();
         
         if ($type === self::TAG_END) {
@@ -101,6 +221,7 @@ class NbtParser
 
     private function readByte(): int
     {
+        $this->need(1);
         $value = ord($this->data[$this->offset]);
         $this->offset++;
         // Convert to signed byte
@@ -109,6 +230,7 @@ class NbtParser
 
     private function readUnsignedByte(): int
     {
+        $this->need(1);
         $value = ord($this->data[$this->offset]);
         $this->offset++;
         return $value;
@@ -116,6 +238,7 @@ class NbtParser
 
     private function readShort(): int
     {
+        $this->need(2);
         $bytes = substr($this->data, $this->offset, 2);
         $this->offset += 2;
         $value = unpack('n', $bytes)[1];
@@ -125,6 +248,7 @@ class NbtParser
 
     private function readInt(): int
     {
+        $this->need(4);
         $bytes = substr($this->data, $this->offset, 4);
         $this->offset += 4;
         $value = unpack('N', $bytes)[1];
@@ -137,6 +261,7 @@ class NbtParser
 
     private function readLong(): int|string
     {
+        $this->need(8);
         $bytes = substr($this->data, $this->offset, 8);
         $this->offset += 8;
         $value = unpack('J', $bytes)[1];
@@ -145,6 +270,7 @@ class NbtParser
 
     private function readFloat(): float
     {
+        $this->need(4);
         $bytes = substr($this->data, $this->offset, 4);
         $this->offset += 4;
         // Reverse bytes for big-endian
@@ -154,6 +280,7 @@ class NbtParser
 
     private function readDouble(): float
     {
+        $this->need(8);
         $bytes = substr($this->data, $this->offset, 8);
         $this->offset += 8;
         // Reverse bytes for big-endian
@@ -163,10 +290,14 @@ class NbtParser
 
     private function readString(): string
     {
-        $length = $this->readShort();
-        if ($length < 0) {
-            $length = 0;
-        }
+        // The wire format is an unsigned 16-bit length; readShort() reinterprets
+        // the high half as negative, so read it unsigned here. The previous
+        // code clamped that to 0 and silently produced an empty name.
+        $this->need(2);
+        $length = unpack('n', substr($this->data, $this->offset, 2))[1];
+        $this->offset += 2;
+
+        $this->need($length);
         $value = substr($this->data, $this->offset, $length);
         $this->offset += $length;
         return $value;
@@ -174,7 +305,8 @@ class NbtParser
 
     private function readByteArray(): array
     {
-        $length = $this->readInt();
+        $length = $this->boundedLength($this->readInt());
+        $this->need($length);
         $values = [];
         for ($i = 0; $i < $length; $i++) {
             $values[] = $this->readByte();
@@ -184,7 +316,8 @@ class NbtParser
 
     private function readIntArray(): array
     {
-        $length = $this->readInt();
+        $length = $this->boundedLength($this->readInt());
+        $this->need($length * 4);
         $values = [];
         for ($i = 0; $i < $length; $i++) {
             $values[] = $this->readInt();
@@ -194,7 +327,8 @@ class NbtParser
 
     private function readLongArray(): array
     {
-        $length = $this->readInt();
+        $length = $this->boundedLength($this->readInt());
+        $this->need($length * 8);
         $values = [];
         for ($i = 0; $i < $length; $i++) {
             $values[] = $this->readLong();
@@ -205,28 +339,44 @@ class NbtParser
     private function readList(): array
     {
         $itemType = $this->readUnsignedByte();
-        $length = $this->readInt();
-        
+        $length = $this->boundedLength($this->readInt());
+
         $values = [];
         for ($i = 0; $i < $length; $i++) {
+            $this->countTag();
             $values[] = $this->readPayload($itemType);
         }
+
         return $values;
     }
 
     private function readCompound(): array
     {
-        $values = [];
-        
-        while (true) {
-            $type = $this->readUnsignedByte();
-            
-            if ($type === self::TAG_END) {
-                break;
-            }
+        // Depth is tracked here because compounds and lists are the only tags
+        // that recurse; without it a file of nothing but open compounds
+        // exhausts the stack, which PHP cannot catch.
+        if (++$this->depth > self::MAX_DEPTH) {
+            throw new \Exception('Malformed NBT: nesting exceeds the parser limit');
+        }
 
-            $name = $this->readString();
-            $values[$name] = $this->readPayload($type);
+        $values = [];
+
+        try {
+            while (true) {
+                // need(1) inside readUnsignedByte() ends an unterminated
+                // compound with a clear error rather than an infinite loop.
+                $type = $this->readUnsignedByte();
+
+                if ($type === self::TAG_END) {
+                    break;
+                }
+
+                $this->countTag();
+                $name = $this->readString();
+                $values[$name] = $this->readPayload($type);
+            }
+        } finally {
+            $this->depth--;
         }
 
         return $values;

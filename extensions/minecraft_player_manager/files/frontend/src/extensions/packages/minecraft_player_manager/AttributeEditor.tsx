@@ -17,10 +17,7 @@ import {
     X,
     type LucideProps,
 } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { useFlashes } from '@/state/flashes';
+import { Modal, Button, Spinner, notify } from '@/extensions-sdk';
 import {
     getServerVersion,
     getAttributes,
@@ -75,7 +72,6 @@ interface AttributeRowProps {
 function AttributeRow({ attribute, serverUuid, playerName, disabled }: AttributeRowProps) {
     const [value, setValue] = useState(attribute.default);
     const [loading, setLoading] = useState(false);
-    const push = useFlashes(s => s.push);
 
     const handleSetValue = async (newValue: number) => {
         if (disabled) return;
@@ -85,9 +81,9 @@ function AttributeRow({ attribute, serverUuid, playerName, disabled }: Attribute
         try {
             const response = await setAttribute(serverUuid, playerName, attribute.id, clampedValue);
             if (!response.success) throw new Error(response.error);
-            push({ type: 'success', message: `Set ${attribute.name} to ${clampedValue}` });
+            notify('success', `Set ${attribute.name} to ${clampedValue}`);
         } catch {
-            push({ type: 'error', message: `Could not set ${attribute.name}` });
+            notify('error', `Could not set ${attribute.name}`);
         } finally {
             setLoading(false);
         }
@@ -100,9 +96,9 @@ function AttributeRow({ attribute, serverUuid, playerName, disabled }: Attribute
             const response = await resetAttribute(serverUuid, playerName, attribute.id);
             if (!response.success) throw new Error(response.error);
             setValue(response.defaultValue || attribute.default);
-            push({ type: 'success', message: `Reset ${attribute.name} to default` });
+            notify('success', `Reset ${attribute.name} to default`);
         } catch {
-            push({ type: 'error', message: `Could not reset ${attribute.name}` });
+            notify('error', `Could not reset ${attribute.name}`);
         } finally {
             setLoading(false);
         }

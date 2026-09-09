@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, MapPin, Shield, Heart, Beef, Star, Gamepad2, Boxes } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
+import { Modal, Button, Spinner } from '@/extensions-sdk';
 import {
     getPlayerData,
     type InventoryItem,
