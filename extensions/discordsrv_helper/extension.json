@@ -1,24 +1,17 @@
 {
+  "manifestVersion": 3,
   "package": {
     "id": "discordsrv_helper",
-    "version": "2.0.0"
+    "version": "3.0.0",
+    "publisher": "M12Labs",
+    "license": "MIT",
+    "homepage": "https://github.com/macery12/M12Labs-Extensions"
   },
   "extension": {
     "id": "discordsrv_helper",
     "name": "DiscordSRV Helper",
-    "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls.",
-    "author": "M12Labs",
-    "icon": "server",
-    "route": "discordsrv_helper",
-    "settingsSchema": [
-      {
-        "key": "jar_url",
-        "label": "DiscordSRV Jar URL",
-        "type": "text",
-        "placeholder": "https://github.com/DiscordSRV/DiscordSRV/releases/download/.../DiscordSRV.jar",
-        "help": "Optional. If set, the install action uses this URL instead of auto-detecting the latest release."
-      }
-    ],
+    "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls. The plugin jar is fetched from the official DiscordSRV release feed and verified by the panel before it reaches your server.",
+    "icon": "discordsrv",
     "defaults": {
       "enabled": false,
       "allowedNests": [],
@@ -27,6 +20,28 @@
     }
   },
   "compatiblePanelVersions": [
-    "Alpha 3.0"
-  ]
+    ">=Alpha 4.0 <Alpha 5.0"
+  ],
+  "capabilities": {
+    "routes": {
+      "client": true
+    },
+    "pages": {
+      "server": [
+        {
+          "slug": "discordsrv",
+          "labelKey": "ext.discordsrv_helper.nav.discordsrv",
+          "icon": "discordsrv",
+          "category": "configuration",
+          "order": 50,
+          "requiredServerPermission": "extension.read"
+        }
+      ]
+    }
+  },
+  "requirements": {
+    "phpExtensions": ["zip"],
+    "panelServices": ["http-client"],
+    "extensions": []
+  }
 }

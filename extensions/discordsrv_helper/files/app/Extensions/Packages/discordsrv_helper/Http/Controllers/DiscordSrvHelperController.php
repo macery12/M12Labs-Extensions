@@ -4,15 +4,18 @@ namespace Everest\Extensions\Packages\discordsrv_helper\Http\Controllers;
 
 use Everest\Models\Server;
 use Everest\Models\Subuser;
-use Everest\Models\ExtensionConfig;
+use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Everest\Exceptions\DisplayException;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\Yaml\Yaml;
 use Everest\Models\ExtensionFileSnapshot;
 use Everest\Repositories\Wings\DaemonFileRepository;
 use Everest\Services\Extensions\ExtensionFileSnapshotService;
+use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
 use Everest\Http\Controllers\Api\Client\ClientApiController;
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperStatusRequest;
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperInstallRequest;
@@ -21,14 +24,67 @@ use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelper
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperOwnerRequest;
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperSubuserAccessRequest;
 
+/**
+ * Installs and configures DiscordSRV for a single server.
+ *
+ * Mounted by the loader under
+ * /api/client/servers/{server}/extensions/ext/discordsrv_helper, with the server
+ * binding, client auth and the extensions.access gate applied there. The
+ * package's route file declares no prefix and no middleware of its own.
+ *
+ * The install path is deliberately narrow. It used to accept a caller-supplied
+ * jar_url, ask the panel to HEAD it, and then hand the resolved URL to Wings to
+ * download — which made both the panel and the daemon fetch an arbitrary host
+ * on request, with no validation at any redirect hop and a separate DNS
+ * resolution on the Wings side that a rebinding attacker could point elsewhere.
+ *
+ * Now there is no caller-supplied URL at all. The panel resolves the latest
+ * release from one pinned repository, checks every hop against a host
+ * allowlist, downloads the asset itself under size and time limits, verifies it
+ * really is a JAR, and streams those verified bytes to Wings. Wings never
+ * receives a URL, so it never fetches anything.
+ */
 class DiscordSrvHelperController extends ClientApiController
 {
+    use RespondsWithExtensionEnvelope;
+
     private const EXTENSION_ID = 'discordsrv_helper';
     private const PLUGINS_DIR = '/plugins';
     private const DISCORDSRV_DIR = '/plugins/DiscordSRV';
     private const CONFIG_FILE = '/plugins/DiscordSRV/config.yml';
     private const TOKEN_FILE = '/plugins/DiscordSRV/.token';
     private const JAR_FILENAME = 'DiscordSRV.jar';
+
+    /** The single upstream this package will install from. */
+    private const RELEASE_API = 'https://api.github.com/repos/DiscordSRV/DiscordSRV/releases/latest';
+
+    /**
+     * Hosts the download may touch, checked at every redirect hop.
+     *
+     * GitHub serves release metadata from api.github.com and redirects asset
+     * downloads to its object storage, so all three are required for a normal
+     * install and nothing else is.
+     */
+    private const ALLOWED_HOSTS = [
+        'api.github.com',
+        'github.com',
+        'objects.githubusercontent.com',
+        'release-assets.githubusercontent.com',
+    ];
+
+    /** DiscordSRV releases are ~10-15 MB; this bounds a hostile response. */
+    private const MAX_JAR_BYTES = 104_857_600;
+
+    /** Smaller than this is not a plugin jar. */
+    private const MIN_JAR_BYTES = 4_096;
+
+    private const MAX_REDIRECTS = 5;
+
+    /** Scratch directory for downloads, under the panel's own storage. */
+    private const TEMP_DIR = 'app/discordsrv-helper';
+
+    /** Bound on the release metadata document. */
+    private const MAX_METADATA_BYTES = 1_048_576;
 
     public function __construct(
         private DaemonFileRepository $fileRepository,
@@ -86,40 +142,89 @@ class DiscordSrvHelperController extends ClientApiController
 
     public function install(DiscordSrvHelperInstallRequest $request, Server $server): JsonResponse
     {
-        $jarUrl = $request->input('jar_url');
-        if (!$jarUrl) {
-            $config = ExtensionConfig::getByExtensionId(self::EXTENSION_ID);
-            $jarUrl = is_array($config?->settings) ? Arr::get($config->settings, 'jar_url') : null;
+        $asset = $this->resolveLatestAsset();
+        $download = null;
+
+        try {
+            $download = $this->downloadVerifiedJar($asset['url']);
+            $tempFile = $this->temporaryPath($download);
+
+            // Wings is handed bytes the panel has already fetched and checked,
+            // never a URL. That is what keeps the daemon out of the request:
+            // it cannot resolve a host, follow a redirect, or be pointed at
+            // anything by a caller.
+            $response = $this->fileRepository
+                ->setServer($server)
+                ->putFile(self::PLUGINS_DIR . '/' . self::JAR_FILENAME, $tempFile);
+
+            $this->ensureDaemonSuccess($response, $server, 'Failed to write the DiscordSRV jar.');
+
+            return $this->extensionItemResponse('discordsrv_helper_install', [
+                'installed' => true,
+                'jar' => self::JAR_FILENAME,
+                'release' => $asset['release'],
+                'asset' => $asset['name'],
+                // The digest of exactly what was written, so an operator can
+                // check it against the upstream release.
+                'sha256' => hash_file('sha256', $tempFile),
+            ]);
+        } finally {
+            $this->discardTemporary($download);
         }
-        if (!$jarUrl) {
-            $jarUrl = $this->getLatestDiscordSrvJarUrl();
-        }
-
-        $jarUrl = $this->resolveRedirectedUrl($jarUrl);
-
-        $response = $this->fileRepository->setServer($server)->pull($jarUrl, self::PLUGINS_DIR, [
-            'filename' => self::JAR_FILENAME,
-            'foreground' => true,
-        ]);
-
-        $this->ensureDaemonSuccess($response, 'Failed to download DiscordSRV jar.');
-
-        return new JsonResponse([
-            'installed' => true,
-            'jar' => self::JAR_FILENAME,
-            'jar_url' => $jarUrl,
-        ]);
     }
 
-    private function ensureDaemonSuccess(ResponseInterface $response, string $message): void
+    /**
+     * Absolute path for one scratch filename.
+     *
+     * Every caller passes a bare filename this controller generated, so a path
+     * can only ever be built inside TEMP_DIR — there is no argument that could
+     * reach elsewhere.
+     */
+    private function temporaryPath(string $name): string
+    {
+        return storage_path(self::TEMP_DIR . '/' . basename($name));
+    }
+
+    /**
+     * Remove one scratch file, addressed by name rather than by path.
+     *
+     * The target is rebuilt from storage_path() at the point of deletion and
+     * the name is reduced to its basename, so this cannot reach outside the
+     * package's own scratch directory whatever it is handed.
+     */
+    private function discardTemporary(?string $name): void
+    {
+        if ($name === null || !is_file($this->temporaryPath($name))) {
+            return;
+        }
+
+        @unlink(storage_path(self::TEMP_DIR . '/' . basename($name)));
+    }
+
+    /**
+     * Fail without echoing the daemon's own words.
+     *
+     * A Wings error body can carry filesystem paths, upstream response bodies
+     * and connection detail. The caller gets a stable sentence and a
+     * correlation id; the rest stays in the panel's log.
+     */
+    private function ensureDaemonSuccess(ResponseInterface $response, Server $server, string $message): void
     {
         $status = $response->getStatusCode();
         if ($status >= 200 && $status < 300) {
             return;
         }
 
-        $body = trim((string) $response->getBody());
-        throw new \RuntimeException($message . ($body ? " Wings response: {$body}" : ''));
+        $correlationId = (string) Str::uuid();
+
+        Log::error('discordsrv_helper: daemon rejected a file write', [
+            'correlation_id' => $correlationId,
+            'server_id' => $server->id,
+            'status' => $status,
+            'body' => Str::limit(trim((string) $response->getBody()), 2000),
+        ]);
+
+        throw new DisplayException(sprintf('%s Reference: %s', $message, $correlationId));
     }
 
     public function setToken(DiscordSrvHelperTokenRequest $request, Server $server): JsonResponse
@@ -289,58 +394,185 @@ class DiscordSrvHelperController extends ClientApiController
         }
     }
 
-    private function getLatestDiscordSrvJarUrl(): string
-    {
-        $response = Http::timeout(15)
-            ->withHeaders([
-                'Accept' => 'application/vnd.github+json',
-            ])
-            ->get('https://api.github.com/repos/DiscordSRV/DiscordSRV/releases/latest');
-
-        $response->throw();
-        $json = $response->json();
-
-        $assets = $json['assets'] ?? [];
-        foreach ($assets as $asset) {
-            $name = (string) ($asset['name'] ?? '');
-            $url = (string) ($asset['browser_download_url'] ?? '');
-
-            if ($url && str_ends_with(strtolower($name), '.jar')) {
-                return $url;
-            }
-        }
-
-        throw new \RuntimeException('Could not locate a .jar asset in the latest DiscordSRV release.');
-    }
-
-    private function resolveRedirectedUrl(string $url): string
+    /**
+     * The asset to install, from the one pinned upstream repository.
+     *
+     * @return array{name: string, url: string, release: string}
+     *
+     * @throws DisplayException
+     */
+    private function resolveLatestAsset(): array
     {
         try {
             $response = Http::timeout(15)
-                ->withOptions([
-                    'allow_redirects' => [
-                        'track_redirects' => true,
-                    ],
-                ])
-                ->head($url);
+                ->connectTimeout(5)
+                ->withHeaders(['Accept' => 'application/vnd.github+json'])
+                ->withOptions($this->redirectPolicy())
+                ->get(self::RELEASE_API);
+        } catch (\Throwable $exception) {
+            $this->logFailure('release lookup failed', $exception);
 
-            $headers = $response->headers();
-            $history = $headers['X-Guzzle-Redirect-History'] ?? [];
-
-            if (is_string($history)) {
-                $history = array_filter(array_map('trim', explode(',', $history)));
-            }
-
-            if (is_array($history) && count($history) > 0) {
-                $last = (string) $history[count($history) - 1];
-                if ($last !== '') {
-                    return $last;
-                }
-            }
-
-            return $url;
-        } catch (\Throwable) {
-            return $url;
+            throw new DisplayException('Could not reach the DiscordSRV release feed. Please try again.');
         }
+
+        if (!$response->successful() || strlen($response->body()) > self::MAX_METADATA_BYTES) {
+            throw new DisplayException('The DiscordSRV release feed returned an unexpected response.');
+        }
+
+        $json = $response->json();
+        if (!is_array($json)) {
+            throw new DisplayException('The DiscordSRV release feed returned an unexpected response.');
+        }
+
+        $release = (string) ($json['tag_name'] ?? 'latest');
+
+        foreach ((array) ($json['assets'] ?? []) as $asset) {
+            $name = (string) ($asset['name'] ?? '');
+            $url = (string) ($asset['browser_download_url'] ?? '');
+
+            // Named, not merely ".jar". Taking the first jar in the release
+            // meant a sources or javadoc artifact — or anything an upstream
+            // release later adds — would be installed as the plugin.
+            if (!preg_match('/^DiscordSRV[A-Za-z0-9._-]*\.jar$/i', $name)) {
+                continue;
+            }
+
+            if ($url === '' || !$this->isAllowedUrl($url)) {
+                continue;
+            }
+
+            return ['name' => $name, 'url' => $url, 'release' => $release];
+        }
+
+        throw new DisplayException('The latest DiscordSRV release does not contain a recognisable plugin jar.');
+    }
+
+    /**
+     * Download an asset to a scratch file, verifying it end to end.
+     *
+     * Returns a bare filename rather than a path: the caller resolves it
+     * through temporaryPath()/discardTemporary(), so no path built from this
+     * can point outside the package's own scratch directory.
+     *
+     * @return string the scratch filename
+     *
+     * @throws DisplayException
+     */
+    private function downloadVerifiedJar(string $url): string
+    {
+        $directory = storage_path(self::TEMP_DIR);
+
+        if (!is_dir($directory) && !@mkdir($directory, 0o750, true) && !is_dir($directory)) {
+            throw new DisplayException('Could not prepare a download directory.');
+        }
+
+        $name = 'dsrv-' . bin2hex(random_bytes(16)) . '.jar';
+        $path = $this->temporaryPath($name);
+
+        try {
+            $response = Http::timeout(120)
+                ->connectTimeout(10)
+                ->withOptions($this->redirectPolicy() + [
+                    'sink' => $path,
+                    // Refuse on the headers, before a body is streamed to disk.
+                    'on_headers' => function (ResponseInterface $response): void {
+                        $length = (int) ($response->getHeaderLine('Content-Length') ?: 0);
+
+                        if ($length > self::MAX_JAR_BYTES) {
+                            throw new \RuntimeException('declared length exceeds the limit');
+                        }
+                    },
+                ])
+                ->get($url);
+        } catch (\Throwable $exception) {
+            $this->discardTemporary($name);
+            $this->logFailure('jar download failed', $exception);
+
+            throw new DisplayException('Could not download the DiscordSRV jar. Please try again.');
+        }
+
+        try {
+            if (!$response->successful()) {
+                throw new DisplayException('The DiscordSRV download returned an unexpected response.');
+            }
+
+            $size = (int) @filesize($path);
+
+            // Checked again after the fact: a chunked response carries no
+            // Content-Length for on_headers to judge.
+            if ($size < self::MIN_JAR_BYTES || $size > self::MAX_JAR_BYTES) {
+                throw new DisplayException('The downloaded DiscordSRV jar was not a plausible size.');
+            }
+
+            // A jar is a zip. This does not prove the file is DiscordSRV, but
+            // it does prove the panel is not about to write an HTML error page,
+            // a redirect stub or a text file into the plugins directory.
+            $handle = fopen($path, 'rb');
+            $magic = $handle === false ? '' : (string) fread($handle, 4);
+            if ($handle !== false) {
+                fclose($handle);
+            }
+
+            if ($magic !== "PK\x03\x04") {
+                throw new DisplayException('The downloaded DiscordSRV file was not a jar archive.');
+            }
+        } catch (\Throwable $exception) {
+            $this->discardTemporary($name);
+
+            throw $exception;
+        }
+
+        return $name;
+    }
+
+    /**
+     * Redirect handling that checks every hop.
+     *
+     * The previous release issued a HEAD to whatever it was given, took the
+     * final URL from the redirect history and, on any failure, fell back to the
+     * original — so an unvalidated host was reached either way. Here each hop
+     * is checked as it happens and an unexpected host aborts the transfer.
+     *
+     * @return array<string, mixed>
+     */
+    private function redirectPolicy(): array
+    {
+        return [
+            'allow_redirects' => [
+                'max' => self::MAX_REDIRECTS,
+                'strict' => true,
+                'referer' => false,
+                'protocols' => ['https'],
+                'on_redirect' => function ($request, $response, $uri): void {
+                    if (!$this->isAllowedUrl((string) $uri)) {
+                        throw new \RuntimeException('redirect left the allowed hosts');
+                    }
+                },
+            ],
+        ];
+    }
+
+    /** HTTPS, and a host on the allowlist. */
+    private function isAllowedUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+
+        if ($parts === false || ($parts['scheme'] ?? '') !== 'https') {
+            return false;
+        }
+
+        $host = strtolower($parts['host'] ?? '');
+
+        return in_array($host, self::ALLOWED_HOSTS, true);
+    }
+
+    /** Record why an upstream call failed without returning any of it. */
+    private function logFailure(string $message, \Throwable $exception): void
+    {
+        Log::warning("discordsrv_helper: {$message}", [
+            'correlation_id' => (string) Str::uuid(),
+            'exception' => $exception::class,
+            'message' => $exception->getMessage(),
+        ]);
     }
 }

@@ -11,12 +11,17 @@ import {
     CheckCircle2,
     XCircle,
 } from 'lucide-react';
-import { useServer } from '@/components/server/ServerContext';
-import { useFlashes } from '@/state/flashes';
-import { can } from '@/lib/can';
-import { Button } from '@/components/ui/Button';
-import { Input, Field } from '@/components/ui/Input';
-import { Spinner } from '@/components/ui/Spinner';
+import {
+    Button,
+    Field,
+    Input,
+    Spinner,
+    createTranslator,
+    extensionErrorMessage,
+    notify,
+    useExtensionQueryKey,
+    useExtensionServerContext,
+} from '@/extensions-sdk';
 import {
     getDiscordSrvHelperStatus,
     installDiscordSrv,
@@ -26,12 +31,18 @@ import {
     revertDiscordSrvHistory,
     getDiscordSrvSubusers,
     setDiscordSrvSubuserAccess,
-} from './api';
+} from '../../api';
 
-// Extension UI: strings are literal English (extensions cannot contribute
-// Paraglide messages) and every colour comes from a theme CSS variable.
+/*
+ * The DiscordSRV helper, mounted by the panel as this package's server page.
+ * Everything it can reach comes from '@/extensions-sdk', and every colour is a
+ * theme variable.
+ */
 
-const QK = ['ext', 'discordsrv_helper'] as const;
+const t = createTranslator('discordsrv_helper');
+
+/** Cache namespace for this release; an upgrade must not serve an old shape. */
+const VERSION = '3.0.0';
 
 function Card({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
     return (
@@ -65,40 +76,44 @@ function StatusRow({ label, ok, text }: { label: string; ok?: boolean; text?: st
 }
 
 export default function DiscordSrvHelperPage() {
-    const server = useServer();
+    const { server, can } = useExtensionServerContext();
     const uuid = server.uuid;
     const isOwner = server.isOwner;
-    const push = useFlashes(s => s.push);
     const qc = useQueryClient();
 
-    const held = server.permissions;
-    const canReadExtensions = can(held, 'extension.read');
-    const canFileRead = can(held, 'file.read');
-    const canManage = can(held, 'extension.manage');
-    const canInstall = canManage && can(held, 'file.create') && can(held, 'file.update');
-    const canSetToken = canInstall && can(held, 'file.read-content');
-    const canSetChannel = canManage && can(held, 'file.update') && can(held, 'file.read-content');
+    const canReadExtensions = can('extension.read');
+    const canFileRead = can('file.read');
+    const canManage = can('extension.manage');
+    const canInstall = canManage && can('file.create') && can('file.update');
+    const canSetToken = canInstall && can('file.read-content');
+    const canSetChannel = canManage && can('file.update') && can('file.read-content');
 
-    const [jarUrl, setJarUrl] = useState('');
     const [botToken, setBotToken] = useState('');
     const [globalChannelId, setGlobalChannelId] = useState('');
     const [clientId, setClientId] = useState('');
 
+    // Keys are namespaced by extension and version, so an upgrade never serves
+    // a previous release's cached shape; the signal cancels in-flight reads on
+    // unmount.
+    const statusKey = useExtensionQueryKey('discordsrv_helper', VERSION, 'status', uuid);
+    const historyKey = useExtensionQueryKey('discordsrv_helper', VERSION, 'history', uuid);
+    const subusersKey = useExtensionQueryKey('discordsrv_helper', VERSION, 'subusers', uuid);
+
     const statusQuery = useQuery({
-        queryKey: [...QK, uuid, 'status'],
-        queryFn: () => getDiscordSrvHelperStatus(uuid),
+        queryKey: statusKey,
+        queryFn: ({ signal }) => getDiscordSrvHelperStatus(uuid, signal),
         enabled: canReadExtensions && canFileRead,
     });
 
     const historyQuery = useQuery({
-        queryKey: [...QK, uuid, 'history'],
-        queryFn: () => getDiscordSrvHistory(uuid),
+        queryKey: historyKey,
+        queryFn: ({ signal }) => getDiscordSrvHistory(uuid, signal),
         enabled: isOwner,
     });
 
     const subusersQuery = useQuery({
-        queryKey: [...QK, uuid, 'subusers'],
-        queryFn: () => getDiscordSrvSubusers(uuid),
+        queryKey: subusersKey,
+        queryFn: ({ signal }) => getDiscordSrvSubusers(uuid, signal),
         enabled: isOwner,
     });
 
@@ -111,17 +126,21 @@ export default function DiscordSrvHelperPage() {
         return `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(id)}&permissions=0&scope=${scope}`;
     }, [clientId]);
 
-    const refetchStatus = () => qc.invalidateQueries({ queryKey: [...QK, uuid, 'status'] });
+    const refetchStatus = () => qc.invalidateQueries({ queryKey: statusKey });
     const refetchOwner = () => {
-        qc.invalidateQueries({ queryKey: [...QK, uuid, 'history'] });
-        qc.invalidateQueries({ queryKey: [...QK, uuid, 'subusers'] });
+        qc.invalidateQueries({ queryKey: historyKey });
+        qc.invalidateQueries({ queryKey: subusersKey });
     };
-    const onError = () => push({ type: 'error', message: 'Something went wrong. Please try again.' });
+    // The backend answers a refused install with a specific reason (unexpected
+    // host, bad archive, oversized download); surfacing it beats a generic
+    // failure the operator cannot act on.
+    const onError = (err: unknown) =>
+        notify('error', extensionErrorMessage(err, t('common.genericError', 'Something went wrong. Please try again.')));
 
     const install = useMutation({
-        mutationFn: () => installDiscordSrv(uuid, jarUrl.trim() || undefined),
-        onSuccess: () => {
-            push({ type: 'success', message: 'DiscordSRV install started.' });
+        mutationFn: () => installDiscordSrv(uuid),
+        onSuccess: result => {
+            notify('success', t('install.done', 'DiscordSRV {release} installed.', { release: result.release }));
             refetchStatus();
         },
         onError,
@@ -130,7 +149,7 @@ export default function DiscordSrvHelperPage() {
     const saveToken = useMutation({
         mutationFn: () => setDiscordSrvToken(uuid, botToken),
         onSuccess: () => {
-            push({ type: 'success', message: 'Token saved.' });
+            notify('success', t('token.saved', 'Token saved.'));
             setBotToken('');
             refetchStatus();
             refetchOwner();
@@ -141,7 +160,7 @@ export default function DiscordSrvHelperPage() {
     const saveChannel = useMutation({
         mutationFn: () => setDiscordSrvGlobalChannel(uuid, globalChannelId.trim()),
         onSuccess: () => {
-            push({ type: 'success', message: 'Global channel saved.' });
+            notify('success', t('channel.saved', 'Global channel saved.'));
             refetchStatus();
             refetchOwner();
         },
@@ -151,7 +170,7 @@ export default function DiscordSrvHelperPage() {
     const revert = useMutation({
         mutationFn: (snapshotId: number) => revertDiscordSrvHistory(uuid, snapshotId),
         onSuccess: () => {
-            push({ type: 'success', message: 'Snapshot reverted.' });
+            notify('success', t('history.reverted', 'Snapshot reverted.'));
             refetchStatus();
             refetchOwner();
         },
@@ -167,9 +186,12 @@ export default function DiscordSrvHelperPage() {
 
     const title = (
         <div>
-            <h1 className="text-xl font-semibold text-[var(--color-ink)]">DiscordSRV Helper</h1>
+            <h1 className="text-xl font-semibold text-[var(--color-ink)]">{t('page.title', 'DiscordSRV Helper')}</h1>
             <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-                Install and configure DiscordSRV — token, global channel, history and per-subuser access.
+                {t(
+                    'page.subtitle',
+                    'Install and configure DiscordSRV — token, global channel, history and per-subuser access.',
+                )}
             </p>
         </div>
     );
@@ -179,7 +201,7 @@ export default function DiscordSrvHelperPage() {
             <div className="flex flex-col gap-6">
                 {title}
                 <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-ink-muted)]">
-                    You do not have permission to view extensions.
+                    {t('page.deniedExtensions', 'You do not have permission to view extensions.')}
                 </div>
             </div>
         );
@@ -190,8 +212,15 @@ export default function DiscordSrvHelperPage() {
             <div className="flex flex-col gap-6">
                 {title}
                 <div className="rounded-[var(--radius-card)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-ink-muted)]">
-                    <p>This extension requires file read permission to check plugin status.</p>
-                    <p className="mt-2 text-xs text-[var(--color-ink-faint)]">Required: file.read</p>
+                    <p>
+                        {t(
+                            'page.deniedFiles',
+                            'This extension requires file read permission to check plugin status.',
+                        )}
+                    </p>
+                    <p className="mt-2 text-xs text-[var(--color-ink-faint)]">
+                        {t('page.required', 'Requires: {permissions}', { permissions: 'file.read' })}
+                    </p>
                 </div>
             </div>
         );
@@ -207,55 +236,76 @@ export default function DiscordSrvHelperPage() {
                 </div>
             ) : (
                 <>
-                    <Card title="Status" icon={<MessagesSquare className="h-4 w-4" />}>
+                    <Card title={t('status.title', 'Status')} icon={<MessagesSquare className="h-4 w-4" />}>
                         <div className="mt-4 grid gap-2">
-                            <StatusRow label="Installed" ok={!!status?.installed} />
-                            <StatusRow label="Plugin Jar" text={status?.plugin_jar || '—'} />
-                            <StatusRow label="Plugin Folder" ok={!!status?.plugin_folder_present} />
-                            <StatusRow label="Token File" ok={!!status?.token_file_present} />
-                            <StatusRow label="Config" ok={!!status?.config_present} />
+                            <StatusRow label={t('status.installed', 'Installed')} ok={!!status?.installed} />
+                            <StatusRow label={t('status.pluginJar', 'Plugin Jar')} text={status?.plugin_jar || '—'} />
+                            <StatusRow
+                                label={t('status.pluginFolder', 'Plugin Folder')}
+                                ok={!!status?.plugin_folder_present}
+                            />
+                            <StatusRow label={t('status.tokenFile', 'Token File')} ok={!!status?.token_file_present} />
+                            <StatusRow label={t('status.config', 'Config')} ok={!!status?.config_present} />
                         </div>
                     </Card>
 
-                    <Card title="Install" icon={<Download className="h-4 w-4" />}>
+                    <Card title={t('install.title', 'Install')} icon={<Download className="h-4 w-4" />}>
                         <p className="mt-2 text-sm text-[var(--color-ink-muted)]">
-                            Installs DiscordSRV to{' '}
-                            <span className="font-mono text-[var(--color-ink)]">/plugins/DiscordSRV.jar</span>.
+                            {t('install.description', 'Installs DiscordSRV to {path}.', {
+                                path: '/plugins/DiscordSRV.jar',
+                            })}
                         </p>
-                        <div className="mt-4">
-                            <Field label="Optional Jar URL">
-                                <Input
-                                    value={jarUrl}
-                                    onChange={e => setJarUrl(e.target.value)}
-                                    placeholder="https://.../DiscordSRV-....jar"
-                                />
-                            </Field>
-                        </div>
+                        {/*
+                         * No URL field. The source is pinned in the panel, which
+                         * verifies the download before it reaches the server —
+                         * saying so here is what stops the missing input reading
+                         * as a regression.
+                         */}
+                        <p className="mt-2 text-xs text-[var(--color-ink-faint)]">
+                            {t(
+                                'install.source',
+                                'The jar is fetched from the official DiscordSRV release feed and verified by the panel before it is written to your server. There is no custom URL option: allowing one would let this page point the panel and the daemon at any host.',
+                            )}
+                        </p>
                         <div className="mt-4">
                             <Button disabled={!canInstall || install.isPending} onClick={() => install.mutate()}>
                                 <Download className="h-4 w-4" />
-                                {install.isPending ? 'Installing…' : 'Install DiscordSRV'}
+                                {install.isPending
+                                    ? t('install.pending', 'Installing…')
+                                    : t('install.action', 'Install DiscordSRV')}
                             </Button>
                             {!canInstall && (
                                 <p className="mt-2 text-xs text-[var(--color-ink-faint)]">
-                                    Requires: extension.manage + file.create + file.update
+                                    {t('page.required', 'Requires: {permissions}', {
+                                        permissions: 'extension.manage + file.create + file.update',
+                                    })}
+                                </p>
+                            )}
+                            {install.data && (
+                                <p className="mt-3 break-all font-mono text-xs text-[var(--color-ink-faint)]">
+                                    {t('install.digest', 'Installed {asset} ({release}) · SHA-256 {sha256}', {
+                                        asset: install.data.asset,
+                                        release: install.data.release,
+                                        sha256: install.data.sha256,
+                                    })}
                                 </p>
                             )}
                         </div>
                     </Card>
 
-                    <Card title="Bot Token" icon={<KeyRound className="h-4 w-4" />}>
+                    <Card title={t('token.title', 'Bot Token')} icon={<KeyRound className="h-4 w-4" />}>
                         <p className="mt-2 text-sm text-[var(--color-ink-muted)]">
-                            Saves the token to{' '}
-                            <span className="font-mono text-[var(--color-ink)]">/plugins/DiscordSRV/.token</span>.
+                            {t('token.description', 'Saves the token to {path}.', {
+                                path: '/plugins/DiscordSRV/.token',
+                            })}
                         </p>
                         <div className="mt-4">
-                            <Field label="Bot Token">
+                            <Field label={t('token.label', 'Bot Token')}>
                                 <Input
                                     type="password"
                                     value={botToken}
                                     onChange={e => setBotToken(e.target.value)}
-                                    placeholder="Paste bot token"
+                                    placeholder={t('token.placeholder', 'Paste bot token')}
                                 />
                             </Field>
                         </div>
@@ -265,23 +315,29 @@ export default function DiscordSrvHelperPage() {
                                 onClick={() => saveToken.mutate()}
                             >
                                 <KeyRound className="h-4 w-4" />
-                                {saveToken.isPending ? 'Saving…' : 'Save Token'}
+                                {saveToken.isPending
+                                    ? t('common.saving', 'Saving…')
+                                    : t('token.action', 'Save Token')}
                             </Button>
                             {!canSetToken && (
                                 <p className="mt-2 text-xs text-[var(--color-ink-faint)]">
-                                    Requires: extension.manage + file.create + file.update + file.read-content
+                                    {t('page.required', 'Requires: {permissions}', {
+                                        permissions:
+                                            'extension.manage + file.create + file.update + file.read-content',
+                                    })}
                                 </p>
                             )}
                         </div>
                     </Card>
 
-                    <Card title="Link Global Chat" icon={<Hash className="h-4 w-4" />}>
+                    <Card title={t('channel.title', 'Link Global Chat')} icon={<Hash className="h-4 w-4" />}>
                         <p className="mt-2 text-sm text-[var(--color-ink-muted)]">
-                            Sets <span className="font-mono text-[var(--color-ink)]">Channels.global</span> in
-                            DiscordSRV config.yml.
+                            {t('channel.description', 'Sets {key} in DiscordSRV config.yml.', {
+                                key: 'Channels.global',
+                            })}
                         </p>
                         <div className="mt-4">
-                            <Field label="Discord Channel ID">
+                            <Field label={t('channel.label', 'Discord Channel ID')}>
                                 <Input
                                     value={globalChannelId}
                                     onChange={e => setGlobalChannelId(e.target.value)}
@@ -297,22 +353,29 @@ export default function DiscordSrvHelperPage() {
                                 onClick={() => saveChannel.mutate()}
                             >
                                 <Hash className="h-4 w-4" />
-                                {saveChannel.isPending ? 'Saving…' : 'Save Channel'}
+                                {saveChannel.isPending
+                                    ? t('common.saving', 'Saving…')
+                                    : t('channel.action', 'Save Channel')}
                             </Button>
                             {!canSetChannel && (
                                 <p className="mt-2 text-xs text-[var(--color-ink-faint)]">
-                                    Requires: extension.manage + file.update + file.read-content
+                                    {t('page.required', 'Requires: {permissions}', {
+                                        permissions: 'extension.manage + file.update + file.read-content',
+                                    })}
                                 </p>
                             )}
                         </div>
                     </Card>
 
-                    <Card title="Invite Link" icon={<ExternalLink className="h-4 w-4" />}>
+                    <Card title={t('invite.title', 'Invite Link')} icon={<ExternalLink className="h-4 w-4" />}>
                         <p className="mt-2 text-sm text-[var(--color-ink-muted)]">
-                            Discord invite links require the Application Client ID (not the token).
+                            {t(
+                                'invite.description',
+                                'Discord invite links require the Application Client ID (not the token).',
+                            )}
                         </p>
                         <div className="mt-4">
-                            <Field label="Application Client ID">
+                            <Field label={t('invite.label', 'Application Client ID')}>
                                 <Input
                                     value={clientId}
                                     onChange={e => setClientId(e.target.value)}
@@ -327,22 +390,27 @@ export default function DiscordSrvHelperPage() {
                                 onClick={() => inviteUrl && window.open(inviteUrl, '_blank', 'noopener,noreferrer')}
                             >
                                 <ExternalLink className="h-4 w-4" />
-                                Open Invite Link
+                                {t('invite.action', 'Open Invite Link')}
                             </Button>
                         </div>
                     </Card>
 
                     {isOwner && (
-                        <Card title="Revert Changes (Owner Only)" icon={<History className="h-4 w-4" />}>
+                        <Card
+                            title={t('history.title', 'Revert Changes (Owner Only)')}
+                            icon={<History className="h-4 w-4" />}
+                        >
                             <p className="mt-2 text-sm text-[var(--color-ink-muted)]">
-                                Recent config/token changes made through this extension.
+                                {t('history.description', 'Recent config/token changes made through this extension.')}
                             </p>
                             {historyQuery.isLoading ? (
                                 <div className="flex justify-center py-6">
                                     <Spinner className="h-5 w-5" />
                                 </div>
                             ) : (historyQuery.data?.length ?? 0) === 0 ? (
-                                <p className="mt-4 text-sm text-[var(--color-ink-faint)]">No snapshots available.</p>
+                                <p className="mt-4 text-sm text-[var(--color-ink-faint)]">
+                                    {t('history.empty', 'No snapshots available.')}
+                                </p>
                             ) : (
                                 <div className="mt-4 space-y-2">
                                     {historyQuery.data!.map(h => (
@@ -365,7 +433,7 @@ export default function DiscordSrvHelperPage() {
                                                 disabled={revert.isPending}
                                                 onClick={() => revert.mutate(h.id)}
                                             >
-                                                Revert
+                                                {t('history.action', 'Revert')}
                                             </Button>
                                         </div>
                                     ))}
@@ -375,16 +443,21 @@ export default function DiscordSrvHelperPage() {
                     )}
 
                     {isOwner && (
-                        <Card title="Subuser Access (Owner Only)" icon={<Users className="h-4 w-4" />}>
+                        <Card
+                            title={t('subusers.title', 'Subuser Access (Owner Only)')}
+                            icon={<Users className="h-4 w-4" />}
+                        >
                             <p className="mt-2 text-sm text-[var(--color-ink-muted)]">
-                                Enable or disable this extension per subuser.
+                                {t('subusers.description', 'Enable or disable this extension per subuser.')}
                             </p>
                             {subusersQuery.isLoading ? (
                                 <div className="flex justify-center py-6">
                                     <Spinner className="h-5 w-5" />
                                 </div>
                             ) : (subusersQuery.data?.length ?? 0) === 0 ? (
-                                <p className="mt-4 text-sm text-[var(--color-ink-faint)]">No subusers.</p>
+                                <p className="mt-4 text-sm text-[var(--color-ink-faint)]">
+                                    {t('subusers.empty', 'No subusers.')}
+                                </p>
                             ) : (
                                 <div className="mt-4 space-y-2">
                                     {subusersQuery.data!.map(s => (
@@ -411,7 +484,9 @@ export default function DiscordSrvHelperPage() {
                                                     })
                                                 }
                                             >
-                                                {s.disabled ? 'Enable' : 'Disable'}
+                                                {s.disabled
+                                                    ? t('subusers.enable', 'Enable')
+                                                    : t('subusers.disable', 'Disable')}
                                             </Button>
                                         </div>
                                     ))}
