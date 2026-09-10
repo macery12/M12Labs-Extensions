@@ -75,11 +75,10 @@ def check_release_signature(release: dict, manifest: dict, keys: dict[str, dict]
     embedded = (manifest.get('integrity') or {}).get('signature')
 
     if declared is None and embedded is None:
-        # An unsigned release is publishable — a panel with no root pinned still
-        # installs it — but it is worth being loud about, because on a panel that
-        # does pin a root it can declare neither hooks nor queues.
-        print(f'  ! {extension_id} {release["version"]} is unsigned')
-        return
+        raise ValueError(
+            f'Manifest v3 release {extension_id} {release["version"]} is unsigned. '
+            'Official repository releases must carry a root-authorized release signature.'
+        )
 
     if declared is None or embedded is None:
         raise ValueError(

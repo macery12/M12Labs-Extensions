@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import signing
 import m12labs_extension_tool as packaging
 from extension_scanner import scan_target, render_report
-from check_extensions import check_archive, check_keys, without_provenance
+from check_extensions import check_archive, check_keys, check_release_signature, without_provenance
 
 
 class SecurityTests(unittest.TestCase):
@@ -71,9 +71,15 @@ class SecurityTests(unittest.TestCase):
 
     def test_current_roots_and_archive_roundtrip(self):
         self.assertFalse(self.rules())
-        result = packaging.stage_extension(self.source)
+        result, public_key = self.signed()
         self.assertFalse([f for f in scan_target(result['archive_path']) if f.severity == 'block'])
-        published = check_archive(self.root, result['release_entry'], 'demo', True, keys={})
+        published = check_archive(
+            self.root,
+            result['release_entry'],
+            'demo',
+            True,
+            keys={'test-key': {'publicKey': public_key, 'revoked': False}},
+        )
         self.assertEqual(without_provenance(published), without_provenance(result['manifest']))
 
     def test_rejected_roots_and_identity(self):
@@ -108,7 +114,7 @@ class SecurityTests(unittest.TestCase):
         self.assertIn('php.action-without-formrequest', self.rules())
 
     def test_archive_tampering_is_blocked(self):
-        result = packaging.stage_extension(self.source)
+        result, _ = self.signed()
         with ZipFile(result['archive_path'], 'a') as archive:
             archive.writestr('hidden.php', '<?php echo 1;')
         self.assertIn('manifest.undeclared-file', {f.rule for f in scan_target(result['archive_path'])})
@@ -183,6 +189,41 @@ class SecurityTests(unittest.TestCase):
             signing.artifact_message('demo', '1.0.0', signing.canonicalize(result['manifest'])),
             signature['value'],
         ))
+
+    def test_publish_refuses_to_write_an_unsigned_release(self):
+        with patch.object(signing, 'release_key_from_env', return_value=(None, None)):
+            with self.assertRaisesRegex(SystemExit, 'Publishing requires'):
+                packaging.stage_extension(self.source)
+
+        self.assertFalse((self.root / 'packages').exists())
+
+    def test_local_build_can_remain_unsigned_but_repository_gate_rejects_it(self):
+        with patch.object(signing, 'release_key_from_env', return_value=(None, None)):
+            result = packaging.stage_extension(self.source, publish_to_packages=False)
+
+        self.assertNotIn('signature', result['release_entry'])
+        with self.assertRaisesRegex(ValueError, 'is unsigned'):
+            check_release_signature(result['release_entry'], result['manifest'], {}, 'demo')
+
+    def test_custom_domains_credentials_are_pinned_to_cloudflare(self):
+        source = packaging.REPO_ROOT / 'extensions/custom_domains'
+        descriptor = packaging.load_json(source / 'extension.json')
+        defaults = descriptor['extension']['defaults']['settings']
+        fields = descriptor['capabilities']['settings']['fields']
+
+        self.assertNotIn('cloudflare_base_url', defaults)
+        self.assertNotIn('cloudflare_base_url', {field['key'] for field in fields})
+
+        settings = (source / 'files/app/Extensions/Packages/custom_domains/Services/PackageSettings.php').read_text()
+        service = (source / 'files/app/Extensions/Packages/custom_domains/Services/CloudflareDnsService.php').read_text()
+        self.assertNotIn('cloudflare_base_url', settings)
+        self.assertIn("private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';", service)
+        self.assertIn("->withOptions(['allow_redirects' => false])", service)
+        self.assertIn("preg_match('/^[a-f0-9]{32}$/i', $value)", service)
+        self.assertNotIn('PackageSettings::baseUrl()', service)
+
+        request = (source / 'files/app/Extensions/Packages/custom_domains/Http/Requests/Admin/StoreCustomDomainRequest.php').read_text()
+        self.assertIn("'regex:/^[a-f0-9]{32}$/i'", request)
 
     def test_a_manifest_edited_after_signing_no_longer_verifies(self):
         result, public_key = self.signed()

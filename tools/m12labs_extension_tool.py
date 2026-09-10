@@ -339,6 +339,18 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
     if not extension_id or not version:
         raise SystemExit('extension.json must define extension.id and package.version')
 
+    # Local builds may intentionally be unsigned for development, but anything
+    # written into packages/ and registry.json is an official repository
+    # release. Refuse it before touching either destination unless a release key
+    # is present. The repository gate independently enforces the same invariant
+    # so an archive cannot bypass this command and be committed by hand.
+    release_key, key_id = signing.release_key_from_env()
+    if publish_to_packages and release_key is None:
+        raise SystemExit(
+            'Publishing requires M12LABS_RELEASE_KEY and M12LABS_RELEASE_KEY_ID. '
+            'Use the build command for an unsigned local-development artifact.'
+        )
+
     stage_root = BUILD_ROOT / extension_id / version
     archive_name = package_filename(extension_id)
     if publish_to_packages:
@@ -394,7 +406,6 @@ def stage_extension(extension_dir: Path, debug: bool = False, publish_to_package
     # minus only `integrity.signature`. That is what the panel canonicalizes,
     # so signing anything else produces a signature that verifies nowhere.
     signature = None
-    release_key, key_id = signing.release_key_from_env()
     if release_key is not None:
         manifest['integrity'] = {'signatureAlgorithm': 'ed25519', 'keyId': key_id}
         canonical = signing.canonicalize(manifest)
