@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "custom_domains",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -17,7 +17,6 @@
       "allowedNests": [],
       "allowedEggs": [],
       "settings": {
-        "cloudflare_base_url": "https://api.cloudflare.com/client/v4",
         "cloudflare_proxied": false,
         "cloudflare_retries": 3,
         "cloudflare_retry_sleep_ms": 250,
@@ -123,14 +122,6 @@
     ],
     "settings": {
       "fields": [
-        {
-          "key": "cloudflare_base_url",
-          "type": "url",
-          "labelKey": "ext.custom_domains.setting.baseUrl",
-          "helpKey": "ext.custom_domains.setting.baseUrl.help",
-          "required": true,
-          "default": "https://api.cloudflare.com/client/v4"
-        },
         {
           "key": "cloudflare_proxied",
           "type": "boolean",

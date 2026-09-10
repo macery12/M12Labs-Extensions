@@ -21,7 +21,11 @@ class StoreCustomDomainRequest extends ApplicationApiRequest
     {
         return [
             'domain' => ['required', 'string', 'max:191', 'regex:/^(?!-)[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/'],
-            'cloudflare_zone_id' => 'nullable|string|max:191',
+            // Cloudflare resource identifiers are 32 hexadecimal characters.
+            // Keeping slashes, dot segments and query delimiters out prevents
+            // an administrator-supplied id from changing the authenticated API
+            // path the provisioning service calls.
+            'cloudflare_zone_id' => ['nullable', 'string', 'regex:/^[a-f0-9]{32}$/i'],
             'api_key_id' => 'nullable|integer|exists:ext_custom_domains_api_keys,id',
             'allowed_nest_ids' => 'nullable|array',
             'allowed_nest_ids.*' => 'integer|exists:nests,id',

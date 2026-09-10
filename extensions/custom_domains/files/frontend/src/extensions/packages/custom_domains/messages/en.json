@@ -146,8 +146,6 @@
     "ext.custom_domains.server.title": "Custom Domains",
     "ext.custom_domains.setting.allowWildcard": "Allow wildcard subdomains",
     "ext.custom_domains.setting.allowWildcard.help": "Permit users to create wildcard (*.) subdomains. Advanced — usually left off.",
-    "ext.custom_domains.setting.baseUrl": "Cloudflare API base URL",
-    "ext.custom_domains.setting.baseUrl.help": "Leave as the default unless you are pointing at a test double.",
     "ext.custom_domains.setting.maxWildcards": "Wildcards per user",
     "ext.custom_domains.setting.maxWildcards.help": "How many wildcard subdomains one user may hold.",
     "ext.custom_domains.setting.proxied": "Proxy records through Cloudflare",

@@ -26,7 +26,6 @@ final class PackageSettings
     public const SECRET_CLOUDFLARE_TOKEN = 'cloudflare_token';
 
     private const DEFAULTS = [
-        'cloudflare_base_url' => 'https://api.cloudflare.com/client/v4',
         'cloudflare_proxied' => false,
         'cloudflare_retries' => 3,
         'cloudflare_retry_sleep_ms' => 250,
@@ -60,11 +59,6 @@ final class PackageSettings
     public static function flush(): void
     {
         self::$cache = null;
-    }
-
-    public static function baseUrl(): string
-    {
-        return rtrim((string) (self::all()['cloudflare_base_url'] ?? self::DEFAULTS['cloudflare_base_url']), '/');
     }
 
     public static function proxied(): bool

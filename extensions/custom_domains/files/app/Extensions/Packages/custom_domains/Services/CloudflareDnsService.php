@@ -10,6 +10,13 @@ use Illuminate\Http\Client\ConnectionException;
 
 class CloudflareDnsService
 {
+    /**
+     * Credentials must only ever be sent to Cloudflare's canonical API
+     * endpoint. Making this administrator-configurable turns a settings write
+     * into an API-token exfiltration primitive.
+     */
+    private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';
+
     private function client(#[\SensitiveParameter] ?string $tokenOverride = null): PendingRequest
     {
         // The account-wide token now lives in the panel's encrypted secret
@@ -27,6 +34,7 @@ class CloudflareDnsService
         $sleep = PackageSettings::retrySleepMs();
 
         return Http::retry($retries, $sleep)
+            ->withOptions(['allow_redirects' => false])
             ->acceptJson()
             ->asJson()
             ->withHeaders([
@@ -55,7 +63,16 @@ class CloudflareDnsService
 
     private function baseUrl(): string
     {
-        return PackageSettings::baseUrl();
+        return self::API_BASE_URL;
+    }
+
+    private function resourceId(string $value, string $label): string
+    {
+        if (preg_match('/^[a-f0-9]{32}$/i', $value) !== 1) {
+            throw new \Exception(sprintf('Invalid Cloudflare %s identifier.', $label));
+        }
+
+        return $value;
     }
 
     public function getZoneByName(string $domain, #[\SensitiveParameter] ?string $tokenOverride = null): ?array
@@ -149,6 +166,8 @@ class CloudflareDnsService
      */
     private function findRecordsByName(string $zoneId, string $name, #[\SensitiveParameter] ?string $tokenOverride = null): array
     {
+        $zoneId = $this->resourceId($zoneId, 'zone');
+
         try {
             $response = $this->client($tokenOverride)->get($this->baseUrl() . '/zones/' . $zoneId . '/dns_records', [
                 'name' => $name,
@@ -219,6 +238,9 @@ class CloudflareDnsService
 
     public function deleteRecord(string $zoneId, string $recordId, #[\SensitiveParameter] ?string $tokenOverride = null): void
     {
+        $zoneId = $this->resourceId($zoneId, 'zone');
+        $recordId = $this->resourceId($recordId, 'DNS record');
+
         try {
             $this->client($tokenOverride)->delete($this->baseUrl() . '/zones/' . $zoneId . '/dns_records/' . $recordId)->throw();
         } catch (RequestException|ConnectionException $exception) {
@@ -228,6 +250,8 @@ class CloudflareDnsService
 
     private function findRecord(string $zoneId, string $type, string $name, #[\SensitiveParameter] ?string $tokenOverride = null): ?array
     {
+        $zoneId = $this->resourceId($zoneId, 'zone');
+
         try {
             $response = $this->client($tokenOverride)->get($this->baseUrl() . '/zones/' . $zoneId . '/dns_records', [
                 'type' => $type,
@@ -251,6 +275,8 @@ class CloudflareDnsService
 
     private function createRecord(string $zoneId, array $payload, #[\SensitiveParameter] ?string $tokenOverride = null): array
     {
+        $zoneId = $this->resourceId($zoneId, 'zone');
+
         try {
             $response = $this->client($tokenOverride)
                 ->post($this->baseUrl() . '/zones/' . $zoneId . '/dns_records', $payload)
@@ -270,6 +296,9 @@ class CloudflareDnsService
 
     private function updateRecord(string $zoneId, string $recordId, array $payload, #[\SensitiveParameter] ?string $tokenOverride = null): array
     {
+        $zoneId = $this->resourceId($zoneId, 'zone');
+        $recordId = $this->resourceId($recordId, 'DNS record');
+
         try {
             $response = $this->client($tokenOverride)
                 ->put($this->baseUrl() . '/zones/' . $zoneId . '/dns_records/' . $recordId, $payload)
