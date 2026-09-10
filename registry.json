@@ -9,6 +9,22 @@
       "id": "custom_domains",
       "versions": [
         {
+          "version": "1.0.2",
+          "archive": "packages/custom_domains/1.0.2/custom_domains.M12LabsExtension",
+          "sha256": "b8452cb0b6c5cd4851221be8794b6261de25c879903998cba35065fc776f525e",
+          "publishedAt": "2026-09-10T01:22:19Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "5buzuCIQAdFnymU3mylgqc0L+Ml9InlPFQwnoWeheVaH3/JG7fkcA0MZaXQSRdiqcYzOGAkHq/O/CSTAxWtVDA==",
+            "canonicalManifestSha256": "a79e41e954c67bd2fa935753cc653ecd7dcbf9fb70886839a14a33bef787fcc8"
+          }
+        },
+        {
           "version": "1.0.1",
           "archive": "packages/custom_domains/1.0.1/custom_domains.M12LabsExtension",
           "sha256": "bd6d6863a004d11dffe46246dc310710931ae32388323cec6c2b00ccb55d0fef",
@@ -59,12 +75,28 @@
         "queues": 1,
         "permissions": 4,
         "secrets": 1,
-        "settings": 6
+        "settings": 5
       }
     },
     {
       "id": "discordsrv_helper",
       "versions": [
+        {
+          "version": "3.0.0",
+          "archive": "packages/discordsrv_helper/3.0.0/discordsrv_helper.M12LabsExtension",
+          "sha256": "1ef7e75960de10f2da32e9f631091f25c0cc9b59f75924f0e899850da782f223",
+          "publishedAt": "2026-09-10T01:22:19Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "GcfbqvmhaJpko0+VjpnDgDUmLqbsgLL5SvH3PN13sAbxvOxuXyrPVCsSmSXkUytn6rdCsy9WkxLrlIYWjQDuAQ==",
+            "canonicalManifestSha256": "6b3b6503f62fe48800925c7046ccedbf00eaa9bf49878e3b10f75fb1868697e8"
+          }
+        },
         {
           "version": "2.0.0",
           "archive": "packages/discordsrv_helper/2.0.0/discordsrv_helper.M12LabsExtension",
@@ -89,13 +121,43 @@
         }
       ],
       "name": "DiscordSRV Helper",
-      "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls.",
+      "description": "Install and configure DiscordSRV from M12Labs, including token, channel, history, and subuser access controls. The plugin jar is fetched from the official DiscordSRV release feed and verified by the panel before it reaches your server.",
       "author": "M12Labs",
-      "icon": "server"
+      "icon": "discordsrv",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 0,
+        "clientRoutes": true,
+        "adminRoutes": false,
+        "migrations": false,
+        "schedule": false,
+        "commands": 0,
+        "hooks": [],
+        "queues": 0,
+        "permissions": 0,
+        "secrets": 0,
+        "settings": 0
+      }
     },
     {
       "id": "minecraft_icon_builder",
       "versions": [
+        {
+          "version": "3.0.0",
+          "archive": "packages/minecraft_icon_builder/3.0.0/minecraft_icon_builder.M12LabsExtension",
+          "sha256": "9e452301d7645162ea5c65589961fd6e22ab7a8d5f04f6d5e5f305618479d3e8",
+          "publishedAt": "2026-09-10T01:22:19Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "OSHxXbnTpgQP0MqGbBL6GY1vdpBbDEAYuNRqaNguPeqQOn2d7GPExxK8AsZeiZlTz2mxY3wuDhqIbApah8nBCw==",
+            "canonicalManifestSha256": "43fea0699ac4262d73704cf8a3ad73b986dae0a56d2e787f7d433ed3bb80f7a8"
+          }
+        },
         {
           "version": "2.0.0",
           "archive": "packages/minecraft_icon_builder/2.0.0/minecraft_icon_builder.M12LabsExtension",
@@ -133,11 +195,41 @@
       "name": "Minecraft Icon Builder",
       "description": "Paint and save a custom 64\u00d764 server-icon.png directly from the panel using a built-in pixel editor.",
       "author": "M12Labs",
-      "icon": "image"
+      "icon": "palette",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 0,
+        "clientRoutes": true,
+        "adminRoutes": false,
+        "migrations": false,
+        "schedule": false,
+        "commands": 0,
+        "hooks": [],
+        "queues": 0,
+        "permissions": 0,
+        "secrets": 0,
+        "settings": 0
+      }
     },
     {
       "id": "minecraft_log_uploader",
       "versions": [
+        {
+          "version": "3.0.0",
+          "archive": "packages/minecraft_log_uploader/3.0.0/minecraft_log_uploader.M12LabsExtension",
+          "sha256": "1518b99fdacb5ba7f73a2742c19f06d63b0cbb972beb4a1febae17b4ae50dddc",
+          "publishedAt": "2026-09-10T01:22:19Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "H79MWEWRpQt8n/ElumLhBOiZG8RrhnMVmlMOMtl3VA3E+sgWO1NFjdpXQmI8p4d0GVZhNO/2aDtLl+w7NslGAw==",
+            "canonicalManifestSha256": "f5fd1a524dac8c2d33aaa6cdf440c58823f3f95d54f19153f591b8922135bc5c"
+          }
+        },
         {
           "version": "2.0.0",
           "archive": "packages/minecraft_log_uploader/2.0.0/minecraft_log_uploader.M12LabsExtension",
@@ -162,13 +254,43 @@
         }
       ],
       "name": "Minecraft Log Uploader",
-      "description": "Read, preview, and upload your Minecraft server logs to mclo.gs directly from the panel.",
+      "description": "Read and preview your Minecraft server logs, and optionally publish one to the third-party mclo.gs paste service for sharing.",
       "author": "M12Labs",
-      "icon": "file-text"
+      "icon": "docs",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 0,
+        "clientRoutes": true,
+        "adminRoutes": false,
+        "migrations": false,
+        "schedule": false,
+        "commands": 0,
+        "hooks": [],
+        "queues": 0,
+        "permissions": 0,
+        "secrets": 0,
+        "settings": 0
+      }
     },
     {
       "id": "minecraft_player_manager",
       "versions": [
+        {
+          "version": "3.0.0",
+          "archive": "packages/minecraft_player_manager/3.0.0/minecraft_player_manager.M12LabsExtension",
+          "sha256": "362b0d0048a4eb1b039cfed35dfb24c5a5d6088a6806bc4384696b72b433e1ef",
+          "publishedAt": "2026-09-10T01:22:19Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "2urGIp3xvu1KwWs+JZw2XIVJccIr3ABI/QKjINRigtDXrtU9d7UXj+7szeVd2bO6as3j0e9FWwlJbowkvSuQCA==",
+            "canonicalManifestSha256": "5fe54e69dc7f1ffd82bec28eb47f2871945d9858044f9a1c6629566c4d389bda"
+          }
+        },
         {
           "version": "2.0.0",
           "archive": "packages/minecraft_player_manager/2.0.0/minecraft_player_manager.M12LabsExtension",
@@ -195,11 +317,41 @@
       "name": "Minecraft Player Manager",
       "description": "Manage Minecraft Java Edition players directly from M12Labs with whitelist, operator, ban, kick, inventory, and attribute tools.",
       "author": "M12Labs",
-      "icon": "users"
+      "icon": "players",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 0,
+        "clientRoutes": true,
+        "adminRoutes": false,
+        "migrations": false,
+        "schedule": false,
+        "commands": 0,
+        "hooks": [],
+        "queues": 0,
+        "permissions": 0,
+        "secrets": 0,
+        "settings": 0
+      }
     },
     {
       "id": "minecraft_startup_editor",
       "versions": [
+        {
+          "version": "3.0.0",
+          "archive": "packages/minecraft_startup_editor/3.0.0/minecraft_startup_editor.M12LabsExtension",
+          "sha256": "5ea2aca511fd92912342ac6a2a814105a517f5081c5579db177c24a1160019a7",
+          "publishedAt": "2026-09-10T01:22:19Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.0 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "OCvBhGRVu/fD3Xpk/5waKi1GKjpWB/1EjuHKFd7jvSNzrZa7Ai0gGPi/+sLcWNBSPTz7z1LvEbprMu4oYytvDw==",
+            "canonicalManifestSha256": "18cece604357165cd6506d8db69cbe5009c0bd47469b6b1a266472fae052347d"
+          }
+        },
         {
           "version": "2.0.0",
           "archive": "packages/minecraft_startup_editor/2.0.0/minecraft_startup_editor.M12LabsExtension",
@@ -226,7 +378,21 @@
       "name": "Minecraft Startup Editor",
       "description": "Safely configure your Minecraft server startup with curated presets and individual addon options. Supports Forge, Fabric, NeoForge, Paper, Purpur, Vanilla and more. No arbitrary command input \u2014 all options are validated against a secure server-side allowlist.",
       "author": "M12Labs",
-      "icon": "terminal"
+      "icon": "wrench",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 0,
+        "clientRoutes": true,
+        "adminRoutes": false,
+        "migrations": false,
+        "schedule": false,
+        "commands": 0,
+        "hooks": [],
+        "queues": 0,
+        "permissions": 0,
+        "secrets": 0,
+        "settings": 0
+      }
     },
     {
       "id": "node_health_history",
