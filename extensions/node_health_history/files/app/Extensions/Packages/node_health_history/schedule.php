@@ -1,6 +1,7 @@
 <?php
 
 use Everest\Services\Extensions\ExtensionScheduleBuilder;
+use Everest\Extensions\Sdk\Services\PackageSettings;
 
 /**
  * Registered by ExtensionScheduleService only while this extension is enabled.
@@ -12,8 +13,7 @@ use Everest\Services\Extensions\ExtensionScheduleBuilder;
  * into a cron expression.
  */
 return function (ExtensionScheduleBuilder $schedule): void {
-    $config = \Everest\Models\ExtensionConfig::getByExtensionId('node_health_history');
-    $interval = (string) ($config?->settings['poll_interval_minutes'] ?? '5');
+    $interval = PackageSettings::for('node_health_history')->string('poll_interval_minutes', '5');
 
     $frequencies = [
         '1' => 'everyMinute',

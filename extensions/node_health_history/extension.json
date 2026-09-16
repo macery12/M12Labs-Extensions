@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "node_health_history",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -16,12 +16,19 @@
       "enabled": false,
       "allowedNests": [],
       "allowedEggs": [],
-      "settings": { "poll_interval_minutes": "5", "retention_days": 30 }
+      "settings": {
+        "poll_interval_minutes": "5",
+        "retention_days": 30
+      }
     }
   },
-  "compatiblePanelVersions": [">=Alpha 4.0 <Alpha 5.0"],
+  "compatiblePanelVersions": [
+    ">=Alpha 4.1 <Alpha 5.0"
+  ],
   "capabilities": {
-    "routes": { "admin": true },
+    "routes": {
+      "admin": true
+    },
     "pages": {
       "admin": [
         {
@@ -45,10 +52,14 @@
     },
     "database": {
       "migrations": true,
-      "tables": ["ext_node_health_history_snapshots"]
+      "tables": [
+        "ext_node_health_history_snapshots"
+      ]
     },
     "schedule": true,
-    "commands": ["p:ext:node-health-history:poll"],
+    "commands": [
+      "p:ext:node-health-history:poll"
+    ],
     "settings": {
       "fields": [
         {
@@ -58,7 +69,14 @@
           "helpKey": "ext.node_health_history.setting.interval.help",
           "required": true,
           "default": "5",
-          "enum": ["1", "5", "10", "15", "30", "60"]
+          "enum": [
+            "1",
+            "5",
+            "10",
+            "15",
+            "30",
+            "60"
+          ]
         },
         {
           "key": "retention_days",
@@ -74,7 +92,10 @@
     }
   },
   "requirements": {
-    "panelServices": ["schedule", "http-client"],
+    "panelServices": [
+      "schedule",
+      "http-client"
+    ],
     "extensions": []
   }
 }

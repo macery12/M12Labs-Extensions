@@ -2,7 +2,7 @@
 
 namespace Everest\Extensions\Packages\node_health_history\Http\Requests;
 
-use Everest\Http\Requests\Api\Application\ApplicationApiRequest;
+use Everest\Extensions\Sdk\Http\ApplicationApiRequest;
 
 class GetNodeHealthHistoryRequest extends ApplicationApiRequest
 {

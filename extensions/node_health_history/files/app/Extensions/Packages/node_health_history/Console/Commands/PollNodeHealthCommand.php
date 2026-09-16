@@ -3,7 +3,7 @@
 namespace Everest\Extensions\Packages\node_health_history\Console\Commands;
 
 use Everest\Extensions\Packages\node_health_history\Services\NodeHealthPoller;
-use Everest\Models\ExtensionConfig;
+use Everest\Extensions\Sdk\Services\PackageSettings;
 use Illuminate\Console\Command;
 
 class PollNodeHealthCommand extends Command
@@ -16,8 +16,7 @@ class PollNodeHealthCommand extends Command
     {
         // Second enable-gate: the scheduler only registers this command for
         // enabled extensions, but it can also be run manually, so guard here.
-        $config = ExtensionConfig::getByExtensionId(NodeHealthPoller::EXTENSION_ID);
-        if (!$config || !$config->enabled) {
+        if (!PackageSettings::for(NodeHealthPoller::EXTENSION_ID)->enabled()) {
             $this->components->warn('Node Health History is disabled; nothing was polled.');
 
             return self::SUCCESS;
