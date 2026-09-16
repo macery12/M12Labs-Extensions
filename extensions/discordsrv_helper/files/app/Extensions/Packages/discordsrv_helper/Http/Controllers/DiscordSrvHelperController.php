@@ -9,14 +9,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
-use Everest\Exceptions\DisplayException;
+use Everest\Extensions\Sdk\DisplayException;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\Yaml\Yaml;
 use Everest\Models\ExtensionFileSnapshot;
-use Everest\Repositories\Wings\DaemonFileRepository;
-use Everest\Services\Extensions\ExtensionFileSnapshotService;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
-use Everest\Http\Controllers\Api\Client\ClientApiController;
+use Everest\Extensions\Sdk\Services\ServerFiles;
+use Everest\Extensions\Sdk\Services\ServerSubusers;
+use Everest\Extensions\Sdk\Services\PackageSnapshots;
+use Everest\Extensions\Sdk\Http\ClientApiController;
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperStatusRequest;
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperInstallRequest;
 use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelperTokenRequest;
@@ -46,7 +46,6 @@ use Everest\Extensions\Packages\discordsrv_helper\Http\Requests\DiscordSrvHelper
  */
 class DiscordSrvHelperController extends ClientApiController
 {
-    use RespondsWithExtensionEnvelope;
 
     private const EXTENSION_ID = 'discordsrv_helper';
     private const PLUGINS_DIR = '/plugins';
@@ -86,16 +85,24 @@ class DiscordSrvHelperController extends ClientApiController
     /** Bound on the release metadata document. */
     private const MAX_METADATA_BYTES = 1_048_576;
 
-    public function __construct(
-        private DaemonFileRepository $fileRepository,
-        private ExtensionFileSnapshotService $snapshotService,
-    ) {
+    public function __construct()
+    {
         parent::__construct();
+    }
+
+    private function files(Server $server): ServerFiles
+    {
+        return ServerFiles::for($server);
+    }
+
+    private function snapshots(): PackageSnapshots
+    {
+        return PackageSnapshots::for(self::EXTENSION_ID);
     }
 
     public function status(DiscordSrvHelperStatusRequest $request, Server $server): JsonResponse
     {
-        $plugins = $this->fileRepository->setServer($server)->getDirectory(self::PLUGINS_DIR);
+        $plugins = $this->files($server)->list(self::PLUGINS_DIR);
 
         $pluginJar = null;
         $hasDiscordSrvFolder = false;
@@ -117,7 +124,7 @@ class DiscordSrvHelperController extends ClientApiController
         $configPresent = false;
 
         if ($hasDiscordSrvFolder) {
-            $discordSrvDir = $this->fileRepository->setServer($server)->getDirectory(self::DISCORDSRV_DIR);
+            $discordSrvDir = $this->files($server)->list(self::DISCORDSRV_DIR);
             foreach ($discordSrvDir as $item) {
                 $name = (string) Arr::get($item, 'name', '');
                 $isFile = (bool) Arr::get($item, 'file', true);
@@ -153,9 +160,8 @@ class DiscordSrvHelperController extends ClientApiController
             // never a URL. That is what keeps the daemon out of the request:
             // it cannot resolve a host, follow a redirect, or be pointed at
             // anything by a caller.
-            $response = $this->fileRepository
-                ->setServer($server)
-                ->putFile(self::PLUGINS_DIR . '/' . self::JAR_FILENAME, $tempFile);
+            $response = $this->files($server)
+                ->writeFrom(self::PLUGINS_DIR . '/' . self::JAR_FILENAME, $tempFile);
 
             $this->ensureDaemonSuccess($response, $server, 'Failed to write the DiscordSRV jar.');
 
@@ -235,12 +241,12 @@ class DiscordSrvHelperController extends ClientApiController
 
         $before = $this->safeGetContent($server, self::TOKEN_FILE);
         if (!is_null($before)) {
-            $this->snapshotService->create($server, self::EXTENSION_ID, $request->user(), 'set-token', [
+            $this->snapshots()->capture($server, $request->user(), 'set-token', [
                 self::TOKEN_FILE => $before,
             ]);
         }
 
-        $this->fileRepository->setServer($server)->putContent(self::TOKEN_FILE, $token);
+        $this->files($server)->write(self::TOKEN_FILE, $token);
 
         return new JsonResponse([], JsonResponse::HTTP_NO_CONTENT);
     }
@@ -256,7 +262,7 @@ class DiscordSrvHelperController extends ClientApiController
             ], 409);
         }
 
-        $this->snapshotService->create($server, self::EXTENSION_ID, $request->user(), 'set-global-channel', [
+        $this->snapshots()->capture($server, $request->user(), 'set-global-channel', [
             self::CONFIG_FILE => $before,
         ]);
 
@@ -284,7 +290,7 @@ class DiscordSrvHelperController extends ClientApiController
             $yaml .= "\n";
         }
 
-        $this->fileRepository->setServer($server)->putContent(self::CONFIG_FILE, $yaml);
+        $this->files($server)->write(self::CONFIG_FILE, $yaml);
 
         return new JsonResponse([], JsonResponse::HTTP_NO_CONTENT);
     }
@@ -323,9 +329,9 @@ class DiscordSrvHelperController extends ClientApiController
             ->where('id', $snapshotId)
             ->firstOrFail();
 
-        $files = $this->snapshotService->decryptFiles($snapshot);
+        $files = $this->snapshots()->restore($snapshot);
         foreach ($files as $path => $contents) {
-            $this->fileRepository->setServer($server)->putContent($path, $contents);
+            $this->files($server)->write($path, $contents);
         }
 
         return new JsonResponse([], JsonResponse::HTTP_NO_CONTENT);
@@ -333,10 +339,7 @@ class DiscordSrvHelperController extends ClientApiController
 
     public function subusers(DiscordSrvHelperOwnerRequest $request, Server $server): JsonResponse
     {
-        $subusers = Subuser::query()
-            ->with('user')
-            ->where('server_id', $server->id)
-            ->get();
+        $subusers = ServerSubusers::for($server)->all()->load('user');
 
         $data = $subusers->map(fn (Subuser $s) => [
             'uuid' => $s->user->uuid,
@@ -379,7 +382,7 @@ class DiscordSrvHelperController extends ClientApiController
     private function ensureDirectory(Server $server, string $path, string $name): void
     {
         try {
-            $this->fileRepository->setServer($server)->createDirectory($name, $path);
+            $this->files($server)->createDirectory($name, $path);
         } catch (\Throwable) {
             // Directory likely already exists; ignore.
         }
@@ -388,7 +391,7 @@ class DiscordSrvHelperController extends ClientApiController
     private function safeGetContent(Server $server, string $file): ?string
     {
         try {
-            return $this->fileRepository->setServer($server)->getContent($file);
+            return $this->files($server)->read($file);
         } catch (\Throwable) {
             return null;
         }

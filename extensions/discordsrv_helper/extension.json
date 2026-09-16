@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "discordsrv_helper",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -20,7 +20,7 @@
     }
   },
   "compatiblePanelVersions": [
-    ">=Alpha 4.0 <Alpha 5.0"
+    ">=Alpha 4.1 <Alpha 5.0"
   ],
   "capabilities": {
     "routes": {
@@ -40,8 +40,12 @@
     }
   },
   "requirements": {
-    "phpExtensions": ["zip"],
-    "panelServices": ["http-client"],
+    "phpExtensions": [
+      "zip"
+    ],
+    "panelServices": [
+      "http-client"
+    ],
     "extensions": []
   }
 }
