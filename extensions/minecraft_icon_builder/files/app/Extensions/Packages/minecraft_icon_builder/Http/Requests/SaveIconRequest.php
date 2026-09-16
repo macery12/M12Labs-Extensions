@@ -2,8 +2,8 @@
 
 namespace Everest\Extensions\Packages\minecraft_icon_builder\Http\Requests;
 
-use Everest\Models\Permission;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Permission;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 /**
  * Writing server-icon.png.

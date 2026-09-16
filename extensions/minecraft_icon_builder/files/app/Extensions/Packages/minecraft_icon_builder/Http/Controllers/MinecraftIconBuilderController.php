@@ -6,10 +6,9 @@ use Everest\Models\Server;
 use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Everest\Exceptions\DisplayException;
-use Everest\Repositories\Wings\DaemonFileRepository;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
-use Everest\Http\Controllers\Api\Client\ClientApiController;
+use Everest\Extensions\Sdk\DisplayException;
+use Everest\Extensions\Sdk\Services\ServerFiles;
+use Everest\Extensions\Sdk\Http\ClientApiController;
 use Everest\Extensions\Packages\minecraft_icon_builder\Http\Requests\GetIconRequest;
 use Everest\Extensions\Packages\minecraft_icon_builder\Http\Requests\SaveIconRequest;
 
@@ -30,7 +29,6 @@ use Everest\Extensions\Packages\minecraft_icon_builder\Http\Requests\SaveIconReq
  */
 class MinecraftIconBuilderController extends ClientApiController
 {
-    use RespondsWithExtensionEnvelope;
 
     /** Minecraft renders the server icon at exactly 64x64. */
     private const ICON_DIMENSION = 64;
@@ -44,9 +42,8 @@ class MinecraftIconBuilderController extends ClientApiController
      */
     private const MAX_ICON_BYTES = 262144;
 
-    public function __construct(
-        private DaemonFileRepository $fileRepository,
-    ) {
+    public function __construct()
+    {
         parent::__construct();
     }
 
@@ -55,9 +52,7 @@ class MinecraftIconBuilderController extends ClientApiController
         try {
             // Bounded read: FileSizeTooLargeException is thrown before the body
             // is materialised, so an oversized file costs nothing to refuse.
-            $content = $this->fileRepository
-                ->setServer($server)
-                ->getContent('server-icon.png', self::MAX_ICON_BYTES);
+            $content = ServerFiles::for($server)->read('server-icon.png', self::MAX_ICON_BYTES);
         } catch (\Throwable) {
             // A missing icon is the common case and is not an error. An
             // oversized or unreadable one is reported the same way rather than
@@ -88,7 +83,7 @@ class MinecraftIconBuilderController extends ClientApiController
         $bytes = $this->decodeIcon((string) $request->input('image_base64'));
 
         try {
-            $this->fileRepository->setServer($server)->putContent('server-icon.png', $bytes);
+            ServerFiles::for($server)->write('server-icon.png', $bytes);
         } catch (\Throwable $exception) {
             // The daemon's own message can carry paths, upstream response
             // bodies and connection detail. The caller gets a stable sentence
