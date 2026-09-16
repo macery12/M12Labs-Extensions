@@ -3,7 +3,7 @@
 namespace Everest\Extensions\Packages\minecraft_player_manager\Http\Requests;
 
 use Everest\Models\Server;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 /**
  * Base request for every player-manager endpoint.

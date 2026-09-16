@@ -4,16 +4,16 @@ namespace Everest\Extensions\Packages\minecraft_player_manager\Http\Controllers;
 
 use Everest\Models\Server;
 use Illuminate\Support\Str;
-use Everest\Facades\Activity;
+use Everest\Extensions\Sdk\Services\ServerFiles;
+use Everest\Extensions\Sdk\Services\PanelActivity;
+use Everest\Extensions\Sdk\Services\ServerCommands;
+use Everest\Extensions\Sdk\Services\PackageSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
-use Everest\Models\ExtensionConfig;
-use Everest\Exceptions\DisplayException;
-use Everest\Repositories\Wings\DaemonFileRepository;
-use Everest\Repositories\Wings\DaemonCommandRepository;
-use Everest\Http\Controllers\Api\Client\ClientApiController;
+use Everest\Extensions\Sdk\DisplayException;
+use Everest\Extensions\Sdk\Http\ClientApiController;
 use Everest\Extensions\Packages\minecraft_player_manager\Services\MinecraftPing;
 use Everest\Extensions\Packages\minecraft_player_manager\Services\MinecraftQuery;
 use Everest\Extensions\Packages\minecraft_player_manager\Http\Requests\GetStatusRequest;
@@ -48,11 +48,22 @@ class PlayerManagerController extends ClientApiController
     /** How long a caller waits for that lock before being asked to retry. */
     private const LIST_LOCK_WAIT_SECONDS = 5;
 
-    public function __construct(
-        private DaemonFileRepository $fileRepository,
-        private DaemonCommandRepository $commandRepository
-    ) {
+    /** This package's id, for the SDK services that are scoped to it. */
+    private const EXTENSION_ID = 'minecraft_player_manager';
+
+    public function __construct()
+    {
         parent::__construct();
+    }
+
+    private function files(Server $server): ServerFiles
+    {
+        return ServerFiles::for($server);
+    }
+
+    private function activity(): PanelActivity
+    {
+        return PanelActivity::for(self::EXTENSION_ID);
     }
 
     /**
@@ -88,7 +99,7 @@ class PlayerManagerController extends ClientApiController
     private function dispatchCommand(Server $server, string $command): bool
     {
         try {
-            $this->commandRepository->setServer($server)->send($command);
+            ServerCommands::for($server)->send($command);
 
             return true;
         } catch (\Throwable $e) {
@@ -164,9 +175,7 @@ class PlayerManagerController extends ClientApiController
      */
     private function checkExtensionEnabled(Server $server): void
     {
-        $config = ExtensionConfig::getByExtensionId('minecraft_player_manager');
-        
-        if (!$config || !$config->isServerEligible($server)) {
+        if (!PackageSettings::for(self::EXTENSION_ID)->allowsServer($server)) {
             throw new \Exception('Minecraft Player Manager is not enabled for this server.');
         }
     }
@@ -242,7 +251,7 @@ class PlayerManagerController extends ClientApiController
     {
         return Cache::remember("ext:minecraft_player_manager:server:username-cache:{$server->id}", 30, function () use ($server) {
             try {
-                $cache = $this->fileRepository->setServer($server)->getContent('/usercache.json');
+                $cache = $this->files($server)->read('/usercache.json');
                 return json_decode($cache, true) ?? [];
             } catch (\Throwable $e) {
                 return [];
@@ -353,7 +362,7 @@ class PlayerManagerController extends ClientApiController
     {
         return Cache::remember("ext:minecraft_player_manager:server:properties:{$server->id}", 10, function () use ($server) {
             try {
-                $properties = $this->fileRepository->setServer($server)->getContent('/server.properties');
+                $properties = $this->files($server)->read('/server.properties');
                 $data = explode("\n", $properties);
 
                 $result = [];
@@ -399,7 +408,7 @@ class PlayerManagerController extends ClientApiController
     {
         return Cache::remember("ext:minecraft_player_manager:server:bukkit:{$server->id}", 30, function () use ($server) {
             try {
-                $bukkitYml = $this->fileRepository->setServer($server)->getContent('/bukkit.yml');
+                $bukkitYml = $this->files($server)->read('/bukkit.yml');
                 return !!$bukkitYml;
             } catch (\Throwable $e) {
                 return false;
@@ -425,7 +434,7 @@ class PlayerManagerController extends ClientApiController
 
         // Load ops.json
         try {
-            $ops = $this->fileRepository->setServer($server)->getContent('/ops.json');
+            $ops = $this->files($server)->read('/ops.json');
             $data = json_decode($ops, true);
 
             foreach ($data as $op) {
@@ -446,7 +455,7 @@ class PlayerManagerController extends ClientApiController
 
         // Load whitelist.json
         try {
-            $whitelist = $this->fileRepository->setServer($server)->getContent('/whitelist.json');
+            $whitelist = $this->files($server)->read('/whitelist.json');
             $data = json_decode($whitelist, true);
 
             foreach ($data as $whitelist) {
@@ -465,7 +474,7 @@ class PlayerManagerController extends ClientApiController
 
         // Load banned-players.json
         try {
-            $bans = $this->fileRepository->setServer($server)->getContent('/banned-players.json');
+            $bans = $this->files($server)->read('/banned-players.json');
             $data = json_decode($bans, true);
 
             foreach ($data as $ban) {
@@ -485,7 +494,7 @@ class PlayerManagerController extends ClientApiController
 
         // Load banned-ips.json
         try {
-            $bans = $this->fileRepository->setServer($server)->getContent('/banned-ips.json');
+            $bans = $this->files($server)->read('/banned-ips.json');
             $data = json_decode($bans, true);
 
             foreach ($data as $ban) {
@@ -571,7 +580,7 @@ class PlayerManagerController extends ClientApiController
             }
         
             try {
-                $ops = $this->fileRepository->setServer($server)->getContent('/ops.json');
+                $ops = $this->files($server)->read('/ops.json');
                 $data = json_decode($ops, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -602,13 +611,13 @@ class PlayerManagerController extends ClientApiController
                 'bypassesPlayerLimit' => true,
             ];
 
-            $this->fileRepository->setServer($server)->putContent('/ops.json', json_encode($data, JSON_PRETTY_PRINT));
+            $this->files($server)->write('/ops.json', json_encode($data, JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:op {$playerData['name']}" : "op {$playerData['name']}";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:player.op')
+            $this->activity()->event('player.op')
                 ->property(['uuid' => $playerData['uuid'], 'name' => $playerData['name']])
                 ->log();
 
@@ -631,7 +640,7 @@ class PlayerManagerController extends ClientApiController
             }
         
             try {
-                $ops = $this->fileRepository->setServer($server)->getContent('/ops.json');
+                $ops = $this->files($server)->read('/ops.json');
                 $data = json_decode($ops, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -651,13 +660,13 @@ class PlayerManagerController extends ClientApiController
                 return $op['uuid'] !== $playerData['uuid'];
             });
 
-            $this->fileRepository->setServer($server)->putContent('/ops.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
+            $this->files($server)->write('/ops.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:deop {$playerData['name']}" : "deop {$playerData['name']}";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:player.deop')
+            $this->activity()->event('player.deop')
                 ->property(['uuid' => $playerData['uuid'], 'name' => $playerData['name']])
                 ->log();
 
@@ -671,7 +680,7 @@ class PlayerManagerController extends ClientApiController
             $this->checkExtensionEnabled($server);
         
             try {
-                $properties = $this->fileRepository->setServer($server)->getContent('/server.properties');
+                $properties = $this->files($server)->read('/server.properties');
                 $data = explode("\n", $properties);
             } catch (\Throwable $e) {
                 $data = [];
@@ -691,13 +700,13 @@ class PlayerManagerController extends ClientApiController
             }
 
             Cache::forget("ext:minecraft_player_manager:server:properties:{$server->id}");
-            $this->fileRepository->setServer($server)->putContent('/server.properties', implode("\n", $data));
+            $this->files($server)->write('/server.properties', implode("\n", $data));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? 'minecraft:whitelist ' : 'whitelist ';
             $dispatched = $this->dispatchCommand($server, $cmd . ($whitelist ? 'on' : 'off'));
 
-            Activity::event('server:whitelist.set')
+            $this->activity()->event('whitelist.set')
                 ->property(['enabled' => $whitelist])
                 ->log();
 
@@ -720,7 +729,7 @@ class PlayerManagerController extends ClientApiController
             }
         
             try {
-                $whitelist = $this->fileRepository->setServer($server)->getContent('/whitelist.json');
+                $whitelist = $this->files($server)->read('/whitelist.json');
                 $data = json_decode($whitelist, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -749,13 +758,13 @@ class PlayerManagerController extends ClientApiController
                 'name' => $playerData['name'],
             ];
 
-            $this->fileRepository->setServer($server)->putContent('/whitelist.json', json_encode($data, JSON_PRETTY_PRINT));
+            $this->files($server)->write('/whitelist.json', json_encode($data, JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:whitelist add {$playerData['name']}" : "whitelist add {$playerData['name']}";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:whitelist.add')
+            $this->activity()->event('whitelist.add')
                 ->property(['uuid' => $playerData['uuid'], 'name' => $playerData['name']])
                 ->log();
 
@@ -778,7 +787,7 @@ class PlayerManagerController extends ClientApiController
             }
         
             try {
-                $whitelist = $this->fileRepository->setServer($server)->getContent('/whitelist.json');
+                $whitelist = $this->files($server)->read('/whitelist.json');
                 $data = json_decode($whitelist, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -797,13 +806,13 @@ class PlayerManagerController extends ClientApiController
                 return $w['uuid'] !== $playerData['uuid'];
             });
 
-            $this->fileRepository->setServer($server)->putContent('/whitelist.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
+            $this->files($server)->write('/whitelist.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:whitelist remove {$playerData['name']}" : "whitelist remove {$playerData['name']}";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:whitelist.remove')
+            $this->activity()->event('whitelist.remove')
                 ->property(['uuid' => $playerData['uuid'], 'name' => $playerData['name']])
                 ->log();
 
@@ -828,7 +837,7 @@ class PlayerManagerController extends ClientApiController
             $reason = $this->sanitizeMessage($request->input('reason', 'Banned by panel'));
         
             try {
-                $bans = $this->fileRepository->setServer($server)->getContent('/banned-players.json');
+                $bans = $this->files($server)->read('/banned-players.json');
                 $data = json_decode($bans, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -861,13 +870,13 @@ class PlayerManagerController extends ClientApiController
                 'reason' => $reason,
             ];
 
-            $this->fileRepository->setServer($server)->putContent('/banned-players.json', json_encode($data, JSON_PRETTY_PRINT));
+            $this->files($server)->write('/banned-players.json', json_encode($data, JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:ban {$playerData['name']} $reason" : "ban {$playerData['name']} $reason";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:player.ban')
+            $this->activity()->event('player.ban')
                 ->property(['uuid' => $playerData['uuid'], 'name' => $playerData['name'], 'reason' => $reason])
                 ->log();
 
@@ -890,7 +899,7 @@ class PlayerManagerController extends ClientApiController
             }
         
             try {
-                $bans = $this->fileRepository->setServer($server)->getContent('/banned-players.json');
+                $bans = $this->files($server)->read('/banned-players.json');
                 $data = json_decode($bans, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -909,13 +918,13 @@ class PlayerManagerController extends ClientApiController
                 return $ban['uuid'] !== $playerData['uuid'];
             });
 
-            $this->fileRepository->setServer($server)->putContent('/banned-players.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
+            $this->files($server)->write('/banned-players.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:pardon {$playerData['name']}" : "pardon {$playerData['name']}";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:player.unban')
+            $this->activity()->event('player.unban')
                 ->property(['uuid' => $playerData['uuid'], 'name' => $playerData['name']])
                 ->log();
 
@@ -940,7 +949,7 @@ class PlayerManagerController extends ClientApiController
             $reason = $this->sanitizeMessage($request->input('reason', 'Banned by panel'));
 
             try {
-                $bans = $this->fileRepository->setServer($server)->getContent('/banned-ips.json');
+                $bans = $this->files($server)->read('/banned-ips.json');
                 $data = json_decode($bans, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -963,13 +972,13 @@ class PlayerManagerController extends ClientApiController
                 'reason' => $reason,
             ];
 
-            $this->fileRepository->setServer($server)->putContent('/banned-ips.json', json_encode($data, JSON_PRETTY_PRINT));
+            $this->files($server)->write('/banned-ips.json', json_encode($data, JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:ban-ip $ip $reason" : "ban-ip $ip $reason";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:player.ban-ip')
+            $this->activity()->event('player.ban-ip')
                 ->property(['ip' => $ip, 'reason' => $reason])
                 ->log();
 
@@ -992,7 +1001,7 @@ class PlayerManagerController extends ClientApiController
             }
 
             try {
-                $bans = $this->fileRepository->setServer($server)->getContent('/banned-ips.json');
+                $bans = $this->files($server)->read('/banned-ips.json');
                 $data = json_decode($bans, true);
             } catch (\Throwable $e) {
                 $data = [];
@@ -1002,13 +1011,13 @@ class PlayerManagerController extends ClientApiController
                 return $ban['ip'] !== $ip;
             });
 
-            $this->fileRepository->setServer($server)->putContent('/banned-ips.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
+            $this->files($server)->write('/banned-ips.json', json_encode(array_values($data), JSON_PRETTY_PRINT));
             usleep(500000);
 
             $cmd = $this->isBukkitBased($server) ? "minecraft:pardon-ip $ip" : "pardon-ip $ip";
             $dispatched = $this->dispatchCommand($server, $cmd);
 
-            Activity::event('server:player.unban-ip')
+            $this->activity()->event('player.unban-ip')
                 ->property(['ip' => $ip])
                 ->log();
 
@@ -1033,9 +1042,9 @@ class PlayerManagerController extends ClientApiController
 
         try {
             $cmd = $this->isBukkitBased($server) ? "minecraft:kick $name $reason" : "kick $name $reason";
-            $this->commandRepository->setServer($server)->send($cmd);
+            ServerCommands::for($server)->send($cmd);
 
-            Activity::event('server:player.kick')
+            $this->activity()->event('player.kick')
                 ->property(['name' => $name, 'reason' => $reason])
                 ->log();
 
@@ -1065,9 +1074,9 @@ class PlayerManagerController extends ClientApiController
 
         try {
             $cmd = $this->isBukkitBased($server) ? "minecraft:tell $name $message" : "tell $name $message";
-            $this->commandRepository->setServer($server)->send($cmd);
+            ServerCommands::for($server)->send($cmd);
 
-            Activity::event('server:player.whisper')
+            $this->activity()->event('player.whisper')
                 ->property(['name' => $name, 'message' => $message])
                 ->log();
 
@@ -1095,9 +1104,9 @@ class PlayerManagerController extends ClientApiController
 
         try {
             $cmd = $this->isBukkitBased($server) ? "minecraft:kill $name" : "kill $name";
-            $this->commandRepository->setServer($server)->send($cmd);
+            ServerCommands::for($server)->send($cmd);
 
-            Activity::event('server:player.kill')
+            $this->activity()->event('player.kill')
                 ->property(['name' => $name])
                 ->log();
 
@@ -1209,9 +1218,7 @@ class PlayerManagerController extends ClientApiController
         try {
             // Bounded: a playerdata file is server-controlled input, and the
             // parser below has to hold what this returns.
-            $datContent = $this->fileRepository
-                ->setServer($server)
-                ->getContent($playerDataPath, self::MAX_PLAYER_DATA_BYTES);
+            $datContent = $this->files($server)->read($playerDataPath, self::MAX_PLAYER_DATA_BYTES);
         } catch (\Throwable $e) {
             return new JsonResponse([
                 'success' => false,
@@ -1323,7 +1330,7 @@ class PlayerManagerController extends ClientApiController
                     throw new \InvalidArgumentException('Unsafe level-name.');
                 }
 
-                $this->fileRepository->setServer($server)->getDirectory("/{$levelName}");
+                $this->files($server)->list("/{$levelName}");
 
                 return $levelName;
             } catch (\Throwable $e) {
@@ -1331,7 +1338,7 @@ class PlayerManagerController extends ClientApiController
                 $alternatives = ['world', 'server', 'minecraft'];
                 foreach ($alternatives as $alt) {
                     try {
-                        $this->fileRepository->setServer($server)->getDirectory("/{$alt}");
+                        $this->files($server)->list("/{$alt}");
                         return $alt;
                     } catch (\Throwable $e) {
                         continue;
@@ -1380,7 +1387,7 @@ class PlayerManagerController extends ClientApiController
 
             // Use data get to retrieve attribute value via data command
             $cmd = "data get entity {$name} Attributes";
-            $this->commandRepository->setServer($server)->send($cmd);
+            ServerCommands::for($server)->send($cmd);
 
             // Since we can't read command output directly, we'll return the available attributes
             return new JsonResponse([
@@ -1443,9 +1450,9 @@ class PlayerManagerController extends ClientApiController
             }
 
             $cmd = "attribute {$name} minecraft:{$attribute} base set {$value}";
-            $this->commandRepository->setServer($server)->send($cmd);
+            ServerCommands::for($server)->send($cmd);
 
-            Activity::event('server:player.attribute.set')
+            $this->activity()->event('player.attribute.set')
                 ->property(['name' => $name, 'attribute' => $attribute, 'value' => $value])
                 ->log();
 
@@ -1500,9 +1507,9 @@ class PlayerManagerController extends ClientApiController
             // Use the attribute reset command (1.20+) or set to default
             $defaultValue = $this->getAttributeDefault($attribute);
             $cmd = "attribute {$name} minecraft:{$attribute} base set {$defaultValue}";
-            $this->commandRepository->setServer($server)->send($cmd);
+            ServerCommands::for($server)->send($cmd);
 
-            Activity::event('server:player.attribute.reset')
+            $this->activity()->event('player.attribute.reset')
                 ->property(['name' => $name, 'attribute' => $attribute])
                 ->log();
 
