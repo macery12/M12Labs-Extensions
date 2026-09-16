@@ -2,8 +2,8 @@
 
 namespace Everest\Extensions\Packages\custom_domains\Http\Requests\Client;
 
-use Everest\Models\Permission;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Permission;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 /**
  * Claiming a subdomain for one of the server's ports.

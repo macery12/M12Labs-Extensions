@@ -2,8 +2,8 @@
 
 namespace Everest\Extensions\Packages\custom_domains\Services;
 
-use Everest\Models\ExtensionConfig;
-use Everest\Services\Extensions\ExtensionSecretStore;
+use Everest\Extensions\Sdk\Services\PackageSecrets;
+use Everest\Extensions\Sdk\Services\PackageSettings as SdkSettings;
 
 /**
  * Typed access to this package's own settings and secret.
@@ -50,9 +50,7 @@ final class PackageSettings
             return self::$cache;
         }
 
-        $stored = ExtensionConfig::getByExtensionId(self::EXTENSION_ID)?->settings;
-
-        return self::$cache = array_merge(self::DEFAULTS, is_array($stored) ? $stored : []);
+        return self::$cache = array_merge(self::DEFAULTS, SdkSettings::for(self::EXTENSION_ID)->all());
     }
 
     /** Drop the per-request cache. For tests, and after a settings write. */
@@ -95,6 +93,6 @@ final class PackageSettings
      */
     public static function cloudflareToken(): ?string
     {
-        return app(ExtensionSecretStore::class)->get(self::EXTENSION_ID, self::SECRET_CLOUDFLARE_TOKEN);
+        return PackageSecrets::for(self::EXTENSION_ID)->get(self::SECRET_CLOUDFLARE_TOKEN);
     }
 }

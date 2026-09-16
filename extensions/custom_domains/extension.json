@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "custom_domains",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -26,7 +26,7 @@
     }
   },
   "compatiblePanelVersions": [
-    ">=Alpha 4.0 <Alpha 5.0"
+    ">=Alpha 4.1 <Alpha 5.0"
   ],
   "capabilities": {
     "routes": {

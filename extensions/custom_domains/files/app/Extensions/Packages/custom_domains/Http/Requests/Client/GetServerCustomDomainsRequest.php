@@ -2,8 +2,8 @@
 
 namespace Everest\Extensions\Packages\custom_domains\Http\Requests\Client;
 
-use Everest\Models\Permission;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Permission;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 /**
  * Listing a server's mappings, and the domains available to it.

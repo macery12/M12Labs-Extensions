@@ -8,7 +8,7 @@ use Everest\Extensions\Packages\custom_domains\Models\CustomDomain;
 use Illuminate\Support\Facades\DB;
 use Everest\Extensions\Packages\custom_domains\Models\CustomDomainDnsLog;
 use Everest\Extensions\Packages\custom_domains\Models\ServerCustomDomain;
-use Everest\Exceptions\DisplayException;
+use Everest\Extensions\Sdk\DisplayException;
 
 class CustomDomainProvisioningService
 {

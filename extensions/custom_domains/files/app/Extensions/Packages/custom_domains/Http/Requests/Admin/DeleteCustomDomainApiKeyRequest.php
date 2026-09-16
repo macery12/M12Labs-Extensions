@@ -2,7 +2,7 @@
 
 namespace Everest\Extensions\Packages\custom_domains\Http\Requests\Admin;
 
-use Everest\Http\Requests\Api\Application\ApplicationApiRequest;
+use Everest\Extensions\Sdk\Http\ApplicationApiRequest;
 
 /**
  * Removing a Cloudflare credential.

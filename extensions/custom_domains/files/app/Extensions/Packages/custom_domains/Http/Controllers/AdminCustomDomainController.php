@@ -17,8 +17,7 @@ use Everest\Extensions\Packages\custom_domains\Http\Requests\Admin\StoreCustomDo
 use Everest\Extensions\Packages\custom_domains\Http\Requests\Admin\UpdateCustomDomainApiKeyRequest;
 use Everest\Extensions\Packages\custom_domains\Http\Requests\Admin\DeleteCustomDomainApiKeyRequest;
 use Everest\Extensions\Packages\custom_domains\Services\CustomDomainProvisioningService;
-use Everest\Http\Controllers\Api\Application\ApplicationApiController;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
+use Everest\Extensions\Sdk\Http\ApplicationApiController;
 
 /**
  * Admin surface for the domain catalogue and its Cloudflare credentials.
@@ -31,7 +30,6 @@ use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
  */
 class AdminCustomDomainController extends ApplicationApiController
 {
-    use RespondsWithExtensionEnvelope;
 
     public function index(GetCustomDomainsRequest $request): JsonResponse
     {

@@ -4,8 +4,7 @@ namespace Everest\Extensions\Packages\custom_domains\Http\Controllers;
 
 use Everest\Models\Server;
 use Illuminate\Http\JsonResponse;
-use Everest\Http\Controllers\Api\Client\ClientApiController;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
+use Everest\Extensions\Sdk\Http\ClientApiController;
 use Everest\Extensions\Packages\custom_domains\Models\ServerCustomDomain;
 use Everest\Extensions\Packages\custom_domains\Jobs\ProvisionCustomDomainRecordJob;
 use Everest\Extensions\Packages\custom_domains\Jobs\ProvisionServerCustomDomainsJob;
@@ -29,7 +28,6 @@ use Everest\Extensions\Packages\custom_domains\Http\Requests\Client\DeleteServer
  */
 class ServerCustomDomainController extends ClientApiController
 {
-    use RespondsWithExtensionEnvelope;
 
     public function __construct(private CustomDomainProvisioningService $service)
     {
