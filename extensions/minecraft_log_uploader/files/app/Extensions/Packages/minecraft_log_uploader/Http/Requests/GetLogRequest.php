@@ -2,9 +2,9 @@
 
 namespace Everest\Extensions\Packages\minecraft_log_uploader\Http\Requests;
 
-use Everest\Models\Permission;
-use Everest\Contracts\Http\ClientPermissionsRequest;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Permission;
+use Everest\Extensions\Sdk\Http\ClientPermissionsRequest;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 class GetLogRequest extends ClientApiRequest implements ClientPermissionsRequest
 {
