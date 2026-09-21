@@ -50,6 +50,7 @@ MANIFEST_VERSION = 3
 CAPABILITY_KEYS = {
     'routes', 'pages', 'permissions', 'database', 'hooks',
     'queues', 'schedule', 'commands', 'secrets', 'settings',
+    'privileged', 'bindings', 'streams', 'slots', 'flags',
 }
 
 
@@ -257,6 +258,49 @@ def check_structure(manifest: dict, files: dict[str, bytes], is_archive: bool) -
                     findings.append(Finding('block', 'capability.files-without-declaration', path, 0,
                                             f'Ships a {surface} page that capabilities.pages.{surface} does not '
                                             'declare.'))
+
+    # Slots: declared entry <-> slots/<entry>.tsx, both directions. An entry is
+    # a slug, never a path. An undeclared slot matters more than an undeclared
+    # page: a slot mounts on pages the user did not navigate to, so it is code
+    # running somewhere the administrator was never shown.
+    declared_entries = {str(s.get('entry', '')) for s in (capabilities.get('slots') or []) if isinstance(s, dict)}
+    slot_prefix = f'{frontend_root}slots/'
+
+    for entry in sorted(declared_entries):
+        if not ships(f'{slot_prefix}{entry}.tsx'):
+            findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                    f'Declares the frontend slot entry "{entry}" but ships no '
+                                    f'{slot_prefix}{entry}.tsx.'))
+
+    for path in declared_paths:
+        # Only a top-level entry is mounted; supporting components may sit in a
+        # subdirectory below slots/.
+        if path.startswith(slot_prefix) and path.endswith('.tsx') and '/' not in path[len(slot_prefix):]:
+            if path[len(slot_prefix):-len('.tsx')] not in declared_entries:
+                findings.append(Finding('block', 'capability.files-without-declaration', path, 0,
+                                        'Ships a frontend slot entry that capabilities.slots does not declare.'))
+
+    # Bindings: one-directional. A declared binding must ship its class; the
+    # reverse is not a fault, since a package ships plenty of classes it has no
+    # reason to share.
+    for binding in (capabilities.get('bindings') or []):
+        binding = str(binding)
+
+        if not re.fullmatch(r'[A-Z][A-Za-z0-9]*(/[A-Z][A-Za-z0-9]*)*', binding):
+            findings.append(Finding('block', 'capability.binding-malformed', MANIFEST_FILENAME, 0,
+                                    f'Declares the binding "{binding}", which is not a StudlyCase path inside the '
+                                    'package. The file and the class name are both derived from it, which is what '
+                                    'keeps a binding from naming anything outside its own directory.'))
+        elif not ships(f'{backend_root}{binding}.php'):
+            findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                    f'Declares the binding "{binding}" but ships no {backend_root}{binding}.php.'))
+
+    # Privileged services are consent, not containment: the panel runs package
+    # PHP in-process either way. Surface them so a reviewer reads them.
+    for privilege in sorted({str(p) for p in (capabilities.get('privileged') or [])}):
+        findings.append(Finding('info', 'capability.privileged', MANIFEST_FILENAME, 0,
+                                f'Declares the privileged service "{privilege}". An administrator approves this at '
+                                'install and again if an update adds one; confirm the package genuinely needs it.'))
 
     for legacy in ('meta.json', 'index.tsx', 'admin.tsx'):
         if ships(f'{frontend_root}{legacy}'):

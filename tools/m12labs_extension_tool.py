@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ REGISTRY_SCHEMA_VERSION = 2
 CAPABILITY_KEYS = {
     'routes', 'pages', 'permissions', 'database', 'hooks',
     'queues', 'schedule', 'commands', 'secrets', 'settings',
+    'privileged', 'bindings', 'streams', 'slots', 'flags',
 }
 
 
@@ -193,6 +195,50 @@ def derive_v3_capabilities(extension_id: str, files_dir: Path, descriptor: dict)
                         f'declare it under capabilities.pages.{surface}.'
                     )
 
+    # Slots: declared entry <-> slots/<entry>.tsx, both directions. An entry is
+    # a slug, never a path, so the only file a declaration can name is one
+    # directly under slots/. Supporting components may sit in a subdirectory
+    # below it; only a top-level entry is mounted, so only that needs declaring.
+    declared_entries = {str(slot.get('entry', '')) for slot in (capabilities.get('slots') or [])}
+    slots_dir = frontend_root / 'slots'
+
+    for entry in sorted(declared_entries):
+        if not (slots_dir / f'{entry}.tsx').is_file():
+            raise SystemExit(
+                f'extension.json declares the frontend slot entry "{entry}" but files/ ships no '
+                f'frontend/src/extensions/packages/{extension_id}/slots/{entry}.tsx.'
+            )
+
+    if slots_dir.is_dir():
+        for shipped_slot in sorted(slots_dir.glob('*.tsx')):
+            if shipped_slot.stem not in declared_entries:
+                raise SystemExit(
+                    f'files/ ships slots/{shipped_slot.name} but extension.json does not declare it '
+                    'under capabilities.slots. A slot mounts on pages the user did not navigate to, '
+                    'so an undeclared one is code the administrator was never shown.'
+                )
+
+    # Bindings: one-directional, unlike everything above. A declared binding
+    # must ship its class or the container is told to share something that does
+    # not exist. The reverse is not a fault — a package ships plenty of classes
+    # it has no reason to make shared, and requiring a declaration for each
+    # would turn an optimisation into paperwork.
+    for binding in (capabilities.get('bindings') or []):
+        binding = str(binding)
+
+        if not re.fullmatch(r'[A-Z][A-Za-z0-9]*(/[A-Z][A-Za-z0-9]*)*', binding):
+            raise SystemExit(
+                f'capabilities.bindings declares "{binding}", which is not a StudlyCase path inside the '
+                'package. Both the file and the class name are derived from it, which is what keeps a '
+                'binding from naming anything outside your own directory.'
+            )
+
+        if not ships(*binding.split('/')[:-1], f'{binding.split("/")[-1]}.php'):
+            raise SystemExit(
+                f'extension.json declares the binding "{binding}" but files/ ships no '
+                f'app/Extensions/Packages/{extension_id}/{binding}.php.'
+            )
+
     # The v2 layout inferred surfaces from these filenames. Shipping one
     # alongside a v3 manifest is rejected by the panel, so reject it here too.
     for legacy in ('meta.json', 'index.tsx', 'admin.tsx'):
@@ -246,6 +292,14 @@ def capability_summary(capabilities: dict) -> dict:
         'permissions': len(permissions.get('admin') or []),
         'secrets': len(capabilities.get('secrets') or []),
         'settings': len(settings.get('fields') or []),
+        # Named rather than counted, because these are the two an operator
+        # actually wants to read off a catalog card: which privileges a package
+        # asks for, and where it mounts UI outside its own pages.
+        'privileged': sorted({str(p) for p in (capabilities.get('privileged') or [])}),
+        'slots': sorted({str(slot.get('name', '')) for slot in (capabilities.get('slots') or [])}),
+        'streams': len(capabilities.get('streams') or []),
+        'flags': len(capabilities.get('flags') or []),
+        'bindings': len(capabilities.get('bindings') or []),
     }
 
 
