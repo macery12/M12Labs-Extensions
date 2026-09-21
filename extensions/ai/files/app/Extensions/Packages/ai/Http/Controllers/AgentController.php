@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Http\Controllers\Api\Client\Servers;
+namespace Everest\Extensions\Packages\ai\Http\Controllers;
 
 use Everest\Extensions\Packages\ai\Http\Requests\Client\StartAgentTurnRequest;
 use Everest\Extensions\Packages\ai\Http\Requests\Client\DecideAgentTurnRequest;
@@ -77,7 +77,7 @@ class AgentController extends ClientApiController
     /**
      * Start a turn.
      */
-    public function start(StartAgentTurnRequest $request, Server $server): StreamedResponse|JsonResponse
+    public function start(StartAgentTurnRequest $request, Server $server): StreamedResponse
     {
         $this->assertAgentAvailable($request);
 
@@ -127,8 +127,8 @@ class AgentController extends ClientApiController
             // With durable execution on, the request's job is finished here: the
             // turn has been admitted, the conversation exists and what the user
             // said is recorded, so a worker can pick it up knowing everything a
-            // request knew. The response carries the turn id the client reads
-            // the turn back through.
+            // request knew. The stream says so in one frame and closes; the
+            // client reattaches to the relay with the turn id it carried.
             if ($this->agentDurable()) {
                 return $this->dispatchDurableTurn(
                     $context,

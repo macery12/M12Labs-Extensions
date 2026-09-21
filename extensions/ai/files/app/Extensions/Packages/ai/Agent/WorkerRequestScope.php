@@ -4,8 +4,8 @@ namespace Everest\Extensions\Packages\ai\Agent;
 
 use Everest\Models\User;
 use Illuminate\Http\Request;
-use Laravel\Sanctum\TransientToken;
 use Illuminate\Support\Facades\Auth;
+use Everest\Extensions\Sdk\Services\UserAuthority;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Request as RequestFacade;
 
@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Request as RequestFacade;
  * `UpdateUserSessionActivity` skips itself and a background turn can neither
  * create nor destroy one. No cookies, so nothing is decrypted or re-encrypted.
  * The identity carries the same credential kind as the starting request: a
- * `TransientToken` for a browser session, or the freshly-reloaded `ApiKey` for a
+ * transient token for a browser session, or the freshly-reloaded API key for a
  * token request. That keeps key type/profile/IP middleware and activity
  * attribution authoritative inside every internal sub-request.
  *
@@ -51,14 +51,12 @@ class WorkerRequestScope
 
         $request = $this->buildRequest($authority, $user);
 
-        $key = $authority->apiKey();
-        if ($authority->apiKeyId !== null && $key === null) {
+        // Never replay the secret: only the key's id crossed the queue, and
+        // the panel reloads the row from it so key type, profile and address
+        // restrictions stay authoritative inside every internal sub-request.
+        if (!UserAuthority::reader()->restoreAccessToken($user, $authority->apiKeyId)) {
             throw new \RuntimeException('The API key that started this turn is no longer valid.');
         }
-
-        // Never replay the secret. The database model is all Sanctum and the
-        // authorization middleware need to preserve the key's restrictions.
-        $user->withAccessToken($key ?? new TransientToken());
 
         try {
             $this->app->instance('request', $request);

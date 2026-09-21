@@ -2,8 +2,6 @@
 
 namespace Everest\Extensions\Packages\ai\Agent;
 
-use IPTools\IP;
-use IPTools\Range;
 use Everest\Models\User;
 use Everest\Extensions\Sdk\Services\UserAuthority;
 use Illuminate\Http\Request;
@@ -52,7 +50,10 @@ final class TurnAuthority
             sessionId: $request->hasSession() ? $request->session()->getId() : null,
             ip: $request->ip(),
             origin: $request->getSchemeAndHttpHost(),
-            apiKeyId: $token instanceof ApiKey ? $token->id : null,
+            // `currentAccessToken()` answers with the panel's own API key
+            // model, which a package may not name. Only the id is wanted, and
+            // reading it off whatever core returned is enough to carry it.
+            apiKeyId: is_object($token) && isset($token->id) ? (int) $token->id : null,
         );
     }
 
@@ -117,40 +118,17 @@ final class TurnAuthority
      */
     public function stillHeld(): bool
     {
-        $user = $this->user();
+        $authority = UserAuthority::reader();
 
-        if ($user === null || $user->state === 'suspended') {
+        if (!$authority->accountActive($this->userId)) {
             return false;
         }
 
         if ($this->apiKeyId !== null) {
-            $key = $this->apiKey();
-
-            if ($key === null || ($key->expires_at !== null && $key->expires_at->isPast())) {
-                return false;
-            }
-
-            if (empty($key->allowed_ips)) {
-                return true;
-            }
-
-            if ($this->ip === null) {
-                return false;
-            }
-
-            try {
-                $origin = new IP($this->ip);
-
-                foreach ($key->allowed_ips as $allowed) {
-                    if (Range::parse($allowed)->contains($origin)) {
-                        return true;
-                    }
-                }
-            } catch (\Throwable) {
-                return false;
-            }
-
-            return false;
+            // Expiry and any address range the key is pinned to are part of
+            // what the key means, so they are asked as one question rather
+            // than re-implemented here against a model the package cannot see.
+            return $authority->apiKeyActive($this->userId, $this->apiKeyId, $this->ip);
         }
 
         if ($this->sessionId === null) {
@@ -160,6 +138,6 @@ final class TurnAuthority
             return false;
         }
 
-        return UserAuthority::reader()->sessionActive($this->userId, $this->sessionId);
+        return $authority->sessionActive($this->userId, $this->sessionId);
     }
 }

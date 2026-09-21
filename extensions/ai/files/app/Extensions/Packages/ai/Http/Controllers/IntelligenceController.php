@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Http\Controllers\Api\Application;
+namespace Everest\Extensions\Packages\ai\Http\Controllers;
 
 use Everest\Extensions\Sdk\Services\PanelActivity;
 use Illuminate\Http\Response;
@@ -19,12 +19,16 @@ use Everest\Extensions\Packages\ai\Providers\AbstractProvider;
 use Everest\Extensions\Sdk\Services\AdminAuthorization;
 use Everest\Extensions\Packages\ai\Inference\ProviderReadiness;
 use Everest\Extensions\Packages\ai\Exceptions\AIServiceException;
-use Everest\Extensions\Packages\ai\Http\Requests;
 use Everest\Extensions\Packages\ai\Providers\OpenAiCompatibleProvider;
+use Everest\Extensions\Sdk\Http\ApplicationApiController;
 use Everest\Extensions\Packages\ai\Http\Requests\GetIntelligenceRequest;
+use Everest\Extensions\Packages\ai\Http\Requests\ProbeToolCallingRequest;
+use Everest\Extensions\Packages\ai\Http\Requests\UpdateIntelligenceSettingsRequest;
 
 class IntelligenceController extends ApplicationApiController
 {
+    private readonly AdminAuthorization $adminAuthorizer;
+
     /**
      * IntelligenceController constructor.
      */
@@ -32,8 +36,9 @@ class IntelligenceController extends ApplicationApiController
         private ProviderFactory $factory,
         private AiRedactionPolicy $redactor,
         private ToolBudget $budget,
-        private AdminAuthorizer $adminAuthorizer,
     ) {
+        $this->adminAuthorizer = AdminAuthorization::reader();
+
         parent::__construct();
     }
 
@@ -118,7 +123,7 @@ class IntelligenceController extends ApplicationApiController
             'privacy' => [
                 'enabled' => $this->redactor->enabled(),
                 'categories' => $this->redactor->activeKinds(),
-                'available' => PiiRedactor::KINDS,
+                'available' => PackageRedaction::allKinds(),
                 'forced' => $this->redactor->forced(),
             ],
         ]);
@@ -129,7 +134,7 @@ class IntelligenceController extends ApplicationApiController
      *
      * @throws \Throwable
      */
-    public function update(Intelligence\UpdateIntelligenceSettingsRequest $request): Response
+    public function update(UpdateIntelligenceSettingsRequest $request): Response
     {
         // Endpoint and credential changes can turn the panel into a network
         // client for an attacker-controlled host. Keep ordinary AI tuning
@@ -278,7 +283,7 @@ class IntelligenceController extends ApplicationApiController
      * same tool-call shape the agent consumes. Unlike the inference status
      * endpoint, this performs a real generation and must never be polled.
      */
-    public function probeToolCalling(Intelligence\ProbeToolCallingRequest $request): JsonResponse
+    public function probeToolCalling(ProbeToolCallingRequest $request): JsonResponse
     {
         $config = $this->factory->config();
 

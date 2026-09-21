@@ -71,7 +71,7 @@ class UpdateIntelligenceSettingsRequest extends ApplicationApiRequest
             // leave it silently unsettable here.
             'privacy.enabled' => 'nullable|bool',
             'privacy.categories' => 'nullable|array',
-            'privacy.categories.*' => 'string|in:' . implode(',', PiiRedactor::KINDS),
+            'privacy.categories.*' => 'string|in:' . implode(',', PackageRedaction::allKinds()),
 
             // Two sentinels, both meaning "off" rather than "one": zero queue
             // depth refuses every turn that cannot have a slot immediately, and

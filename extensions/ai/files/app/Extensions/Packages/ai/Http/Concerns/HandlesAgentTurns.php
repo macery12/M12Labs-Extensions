@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Http\Controllers\Api\Concerns;
+namespace Everest\Extensions\Packages\ai\Http\Concerns;
 
 use Everest\Models\Server;
 use Illuminate\Support\Str;
@@ -24,6 +24,8 @@ use Everest\Extensions\Packages\ai\Agent\AgentContext;
 use Everest\Extensions\Packages\ai\Agent\TurnRecorder;
 use Everest\Extensions\Packages\ai\Tools\ToolRegistry;
 use Everest\Extensions\Sdk\Services\DelegatedAccess;
+use Everest\Extensions\Sdk\Services\PackageStreams;
+use Everest\Services\Streaming\EventStreamWriter;
 use Everest\Extensions\Packages\ai\Agent\AgentEventLog;
 use Everest\Extensions\Packages\ai\Agent\TurnAuthority;
 use Everest\Extensions\Packages\ai\Inference\Admission;
@@ -58,6 +60,23 @@ trait HandlesAgentTurns
     /** A crashed claimant is failed closed after this lease. It is never replayed. */
     protected const PENDING_CLAIM_MINUTES = 10;
 
+    /**
+     * The declared stream this package's turns run on.
+     *
+     * One kind rather than three, because a starting turn, a relay and a
+     * queued refusal are the same thing to an operator: a worker held open for
+     * one person reading one turn. Splitting them would let somebody hold three
+     * connections where the manifest says two.
+     */
+    protected const STREAM_KIND = 'agent-turn';
+
+    /**
+     * Where this turn's frames are going, while a request is holding a socket
+     * open. Null in a queue worker, which overrides the emitters below and
+     * appends to the durable log instead.
+     */
+    protected ?EventStreamWriter $streamWriter = null;
+
     abstract protected function agentRunner(): AgentRunner;
 
     abstract protected function toolRegistry(): ToolRegistry;
@@ -81,17 +100,11 @@ trait HandlesAgentTurns
         $turnId = $context->turnId;
         $idleSeconds = $this->agentRunner()->streamIdleSeconds();
 
-        return response()->stream(
-            fn () => $this->executeTurn($context, $resuming, $conversation, $budgetReservation, $lease),
-            200,
-            [
-                'Content-Type' => 'text/event-stream',
-                'Cache-Control' => 'no-cache',
-                'X-Accel-Buffering' => 'no',
-                'X-Agent-Turn-Id' => $turnId,
-                'X-Agent-Idle-Seconds' => (string) $idleSeconds,
-            ]
-        );
+        return $this->openStream($context->user, function (EventStreamWriter $out) use ($context, $resuming, $conversation, $budgetReservation, $lease, $turnId, $idleSeconds): void {
+            $this->send(AgentEvent::stream($turnId, $idleSeconds));
+
+            $this->executeTurn($context, $resuming, $conversation, $budgetReservation, $lease);
+        });
     }
 
     /**
@@ -126,8 +139,10 @@ trait HandlesAgentTurns
         $events = app(AgentEventLog::class);
         $idleSeconds = $this->agentRunner()->streamIdleSeconds();
 
-        return response()->stream(function () use ($usage, $turnId, $events, $after): void {
+        return $this->openStream($user, function (EventStreamWriter $out) use ($usage, $turnId, $events, $after, $idleSeconds): void {
             $cursor = max(0, $after);
+
+            $this->send(AgentEvent::stream($turnId, $idleSeconds));
 
             // A reader that is already up to date would otherwise sit silent
             // until the first new frame, which is indistinguishable from a
@@ -152,7 +167,11 @@ trait HandlesAgentTurns
                     break;
                 }
 
-                if (time() >= $stopAt) {
+                // The deadline the platform set for this stream, and whether
+                // the browser is still there. A relay that never asked would
+                // hold a worker for the full declared duration replaying a log
+                // nobody is reading.
+                if (time() >= $stopAt || $out->shouldStop()) {
                     break;
                 }
 
@@ -166,13 +185,7 @@ trait HandlesAgentTurns
             }
 
             $this->sendTerminal();
-        }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-            'X-Agent-Turn-Id' => $turnId,
-            'X-Agent-Idle-Seconds' => (string) $idleSeconds,
-        ]);
+        });
     }
 
     /**
@@ -186,8 +199,7 @@ trait HandlesAgentTurns
     {
         foreach ($events->replay($turnId, $cursor) as $frame) {
             $cursor = $frame['seq'];
-            $this->write('id: ' . $cursor);
-            $this->write('data: ' . json_encode($frame['event']));
+            $this->sendNumbered($frame['event'], $cursor);
         }
 
         return $cursor;
@@ -355,7 +367,7 @@ trait HandlesAgentTurns
         ?AiConversation $conversation,
         ?AiBudgetReservation $budgetReservation,
         ?TurnLease $lease,
-    ): JsonResponse {
+    ): StreamedResponse {
         $runner = $this->agentRunner();
         $serverUuid = $context->server?->uuid;
         $grace = $runner->maxWallSeconds() + 300;
@@ -390,12 +402,19 @@ trait HandlesAgentTurns
             $budgetReservation?->handle(),
         )->afterCommit();
 
-        return response()->json(['data' => array_filter([
-            'turn_id' => $context->turnId,
-            'conversation_id' => $conversation?->id,
-            'conversation_title' => $conversation?->title,
-            'durable' => true,
-        ], fn ($value) => $value !== null)]);
+        // Answered as a stream that says one thing and closes, rather than as
+        // a JSON body on an endpoint that otherwise streams. The client asked
+        // for `text/event-stream` and gets one; which way the turn is being
+        // run is news carried *on* the transport instead of a second shape the
+        // reader has to detect before it can start.
+        return $this->openStream($context->user, function (EventStreamWriter $out) use ($context, $conversation): void {
+            $this->send(AgentEvent::accepted(
+                $context->turnId,
+                $conversation?->id,
+                $conversation?->title === null ? null : (string) $conversation->title,
+            ));
+            $this->sendTerminal();
+        });
     }
 
     /**
@@ -403,7 +422,7 @@ trait HandlesAgentTurns
      *
      * Extracted from the streaming response so *where* a turn runs is a separate
      * decision from *what* running one means: request-bound turns call this inside
-     * `response()->stream()`, durable ones from a worker with `send()` pointed at
+     * a held stream, durable ones from a worker with `send()` pointed at
      * the event log. Everything that makes a turn correct lives here once — the
      * running usage row, the heartbeat, resolving a resumed pending action,
      * failing open tool calls on throw, and persisting terminal state before the
@@ -678,15 +697,15 @@ trait HandlesAgentTurns
      *
      * Written as SSE rather than a JSON 429 so the browser's existing reader
      * handles it on the same code path as a turn that ran: one transport, one
-     * set of failure modes. Deliberately carries no `X-Agent-Turn-Id` — nothing
-     * has started, so there is no turn to reconcile against if this response is
+     * set of failure modes. Deliberately emits no `stream` frame — nothing has
+     * started, so there is no turn to reconcile against if this response is
      * itself lost, and the client must simply present its ticket again.
      */
     protected function queuedResponse(Admission $admission): StreamedResponse
     {
         $queued = $admission->toArray();
 
-        return response()->stream(function () use ($queued): void {
+        return $this->openStream(null, function (EventStreamWriter $out) use ($queued): void {
             $this->sendComment('keep-alive');
             $this->send(AgentEvent::queued(
                 $queued['position'],
@@ -697,11 +716,7 @@ trait HandlesAgentTurns
             ));
             $this->send(AgentEvent::done('queued'));
             $this->sendTerminal();
-        }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-        ]);
+        });
     }
 
     /**
@@ -1520,14 +1535,10 @@ trait HandlesAgentTurns
 
         $status = $pending->status;
 
-        return response()->stream(function () use ($status): void {
+        return $this->openStream(null, function (EventStreamWriter $out) use ($status): void {
             $this->send(AgentEvent::done('existing_' . $status));
             $this->sendTerminal();
-        }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-        ]);
+        });
     }
 
     /**
@@ -1583,20 +1594,36 @@ trait HandlesAgentTurns
     }
 
     /**
-     * Write one SSE frame.
+     * Open one of this package's declared streams and point the emitters at it.
      *
-     * `ob_flush()` emits a notice when no buffer is active, which would land
-     * as garbage in the middle of the stream — hence the level check.
+     * Every SSE response here goes through this, rather than through
+     * `response()->stream()`, because the platform owns what a stream costs:
+     * the deadline, the keep-alive interval and how many a person may hold at
+     * once are read from the manifest and narrowed by the deployment's own
+     * ceiling. A package that framed its own response would be outside all
+     * three.
+     *
+     * `$user` scopes the per-user accounting. It is null only for the two
+     * responses that carry no turn -- a queue refusal and a replayed decision
+     * -- which write a frame or two and close.
+     *
+     * @param callable(EventStreamWriter): void $producer
      */
-    protected function write(string $line): void
+    protected function openStream($user, callable $producer): StreamedResponse
     {
-        echo $line . "\n\n";
+        return PackageStreams::for('ai')->open(
+            self::STREAM_KIND,
+            function (EventStreamWriter $out) use ($producer): void {
+                $this->streamWriter = $out;
 
-        if (ob_get_level() > 0) {
-            @ob_flush();
-        }
-
-        flush();
+                try {
+                    $producer($out);
+                } finally {
+                    $this->streamWriter = null;
+                }
+            },
+            $user?->uuid === null ? null : (string) $user->uuid,
+        );
     }
 
     /**
@@ -1610,7 +1637,23 @@ trait HandlesAgentTurns
      */
     protected function send(AgentEvent $event): void
     {
-        $this->write('data: ' . json_encode($event->toArray()));
+        $this->streamWriter?->data($event->toArray());
+    }
+
+    /**
+     * A replayed frame, carrying the sequence it was logged under.
+     *
+     * The `id` is part of the frame rather than a frame of its own. Writing it
+     * separately -- which is what this did while the module was in core -- ends
+     * the frame early, so the payload that follows arrives as a second,
+     * unnumbered event and the client's resume cursor never advances. A
+     * reconnect then replays the whole turn instead of the gap.
+     *
+     * @param array<string, mixed> $event
+     */
+    protected function sendNumbered(array $event, int $seq): void
+    {
+        $this->streamWriter?->data($event, $seq);
     }
 
     /**
@@ -1619,7 +1662,7 @@ trait HandlesAgentTurns
      */
     protected function sendComment(string $text): void
     {
-        $this->write(': ' . $text);
+        $this->streamWriter?->comment($text);
     }
 
     /**
@@ -1629,6 +1672,6 @@ trait HandlesAgentTurns
      */
     protected function sendTerminal(): void
     {
-        $this->write('data: [DONE]');
+        $this->streamWriter?->close();
     }
 }

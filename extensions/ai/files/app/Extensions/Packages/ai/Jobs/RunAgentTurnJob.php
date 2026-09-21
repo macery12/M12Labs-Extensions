@@ -271,6 +271,16 @@ class RunAgentTurnJob extends ExtensionJob implements ShouldQueue
     }
 
     /**
+     * Sequences are assigned by the log as it appends, so a worker never has
+     * one to carry. Only the relay numbers frames, from what it read back.
+     *
+     * @param array<string, mixed> $event
+     */
+    protected function sendNumbered(array $event, int $seq): void
+    {
+    }
+
+    /**
      * Terminality is not a frame in the durable model. A reader can join after
      * the turn ended, so "is it over" is a question about state, not about
      * having seen a sentinel. The relay asks the usage row — written before this
@@ -279,10 +289,6 @@ class RunAgentTurnJob extends ExtensionJob implements ShouldQueue
     protected function sendTerminal(): void
     {
         $this->releaseHeldResources();
-    }
-
-    protected function write(string $line): void
-    {
     }
 
     /*

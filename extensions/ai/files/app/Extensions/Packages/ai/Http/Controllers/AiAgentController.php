@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Http\Controllers\Api\Application;
+namespace Everest\Extensions\Packages\ai\Http\Controllers;
 
 use Everest\Models\Server;
 use Illuminate\Support\Str;
@@ -27,6 +27,7 @@ use Everest\Extensions\Packages\ai\Support\AiBudgetService;
 use Everest\Extensions\Packages\ai\Providers\OllamaProvider;
 use Everest\Extensions\Packages\ai\Tools\ConsoleCommandGate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Everest\Extensions\Sdk\Http\ApplicationApiController;
 use Everest\Extensions\Packages\ai\Http\Concerns\HandlesAgentTurns;
 use Everest\Extensions\Packages\ai\Http\Requests\AgentTurnRequest;
 use Everest\Extensions\Packages\ai\Http\Requests\AgentDecisionRequest;

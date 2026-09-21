@@ -24,11 +24,13 @@ class ToolRegistry
     /** @var array<string, ToolDefinition>|null */
     private ?array $indexed = null;
 
+    private readonly AdminAuthorization $authorizer;
+
     public function __construct(
         private RiskGate $riskGate,
         private SchemaValidator $validator,
-        private AdminAuthorizer $authorizer,
     ) {
+        $this->authorizer = AdminAuthorization::reader();
     }
 
     /**
@@ -260,14 +262,14 @@ class ToolRegistry
     public function adminCanUse(User $user, ToolDefinition $definition): bool
     {
         foreach ($definition->permissions as $capability) {
-            if (!$this->authorizer->hasCapability($user, $capability)) {
+            if (!$this->authorizer->holds($user, $capability)) {
                 return false;
             }
         }
 
         return $this->holdsAnyOf(
             $definition,
-            fn (string $capability) => $this->authorizer->hasCapability($user, $capability),
+            fn (string $capability) => $this->authorizer->holds($user, $capability),
         );
     }
 

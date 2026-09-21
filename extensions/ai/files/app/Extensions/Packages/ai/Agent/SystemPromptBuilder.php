@@ -334,11 +334,11 @@ class SystemPromptBuilder
         $user = $context->user;
 
         // Loaded once and cached on the model: this runs on every step of the
-        // turn, and AdminAuthorizer::profile() re-queries whenever the relation
-        // is absent.
+        // turn, and the panel re-queries the role whenever the relation is
+        // absent.
         $user->loadMissing('adminRole');
 
-        $authorizer = app(AdminAuthorizer::class);
+        $authorizer = AdminAuthorization::reader();
 
         return [
             'surface' => 'panel_administration',

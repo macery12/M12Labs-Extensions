@@ -1,7 +1,8 @@
 <?php
 
-namespace Everest\Models;
+namespace Everest\Extensions\Packages\ai\Models;
 
+use Everest\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 

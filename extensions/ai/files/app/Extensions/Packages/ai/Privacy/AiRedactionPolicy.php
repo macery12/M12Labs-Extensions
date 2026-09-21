@@ -11,7 +11,7 @@ use Everest\Extensions\Packages\ai\Data\ProviderConfig;
 /**
  * When the AI module redacts, and which categories it sweeps.
  *
- * The engine itself is core's ({@see PiiRedactor}) because a core admin page
+ * The engine itself is core's ({@see PackageRedaction}) because a core admin page
  * needs it too — see Everest\Services\Queue\FailedJobRedactor. What stayed
  * behind is everything that is genuinely a decision about *the AI module*: an
  * operator toggle, the category list they chose, and the rule that OpenRouter
@@ -27,8 +27,16 @@ use Everest\Extensions\Packages\ai\Data\ProviderConfig;
  */
 class AiRedactionPolicy
 {
-    public function __construct(private PiiRedactor $redactor)
+    private readonly PackageRedaction $redactor;
+
+    /**
+     * Takes no dependencies so the container can build it anywhere. The SDK
+     * engine has no public constructor -- it is asked for, not injected -- so
+     * holding one here is what keeps this class resolvable.
+     */
+    public function __construct()
     {
+        $this->redactor = PackageRedaction::engine();
     }
 
     /**
@@ -88,19 +96,19 @@ class AiRedactionPolicy
     public function activeKinds(): array
     {
         if ($this->forced()) {
-            return PiiRedactor::KINDS;
+            return PackageRedaction::allKinds();
         }
 
         // An empty or unparseable value falls back to the defaults rather
         // than to no categories at all, which is the point of the comment
         // above: "none" has to be something an operator chose, never
         // something a malformed row decided on their behalf.
-        $selected = AiConfiguration::list('privacy.categories', PiiRedactor::DEFAULT_KINDS)
-            ?: PiiRedactor::DEFAULT_KINDS;
+        $selected = AiConfiguration::list('privacy.categories', PackageRedaction::defaultKinds())
+            ?: PackageRedaction::defaultKinds();
 
         // Intersected against the canonical list so the order is the declared
         // one and an unknown category cannot reach the walker.
-        return array_values(array_intersect(PiiRedactor::KINDS, $selected));
+        return array_values(array_intersect(PackageRedaction::allKinds(), $selected));
     }
 
     /** OpenRouter always receives fully redacted panel context and tool output. */

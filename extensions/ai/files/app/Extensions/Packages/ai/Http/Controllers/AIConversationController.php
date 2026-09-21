@@ -1,6 +1,6 @@
 <?php
 
-namespace Everest\Http\Controllers\Api\Client\Servers;
+namespace Everest\Extensions\Packages\ai\Http\Controllers;
 
 use Everest\Extensions\Packages\ai\Http\Requests\Client\ServerConversationRequest;
 use Everest\Models\Server;

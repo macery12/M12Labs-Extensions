@@ -12,6 +12,8 @@ namespace Everest\Extensions\Packages\ai\Agent;
  */
 class AgentEvent
 {
+    public const TYPE_STREAM = 'stream';
+    public const TYPE_ACCEPTED = 'accepted';
     public const TYPE_CONVERSATION = 'conversation';
     public const TYPE_QUEUED = 'queued';
     public const TYPE_TEXT = 'text';
@@ -32,6 +34,45 @@ class AgentEvent
         public readonly string $type,
         public readonly array $payload = [],
     ) {
+    }
+
+    /**
+     * What the client needs to reconcile this connection, sent before anything
+     * else on every stream a turn runs on.
+     *
+     * These two travelled as response headers until the module became a
+     * package. A declared stream's headers belong to the platform -- it sets
+     * the deadline and keep-alive a browser reads, and an extension does not
+     * get to add to them -- so anything specific to *this* stream has to be
+     * said in a frame instead. That is the better place for them anyway: a
+     * relay reconnect and a fresh turn now announce themselves identically.
+     *
+     * `idleSeconds` is not the deadline. It is how long silence stays healthy,
+     * which a client turns into "this connection is dead, reconcile" — a turn
+     * can legitimately say nothing for as long as a tool takes to run.
+     */
+    public static function stream(string $turnId, int $idleSeconds): self
+    {
+        return new self(self::TYPE_STREAM, ['turn_id' => $turnId, 'idle_seconds' => $idleSeconds]);
+    }
+
+    /**
+     * The turn was handed to a worker, and nothing further arrives here.
+     *
+     * The durable path's answer. It used to be a JSON body on the same
+     * endpoint, which meant the client had to sniff `Content-Type` before it
+     * knew whether it was holding a stream — and a reader that guessed wrong
+     * simply read a JSON document as SSE and reported nothing at all. One
+     * transport, one shape: the client reads this frame and reattaches through
+     * the relay.
+     */
+    public static function accepted(string $turnId, ?int $conversationId, ?string $conversationTitle): self
+    {
+        return new self(self::TYPE_ACCEPTED, array_filter([
+            'turn_id' => $turnId,
+            'conversation_id' => $conversationId,
+            'conversation_title' => $conversationTitle,
+        ], fn ($value) => $value !== null) + ['durable' => true]);
     }
 
     /**

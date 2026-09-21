@@ -52,7 +52,6 @@ class AgentRunner
         private SystemPromptBuilder $promptBuilder,
         private AiRedactionPolicy $redactor,
         private DelegatedAccess $access,
-        private FileDiffService $fileDiffs,
         private TurnCancellations $cancellations,
         private WorkingSetPlanner $planner,
         private ToolDiscoveryService $discovery,
@@ -2125,7 +2124,7 @@ class AgentRunner
             );
         }
 
-        if (!$this->fileDiffs->isTextFile($path)) {
+        if (!PanelFileDiff::reader()->isTextFile($path)) {
             $detail = sprintf('The target "%s" is not an allowlisted text-file type. files_write cannot create, upload, download, reconstruct or restore binary, database, world-region, archive or unknown file types, and made no change.', $path);
 
             // The positive text allowlist above is the guard. This narrower
