@@ -7,7 +7,9 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -695,6 +697,146 @@ def sync_command(args: argparse.Namespace) -> int:
     return publish_command(args)
 
 
+# Where a staged suite lands inside the panel checkout. The Unit/Integration
+# split is not cosmetic: `bootstrap/tests.php` decides whether to provision a
+# migrated file database by looking for the literal strings `tests/Unit` and
+# `tests/Integration` in the PHPUnit argv. A package suite parked anywhere else
+# reads as "might include Integration", so the fast unit path silently becomes
+# a full migrate-and-seed -- and, per the panel's own notes, a file database
+# forced onto a unit run fabricates failures wholesale. Staging into the
+# panel's own two roots makes its heuristic answer correctly.
+SUITE_ROOTS = {
+    'Unit': 'tests/Unit/Extensions',
+    'Integration': 'tests/Integration/Extensions',
+}
+
+# Shared fixtures and traits, staged once where both suites can autoload them
+# and PHPUnit will never collect them as tests. `Everest\Tests\` maps to
+# `tests/`, so this lands under `Everest\Tests\Extensions\<id>`.
+SUPPORT_ROOT = 'tests/Extensions'
+
+BACKUP_SUFFIX = '.m12labs-tests-backup'
+
+
+def install_roots(extension_id: str) -> list[str]:
+    """The directories the panel's installer writes, relative to its root."""
+    return [
+        f'app/Extensions/Packages/{extension_id}',
+        f'frontend/src/extensions/packages/{extension_id}',
+    ]
+
+
+class StagedTree:
+    """One directory swapped into a panel checkout and put back afterwards.
+
+    Whatever was already at the destination is moved aside rather than deleted,
+    because the usual case is that the extension under test is *also installed*
+    on this panel. Running its tests must not quietly replace an operator's
+    installed copy with the working tree, nor leave it missing if PHPUnit dies
+    halfway through.
+    """
+
+    def __init__(self, source: Path, destination: Path) -> None:
+        self.source = source
+        self.destination = destination
+        self.backup = destination.with_name(destination.name + BACKUP_SUFFIX)
+        self.displaced = False
+
+    def __enter__(self) -> 'StagedTree':
+        if self.backup.exists():
+            raise SystemExit(
+                f'{self.backup} already exists -- a previous run was interrupted. '
+                f'Move it back over {self.destination} by hand before retrying.'
+            )
+        if self.destination.exists():
+            self.destination.rename(self.backup)
+            self.displaced = True
+        self.destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(self.source, self.destination)
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        if self.destination.exists():
+            shutil.rmtree(self.destination)
+        if self.displaced and self.backup.exists():
+            self.backup.rename(self.destination)
+
+
+def tests_command(args: argparse.Namespace) -> int:
+    extension_dir = resolve_extension_dir(args.extension_source_dir)
+    descriptor = load_json(extension_dir / 'extension.json')
+    extension_id = descriptor.get('extension', {}).get('id')
+    if not extension_id:
+        raise SystemExit('extension.json must define extension.id')
+
+    panel = Path(args.panel).expanduser().resolve()
+    if not (panel / 'artisan').is_file():
+        raise SystemExit(f'{panel} does not look like a panel checkout (no artisan).')
+
+    phpunit = panel / 'vendor/bin/phpunit'
+    if not phpunit.is_file():
+        raise SystemExit(f'{phpunit} is missing -- run composer install in the panel first.')
+
+    tests_dir = extension_dir / 'tests'
+    if not tests_dir.is_dir():
+        raise SystemExit(f'{extension_dir.name} ships no tests/ directory.')
+
+    suites = [args.suite] if args.suite else [name for name in SUITE_ROOTS if (tests_dir / name).is_dir()]
+    if not suites:
+        raise SystemExit(f'No suites found. Expected {tests_dir}/Unit or {tests_dir}/Integration.')
+
+    files_dir = extension_dir / 'files'
+    staged = [
+        StagedTree(files_dir / relative, panel / relative)
+        for relative in install_roots(extension_id)
+        if (files_dir / relative).is_dir()
+    ]
+    if (tests_dir / 'Support').is_dir():
+        staged.append(StagedTree(tests_dir / 'Support', panel / SUPPORT_ROOT / extension_id))
+    else:
+        raise SystemExit(
+            f'{extension_dir.name}/tests/Support is missing. It is where the descriptor is '
+            f'staged, which a test needs to stand the package up in the runtime plan.'
+        )
+    for suite in suites:
+        source = tests_dir / suite
+        if not source.is_dir():
+            raise SystemExit(f'Suite {suite} has no directory at {source}.')
+        staged.append(StagedTree(source, panel / SUITE_ROOTS[suite] / extension_id))
+
+    exit_code = 0
+    with ExitStack() as stack:
+        for tree in staged:
+            stack.enter_context(tree)
+            print(f'staged {tree.source.relative_to(REPO_ROOT)} -> {tree.destination.relative_to(panel)}', flush=True)
+
+        # The descriptor is not under files/, so it is never staged as package
+        # code -- but a test needs it: standing the extension up in the panel's
+        # runtime plan from its *real* manifest is what makes the privilege,
+        # stream and secret gates answer the way they will in production. A
+        # capability the manifest forgets then fails a test here rather than on
+        # an operator's panel.
+        descriptor_copy = panel / SUPPORT_ROOT / extension_id / 'extension.json'
+        shutil.copy2(extension_dir / 'extension.json', descriptor_copy)
+        print(f'staged {(extension_dir / "extension.json").relative_to(REPO_ROOT)} -> {descriptor_copy.relative_to(panel)}', flush=True)
+
+        for suite in suites:
+            target = f'{SUITE_ROOTS[suite]}/{extension_id}'
+            # No env overrides, deliberately. The panel's phpunit.xml and its
+            # bootstrap already decide what each suite needs, and every attempt
+            # to "help" by pinning a database from out here has produced a red
+            # run that said nothing about the code under test.
+            command = [str(phpunit), '--configuration', 'phpunit.xml', target]
+            if args.filter:
+                command += ['--filter', args.filter]
+            command += args.phpunit_args
+            print(f'\n$ {" ".join(command)}', flush=True)
+            result = subprocess.run(command, cwd=panel)
+            exit_code = exit_code or result.returncode
+
+    return exit_code
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='M12Labs extension packaging tool')
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -741,6 +883,17 @@ def make_parser() -> argparse.ArgumentParser:
     key_parser.add_argument('--valid-until', default='', help='ISO 8601 instant the key stops being usable')
     key_parser.add_argument('--revoke', action='store_true', help='Mark the key revoked instead of active')
     key_parser.set_defaults(func=authorize_key_command)
+
+    tests_parser = subparsers.add_parser(
+        'tests',
+        help="Stage an extension into a panel checkout and run the package's own PHPUnit suites",
+    )
+    tests_parser.add_argument('extension_source_dir')
+    tests_parser.add_argument('--panel', default='/var/www/m12labs', help='Panel checkout to run against (default: /var/www/m12labs)')
+    tests_parser.add_argument('--suite', choices=sorted(SUITE_ROOTS), help='Run one suite instead of every suite the package ships')
+    tests_parser.add_argument('--filter', help='PHPUnit --filter expression')
+    tests_parser.add_argument('phpunit_args', nargs='*', help='Further arguments passed straight to PHPUnit')
+    tests_parser.set_defaults(func=tests_command)
 
     return parser
 
