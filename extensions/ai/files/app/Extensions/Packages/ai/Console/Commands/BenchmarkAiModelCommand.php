@@ -17,7 +17,7 @@ use Everest\Extensions\Packages\ai\Benchmark\AdvancedAiModelBenchmark;
 
 class BenchmarkAiModelCommand extends Command
 {
-    protected $signature = 'p:ai:benchmark
+    protected $signature = 'p:ext:ai:benchmark
         {--suite=basic : Suite to run: basic, advanced, or all}
         {--runs=1 : Attempts per benchmark case (1-10)}
         {--timeout= : Per-request timeout in seconds (10-600); defaults to the production provider timeout}

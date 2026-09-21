@@ -10,7 +10,7 @@ use Everest\Extensions\Packages\ai\Providers\OllamaProvider;
 
 class WarmAiModelCommand extends Command
 {
-    protected $signature = 'p:ai:warm';
+    protected $signature = 'p:ext:ai:warm';
 
     protected $description = 'Keep the configured Ollama model loaded in memory so users never hit a cold start.';
 

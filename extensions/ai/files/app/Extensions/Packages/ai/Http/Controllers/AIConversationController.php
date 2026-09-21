@@ -2,6 +2,7 @@
 
 namespace Everest\Http\Controllers\Api\Client\Servers;
 
+use Everest\Extensions\Packages\ai\Http\Requests\Client\ServerConversationRequest;
 use Everest\Models\Server;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +16,7 @@ class AIConversationController extends ClientApiController
      * List all conversations for the authenticated user on this server.
      * Returns newest first, limited to 50.
      */
-    public function index(Request $request, Server $server): JsonResponse
+    public function index(ServerConversationRequest $request, Server $server): JsonResponse
     {
         $conversations = AiConversation::where('user_id', $request->user()->id)
             ->where('server_uuid', $server->uuid)
@@ -29,7 +30,7 @@ class AIConversationController extends ClientApiController
     /**
      * Load messages for a specific conversation.
      */
-    public function show(Request $request, Server $server, int $conversationId): JsonResponse
+    public function show(ServerConversationRequest $request, Server $server, int $conversationId): JsonResponse
     {
         $conversation = $this->resolveConversation($request, $server, $conversationId);
 
@@ -57,7 +58,7 @@ class AIConversationController extends ClientApiController
     /**
      * Delete a conversation (and its messages via cascade).
      */
-    public function destroy(Request $request, Server $server, int $conversationId): JsonResponse
+    public function destroy(ServerConversationRequest $request, Server $server, int $conversationId): JsonResponse
     {
         $conversation = $this->resolveConversation($request, $server, $conversationId);
 
@@ -70,7 +71,7 @@ class AIConversationController extends ClientApiController
      * Toggle the saved state of a conversation.
      * Saving clears expires_at (permanent). Unsaving sets a fresh 7-day expiry.
      */
-    public function toggleSave(Request $request, Server $server, int $conversationId): JsonResponse
+    public function toggleSave(ServerConversationRequest $request, Server $server, int $conversationId): JsonResponse
     {
         $conversation = $this->resolveConversation($request, $server, $conversationId);
 

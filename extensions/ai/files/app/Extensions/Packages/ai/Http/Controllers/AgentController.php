@@ -2,6 +2,9 @@
 
 namespace Everest\Http\Controllers\Api\Client\Servers;
 
+use Everest\Extensions\Packages\ai\Http\Requests\Client\StartAgentTurnRequest;
+use Everest\Extensions\Packages\ai\Http\Requests\Client\DecideAgentTurnRequest;
+use Everest\Extensions\Packages\ai\Http\Requests\Client\AgentTurnStateRequest;
 use Everest\Models\Server;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
@@ -74,16 +77,9 @@ class AgentController extends ClientApiController
     /**
      * Start a turn.
      */
-    public function start(Request $request, Server $server): StreamedResponse|JsonResponse
+    public function start(StartAgentTurnRequest $request, Server $server): StreamedResponse|JsonResponse
     {
         $this->assertAgentAvailable($request);
-
-        $request->validate([
-            'query' => 'required|string|min:1|max:8000',
-            'conversation_id' => 'nullable|integer',
-            'console' => 'nullable|string|max:20000',
-            'ticket' => 'nullable|string|max:64',
-        ]);
 
         $user = $request->user();
 
@@ -157,7 +153,7 @@ class AgentController extends ClientApiController
     }
 
     /** Authoritative state used when an accepted SSE connection disappears. */
-    public function turnStatus(Request $request, Server $server, string $turnId): JsonResponse
+    public function turnStatus(AgentTurnStateRequest $request, Server $server, string $turnId): JsonResponse
     {
         $this->assertAgentEnabled($request);
 
@@ -172,7 +168,7 @@ class AgentController extends ClientApiController
      * last sequence it saw, and gets the frames it missed followed by the live
      * ones. Nothing about the turn depends on anyone being connected.
      */
-    public function stream(Request $request, Server $server, string $turnId): StreamedResponse
+    public function stream(AgentTurnStateRequest $request, Server $server, string $turnId): StreamedResponse
     {
         $this->assertAgentEnabled($request);
 
@@ -197,7 +193,7 @@ class AgentController extends ClientApiController
      * Singular by construction — `concurrency.per_user` admits one turn at a
      * time — so this is "the" active turn rather than a list to choose from.
      */
-    public function activeTurn(Request $request, Server $server): JsonResponse
+    public function activeTurn(AgentTurnStateRequest $request, Server $server): JsonResponse
     {
         $this->assertAgentEnabled($request);
 
@@ -205,7 +201,7 @@ class AgentController extends ClientApiController
     }
 
     /** Stop a turn that is still running. */
-    public function cancelTurn(Request $request, Server $server, string $turnId): JsonResponse
+    public function cancelTurn(AgentTurnStateRequest $request, Server $server, string $turnId): JsonResponse
     {
         $this->assertAgentEnabled($request);
 
@@ -220,7 +216,7 @@ class AgentController extends ClientApiController
      * back, rather than being counted against their own per-user limit until it
      * lapses.
      */
-    public function releaseQueue(Request $request, Server $server, string $ticket): JsonResponse
+    public function releaseQueue(AgentTurnStateRequest $request, Server $server, string $ticket): JsonResponse
     {
         return $this->releaseQueuePlace($request->user(), $ticket);
     }
@@ -232,17 +228,9 @@ class AgentController extends ClientApiController
      * for it closed when the turn suspended — an approval can be minutes
      * later, and holding a worker open for that is not an option.
      */
-    public function decide(Request $request, Server $server): StreamedResponse
+    public function decide(DecideAgentTurnRequest $request, Server $server): StreamedResponse
     {
         $this->assertAgentAvailable($request);
-
-        $request->validate([
-            'turn_id' => 'required|uuid',
-            'decision' => 'required|string|in:approve,reject,answer',
-            'confirmation' => 'nullable|string|max:255',
-            'answer' => 'nullable|string|max:500',
-            'ticket' => 'nullable|string|max:64',
-        ]);
 
         $user = $request->user();
 

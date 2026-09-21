@@ -13,7 +13,7 @@ use Everest\Extensions\Packages\ai\Agent\AgentEventLog;
 
 class PruneAiConversationsCommand extends Command
 {
-    protected $signature = 'p:ai:prune-conversations';
+    protected $signature = 'p:ext:ai:prune';
 
     protected $description = 'Delete expired AI conversations and prune retained agent data.';
 
