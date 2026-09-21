@@ -86,6 +86,20 @@ def resolve_extension_dir(raw_path: str) -> Path:
     return candidate
 
 
+# Mirrors ExtensionCapabilityVocabulary::ICONS. The panel refuses a manifest
+# naming anything outside this set, and it refuses it at *install* -- so
+# without the same list here, `build` happily produces an archive that cannot
+# be installed and the author finds out on somebody else's panel.
+ICONS = {
+    'puzzle', 'bot', 'ai', 'sparkles', 'assistant', 'shield', 'shieldcheck', 'auth', 'security',
+    'mail', 'email', 'webhook', 'webhooks', 'billing', 'creditcard', 'payment', 'globe', 'domain',
+    'domains', 'ticket', 'tickets', 'support', 'bell', 'alert', 'alerts', 'notification',
+    'database', 'db', 'server', 'node', 'users', 'user', 'player', 'players', 'playermanager',
+    'gamepad', 'key', 'api', 'book', 'docs', 'palette', 'theme', 'box', 'boxes', 'marketplace',
+    'mods', 'zap', 'discord', 'discordsrv', 'chat', 'message', 'map', 'wrench', 'tools', 'plug',
+}
+
+
 def derive_v3_capabilities(extension_id: str, files_dir: Path, descriptor: dict) -> dict:
     """Cross-check the descriptor's capability block against the files tree.
 
@@ -116,6 +130,22 @@ def derive_v3_capabilities(extension_id: str, files_dir: Path, descriptor: dict)
         raise SystemExit(
             f'Unknown capability key(s): {", ".join(unknown)}. '
             f'The panel rejects a manifest naming anything outside {", ".join(sorted(CAPABILITY_KEYS))}.'
+        )
+
+    named_icons = [('extension.icon', (descriptor.get('extension') or {}).get('icon'))]
+    for surface in ('server', 'admin'):
+        for index, page in enumerate(((capabilities.get('pages') or {}).get(surface) or [])):
+            if isinstance(page, dict):
+                named_icons.append((f'capabilities.pages.{surface}[{index}].icon', page.get('icon')))
+
+    bad_icons = sorted({
+        f'{where} = "{icon}"' for where, icon in named_icons
+        if isinstance(icon, str) and icon.lower() not in ICONS
+    })
+    if bad_icons:
+        raise SystemExit(
+            'Icon(s) outside the panel\'s approved set: ' + ', '.join(bad_icons) + '. '
+            'Pick one of: ' + ', '.join(sorted(ICONS)) + '.'
         )
 
     backend_root = files_dir / 'app' / 'Extensions' / 'Packages' / extension_id

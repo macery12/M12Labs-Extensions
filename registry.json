@@ -6,8 +6,73 @@
   },
   "packages": [
     {
+      "id": "ai",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "archive": "packages/ai/1.0.0/ai.M12LabsExtension",
+          "sha256": "c8f011d3250109356edfceaea79064a661da0026c4c41da2067f5f3c75bbe328",
+          "publishedAt": "2026-09-21T15:54:30Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "hkNHMQ8z2BuT8Jx0FCdVZkwl5603x7cB3ea2qxmsLHxKR88xaonDnScHa1Jb0uorH47q9l5MYFQvL0fghOvRAA==",
+            "canonicalManifestSha256": "b6fc1de29099610a30e434d2b701d11c5339dfaeeb6767c813876b1e25d5a3f7"
+          }
+        }
+      ],
+      "name": "AI Assistant",
+      "description": "A tool-using assistant for server owners and administrators. Answers questions about a server, reads and edits its files, runs console commands behind an approval step, and works against Ollama, OpenAI, Anthropic, OpenRouter or any OpenAI-compatible endpoint.",
+      "author": "M12Labs",
+      "icon": "bot",
+      "capabilitySummary": {
+        "serverPages": 1,
+        "adminPages": 2,
+        "clientRoutes": true,
+        "adminRoutes": true,
+        "migrations": true,
+        "schedule": true,
+        "commands": 3,
+        "hooks": [],
+        "queues": 1,
+        "permissions": 2,
+        "secrets": 3,
+        "settings": 29,
+        "privileged": [
+          "delegated_access",
+          "internal_dispatch"
+        ],
+        "slots": [
+          "server-layout.overlay"
+        ],
+        "streams": 1,
+        "flags": 2,
+        "bindings": 3
+      }
+    },
+    {
       "id": "custom_domains",
       "versions": [
+        {
+          "version": "1.1.0",
+          "archive": "packages/custom_domains/1.1.0/custom_domains.M12LabsExtension",
+          "sha256": "7872182ee187d1468bf7c5752c4c2e9c00293f752cba6c0f679e2cab2ac27f00",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "6f8RUw7nMlQoSo9943UOGPCgv4l5rvjJZ2QtuGImtG49YYjKKGeW2FN+g2eBaGMqDmOPXnL6JG1ZxmuVh8NfBQ==",
+            "canonicalManifestSha256": "27eac4639220be69009139b80973cb496dd53ac17d6680186a016f4290b89a73"
+          }
+        },
         {
           "version": "1.0.2",
           "archive": "packages/custom_domains/1.0.2/custom_domains.M12LabsExtension",
@@ -75,12 +140,33 @@
         "queues": 1,
         "permissions": 4,
         "secrets": 1,
-        "settings": 5
+        "settings": 5,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     },
     {
       "id": "discordsrv_helper",
       "versions": [
+        {
+          "version": "3.1.0",
+          "archive": "packages/discordsrv_helper/3.1.0/discordsrv_helper.M12LabsExtension",
+          "sha256": "727298f35a6f7c50004646e6524a47a720c9e1866c19e033f8a4464134009636",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "efauxi0PJZxRE/0UVy9fV1KIJCMmfN+LJm84N0va4f1znvdZOvPBKEQQXT9wRzHaP7L+VHz0MtoSOBe7GXb7Bw==",
+            "canonicalManifestSha256": "33d9d05b924c4ee875d9ee01c98185a8c5c2059c0f11dec513230392e7dcef68"
+          }
+        },
         {
           "version": "3.0.0",
           "archive": "packages/discordsrv_helper/3.0.0/discordsrv_helper.M12LabsExtension",
@@ -136,12 +222,33 @@
         "queues": 0,
         "permissions": 0,
         "secrets": 0,
-        "settings": 0
+        "settings": 0,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     },
     {
       "id": "minecraft_icon_builder",
       "versions": [
+        {
+          "version": "3.1.0",
+          "archive": "packages/minecraft_icon_builder/3.1.0/minecraft_icon_builder.M12LabsExtension",
+          "sha256": "791b82469c1580387443896ac12dd0a119d8a6fe1f7cd2e9b9184e8fff07b326",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "xxZWXWsMgVSZW2T41dUam5XZ42lkCFNhUOL2neq/o55tOtY5LUudigXYRkBH9HYtfJSeRnoj4looxFFbLULgAg==",
+            "canonicalManifestSha256": "4f93f207314be1784a1acb33d5638be44c10e1266961ab9df48db3c9577409cf"
+          }
+        },
         {
           "version": "3.0.0",
           "archive": "packages/minecraft_icon_builder/3.0.0/minecraft_icon_builder.M12LabsExtension",
@@ -208,12 +315,33 @@
         "queues": 0,
         "permissions": 0,
         "secrets": 0,
-        "settings": 0
+        "settings": 0,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     },
     {
       "id": "minecraft_log_uploader",
       "versions": [
+        {
+          "version": "3.1.0",
+          "archive": "packages/minecraft_log_uploader/3.1.0/minecraft_log_uploader.M12LabsExtension",
+          "sha256": "09fbd4e217fd4a7c578fd6020dd298435d780b5005d0d383c6d3597ba96d23ec",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "MhTVTBVU1765U7lghJBNcFZfgPgG8okhzSTpXlMLdMY1tSaDx1CIJDayEU9rf8uVZEln4gZLCCoNgNVRVNUbDg==",
+            "canonicalManifestSha256": "82d0028112db299c43c0e49941e3e013d63757887a2fc5614c99a257a71a155b"
+          }
+        },
         {
           "version": "3.0.0",
           "archive": "packages/minecraft_log_uploader/3.0.0/minecraft_log_uploader.M12LabsExtension",
@@ -269,12 +397,33 @@
         "queues": 0,
         "permissions": 0,
         "secrets": 0,
-        "settings": 0
+        "settings": 0,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     },
     {
       "id": "minecraft_player_manager",
       "versions": [
+        {
+          "version": "3.1.0",
+          "archive": "packages/minecraft_player_manager/3.1.0/minecraft_player_manager.M12LabsExtension",
+          "sha256": "107e77bc100ec40f2fac4a21cb2390ca4cd406277093814c8d139616e16c8afe",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "fv8i04+lSed55DJSN0YSCHw4ZVBqsFeLgSd0P/Vylk6oDFpcENWgJx8rgpKBhZxm6g702XM8NmjgUDdBKozZBw==",
+            "canonicalManifestSha256": "ee3b0c3d06256893dfef9986036d6a90d0afb670e4d2bb02eb530bf6f6d73a9b"
+          }
+        },
         {
           "version": "3.0.0",
           "archive": "packages/minecraft_player_manager/3.0.0/minecraft_player_manager.M12LabsExtension",
@@ -330,12 +479,33 @@
         "queues": 0,
         "permissions": 0,
         "secrets": 0,
-        "settings": 0
+        "settings": 0,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     },
     {
       "id": "minecraft_startup_editor",
       "versions": [
+        {
+          "version": "3.1.0",
+          "archive": "packages/minecraft_startup_editor/3.1.0/minecraft_startup_editor.M12LabsExtension",
+          "sha256": "5b4060bce7f43c56785912f90bbc0b7b624f7e1df1bfca7bfc1f580f900da3ba",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "vzdxRRs0nMym8nfBr4j5B67+/Yrcoo/jKLWVrZQsD9tTgU8eSvRmC1v3pGhWMrVvCB1g3cRVavwDnbdVqaMXBw==",
+            "canonicalManifestSha256": "361970c60f408dfc49680155759a9eb7a20ed76bdeb8ec3dd968047889194619"
+          }
+        },
         {
           "version": "3.0.0",
           "archive": "packages/minecraft_startup_editor/3.0.0/minecraft_startup_editor.M12LabsExtension",
@@ -391,12 +561,33 @@
         "queues": 0,
         "permissions": 0,
         "secrets": 0,
-        "settings": 0
+        "settings": 0,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     },
     {
       "id": "node_health_history",
       "versions": [
+        {
+          "version": "2.1.0",
+          "archive": "packages/node_health_history/2.1.0/node_health_history.M12LabsExtension",
+          "sha256": "1882ef389558267d382e6369d4afb72514b28ad516456a520fae328f9fa3862f",
+          "publishedAt": "2026-09-21T15:54:29Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.1 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "5bD/U7sna4eBEpZWo921lzLkzr7HxKEJ+/bfmFtYtYIQIXNxaKYl7Hft6eKrebz/DQxcIK7nfCQDLzg1PCRmDw==",
+            "canonicalManifestSha256": "3251d5bb44e8009f3de6159c353bbcef8017c4fe9aaeb610cbbbbd6b21882786"
+          }
+        },
         {
           "version": "2.0.0",
           "archive": "packages/node_health_history/2.0.0/node_health_history.M12LabsExtension",
@@ -441,7 +632,12 @@
         "queues": 0,
         "permissions": 1,
         "secrets": 0,
-        "settings": 2
+        "settings": 2,
+        "privileged": [],
+        "slots": [],
+        "streams": 0,
+        "flags": 0,
+        "bindings": 0
       }
     }
   ],
