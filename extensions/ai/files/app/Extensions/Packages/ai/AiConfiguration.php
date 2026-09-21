@@ -150,7 +150,7 @@ final class AiConfiguration
 
         $flat = self::settingKey($key);
 
-        if (self::isDeclared($flat)) {
+        if (self::declares($flat)) {
             $settings = PackageSettings::for(self::EXTENSION_ID);
 
             // A declared key that has never been written reads as absent, not
@@ -272,7 +272,7 @@ final class AiConfiguration
 
         $flat = self::settingKey($key);
 
-        if (self::isDeclared($flat)) {
+        if (self::declares($flat)) {
             PackageSettings::for(self::EXTENSION_ID)->save([$flat => $value]);
 
             return;
@@ -304,7 +304,16 @@ final class AiConfiguration
         self::$tableCache = null;
     }
 
-    private static function isDeclared(string $flatKey): bool
+    /**
+     * Whether a flat key is one of the manifest's declared fields.
+     *
+     * Public because "where would a write to this key go" is a question with
+     * two different answers and no way to tell them apart from outside -- the
+     * settings column for a declared field, this package's own table for
+     * everything else. A caller that has to put a value somewhere itself,
+     * rather than through {@see set()}, needs to be able to ask.
+     */
+    public static function declares(string $flatKey): bool
     {
         return in_array($flatKey, self::DECLARED, true);
     }

@@ -6,7 +6,6 @@ use Illuminate\Support\Str;
 use Everest\Extensions\Packages\ai\AiConfiguration;
 use Everest\Extensions\Sdk\Http\InternalResponse;
 use Everest\Extensions\Sdk\Services\InternalDispatch;
-use Symfony\Component\HttpFoundation\Response;
 use Everest\Exceptions\Service\Access\InternalDispatchException;
 
 /**
@@ -27,8 +26,20 @@ use Everest\Exceptions\Service\Access\InternalDispatchException;
  */
 class ToolExecutor
 {
-    public function __construct(private InternalDispatch $dispatch)
+    private InternalDispatch $dispatch;
+
+    /**
+     * The dispatcher is built here rather than injected, because
+     * {@see InternalDispatch} is an SDK facade: it has no public constructor
+     * and is reached through `::for($extensionId)`, which is what binds every
+     * sub-request to this package's declared privilege. A constructor
+     * parameter would make this class unresolvable by the container -- and
+     * since the whole agent is autowired from `AgentRunner`, that is not a
+     * theoretical failure.
+     */
+    public function __construct()
     {
+        $this->dispatch = InternalDispatch::for(AiConfiguration::EXTENSION_ID);
     }
 
     public function execute(
@@ -37,18 +48,6 @@ class ToolExecutor
     ): ToolResult {
         try {
             return $this->toResult($this->send($invocation, $maxSeconds));
-        } catch (InternalDispatchException $e) {
-            return match ($e->reason) {
-                InternalDispatchException::REASON_DEADLINE => ToolResult::error(
-                    'time_limit',
-                    'The tool call exceeded the remaining turn time.',
-                ),
-                InternalDispatchException::REASON_UNREADABLE => ToolResult::error(
-                    'unsupported_response',
-                    'This endpoint streams its response and cannot be called as a tool.',
-                ),
-                default => ToolResult::internalError('Tool calls may not run inside a database transaction.'),
-            };
         } catch (\Throwable $e) {
             // Kernel::handle already renders most throwables; anything reaching
             // here is unexpected, so report it and give the model something
@@ -97,21 +96,37 @@ class ToolExecutor
         return $remainingSeconds === null ? $ceiling : max(1, min($ceiling, $remainingSeconds));
     }
 
-    protected function toResult(Response $response): ToolResult
+    protected function toResult(InternalResponse $response): ToolResult
     {
-        $status = $response->getStatusCode();
-        $body = (string) $response->getContent();
-        $decoded = json_decode($body, true);
-        $isJson = json_last_error() === JSON_ERROR_NONE;
+        // A refusal is not the panel's answer -- the request was never sent --
+        // and it must not be dressed up as one. Each of the three means "stop,
+        // this cannot work as asked", so none of them is retryable, which is
+        // exactly what a 500 mapped through toError() would have claimed.
+        if ($response->refused()) {
+            return match ($response->refusedReason) {
+                InternalDispatchException::REASON_DEADLINE => ToolResult::error(
+                    'time_limit',
+                    'The tool call exceeded the remaining turn time.',
+                ),
+                InternalDispatchException::REASON_UNREADABLE => ToolResult::error(
+                    'unsupported_response',
+                    'This endpoint streams its response and cannot be called as a tool.',
+                ),
+                default => ToolResult::internalError('Tool calls may not run inside a database transaction.'),
+            };
+        }
 
-        if ($status >= 200 && $status < 300) {
+        // The SDK has already decoded the body and kept the raw text beside
+        // it, so there is no second json_decode here and no response object to
+        // accidentally send.
+        if ($response->ok()) {
             // Do not cap here. A JSON response must remain decoded until its
             // tool-specific shaper and privacy redactor have run; the runner
             // applies the final serialized-byte cap after both.
-            return ToolResult::ok($isJson ? $decoded : $body);
+            return ToolResult::ok($response->json ?? $response->body);
         }
 
-        return $this->toError($status, $isJson ? $decoded : null);
+        return $this->toError($response->status, $response->json);
     }
 
     protected function toError(int $status, ?array $decoded): ToolResult

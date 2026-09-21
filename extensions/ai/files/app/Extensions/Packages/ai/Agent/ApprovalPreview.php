@@ -3,6 +3,7 @@
 namespace Everest\Extensions\Packages\ai\Agent;
 
 use Everest\Models\Server;
+use Everest\Extensions\Packages\ai\AiConfiguration;
 use Everest\Extensions\Packages\ai\Tools\RiskGate;
 use Everest\Extensions\Packages\ai\Tools\ToolRegistry;
 use Everest\Extensions\Sdk\Services\DelegatedAccess;
@@ -140,7 +141,7 @@ class ApprovalPreview
             return null;
         }
 
-        $server = app(DelegatedAccess::class)->resolveServer($reference);
+        $server = DelegatedAccess::for(AiConfiguration::EXTENSION_ID)->resolveServer($reference);
 
         if ($server === null) {
             return null;

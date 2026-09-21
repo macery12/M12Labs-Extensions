@@ -991,7 +991,7 @@ trait HandlesAgentTurns
 
             // Re-authorize against the approved target even for an opening
             // grant, but do not activate it until the audit row is durable.
-            $access = app(DelegatedAccess::class);
+            $access = DelegatedAccess::for(AiConfiguration::EXTENSION_ID);
             $server = $access->reauthorize($context->user, $grant->after);
             if ($server === null) {
                 $context->assist = null;
@@ -1016,7 +1016,7 @@ trait HandlesAgentTurns
             return;
         }
 
-        $access = app(DelegatedAccess::class);
+        $access = DelegatedAccess::for(AiConfiguration::EXTENSION_ID);
         $server = $access->reauthorize($context->user, $binding);
 
         if ($server === null) {

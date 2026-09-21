@@ -42,6 +42,14 @@ use Everest\Exceptions\Http\Connection\DaemonConnectionException;
  */
 class AgentRunner
 {
+    /**
+     * Delegated access is built here rather than injected. It is an SDK facade
+     * with no public constructor, reached through `::for($extensionId)` so the
+     * grant is stamped with the package asking for it -- a constructor
+     * parameter would simply make this class unresolvable.
+     */
+    private DelegatedAccess $access;
+
     public function __construct(
         private ProviderFactory $factory,
         private InferenceGate $gate,
@@ -51,7 +59,6 @@ class AgentRunner
         private ToolCallSalvager $salvager,
         private SystemPromptBuilder $promptBuilder,
         private AiRedactionPolicy $redactor,
-        private DelegatedAccess $access,
         private TurnCancellations $cancellations,
         private WorkingSetPlanner $planner,
         private ToolDiscoveryService $discovery,
@@ -61,6 +68,7 @@ class AgentRunner
         private ToolBudget $budget,
         private TurnExecutionPolicy $executionPolicy,
     ) {
+        $this->access = DelegatedAccess::for(AiConfiguration::EXTENSION_ID);
     }
 
     /**
