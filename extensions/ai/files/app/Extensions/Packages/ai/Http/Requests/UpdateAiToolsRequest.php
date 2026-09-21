@@ -2,7 +2,6 @@
 
 namespace Everest\Extensions\Packages\ai\Http\Requests;
 
-use Everest\Models\AdminRole;
 use Everest\Extensions\Packages\ai\Tools\ToolDefinition;
 use Everest\Extensions\Sdk\Http\ApplicationApiRequest;
 
@@ -27,6 +26,6 @@ class UpdateAiToolsRequest extends ApplicationApiRequest
 
     public function permission(): string
     {
-        return AdminRole::AI_UPDATE;
+        return 'ext.ai.admin.update';
     }
 }

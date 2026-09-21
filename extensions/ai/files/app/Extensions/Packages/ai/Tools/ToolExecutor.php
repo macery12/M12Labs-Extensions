@@ -4,7 +4,7 @@ namespace Everest\Extensions\Packages\ai\Tools;
 
 use Illuminate\Support\Str;
 use Everest\Extensions\Packages\ai\AiConfiguration;
-use Everest\Services\Access\InternalRequest;
+use Everest\Extensions\Sdk\Http\InternalResponse;
 use Everest\Extensions\Sdk\Services\InternalDispatch;
 use Symfony\Component\HttpFoundation\Response;
 use Everest\Exceptions\Service\Access\InternalDispatchException;
@@ -36,17 +36,7 @@ class ToolExecutor
         ?int $maxSeconds = null,
     ): ToolResult {
         try {
-            return $this->toResult($this->dispatch->dispatch(
-                new InternalRequest(
-                    method: $invocation->method,
-                    uri: $invocation->uri,
-                    query: $invocation->query,
-                    body: $invocation->body,
-                    idempotencyKey: $invocation->idempotencyKey,
-                ),
-                deadlineSeconds: $maxSeconds,
-                nodeTimeoutSeconds: $this->nodeTimeout($maxSeconds),
-            ));
+            return $this->toResult($this->send($invocation, $maxSeconds));
         } catch (InternalDispatchException $e) {
             return match ($e->reason) {
                 InternalDispatchException::REASON_DEADLINE => ToolResult::error(
@@ -77,6 +67,29 @@ class ToolExecutor
      * call the model can route around. Bounded by whatever is left of the turn
      * as well, so the last tool call of a turn does not get a fresh full budget.
      */
+    /**
+     * Dispatch the invocation through the SDK, by verb.
+     *
+     * The SDK exposes named verbs rather than a request object, which is the
+     * right shape for a package -- but a tool's method is data, chosen by the
+     * catalogue, so this is where the two meet. An unexpected verb is a
+     * catalogue bug and refuses rather than guessing.
+     */
+    private function send(ToolInvocation $invocation, ?int $maxSeconds): InternalResponse
+    {
+        $node = $this->nodeTimeout($maxSeconds);
+        $uri = $invocation->uri;
+
+        return match (strtoupper($invocation->method)) {
+            'GET' => $this->dispatch->get($uri, $invocation->query, $maxSeconds, $node),
+            'POST' => $this->dispatch->post($uri, $invocation->body, $invocation->idempotencyKey, $maxSeconds, $node),
+            'PUT' => $this->dispatch->put($uri, $invocation->body, $invocation->idempotencyKey, $maxSeconds, $node),
+            'PATCH' => $this->dispatch->patch($uri, $invocation->body, $invocation->idempotencyKey, $maxSeconds, $node),
+            'DELETE' => $this->dispatch->delete($uri, $invocation->body, $maxSeconds, $node),
+            default => throw new \LogicException(sprintf('Unsupported tool method [%s].', $invocation->method)),
+        };
+    }
+
     protected function nodeTimeout(?int $remainingSeconds): int
     {
         $ceiling = max(5, AiConfiguration::integer('agent.max_tool_seconds', 90));

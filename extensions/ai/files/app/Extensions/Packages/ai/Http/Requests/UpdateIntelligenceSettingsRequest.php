@@ -2,7 +2,6 @@
 
 namespace Everest\Extensions\Packages\ai\Http\Requests;
 
-use Everest\Models\AdminRole;
 use Everest\Extensions\Packages\ai\ProviderFactory;
 use Everest\Extensions\Sdk\Services\PackageRedaction;
 use Everest\Extensions\Packages\ai\Agent\AgentRunner;
@@ -203,7 +202,7 @@ class UpdateIntelligenceSettingsRequest extends ApplicationApiRequest
 
     public function permission(): string
     {
-        return AdminRole::AI_UPDATE;
+        return 'ext.ai.admin.update';
     }
 
     /**

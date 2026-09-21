@@ -5,9 +5,8 @@ namespace Everest\Extensions\Packages\ai\Agent;
 use IPTools\IP;
 use IPTools\Range;
 use Everest\Models\User;
-use Everest\Models\ApiKey;
+use Everest\Extensions\Sdk\Services\UserAuthority;
 use Illuminate\Http\Request;
-use Everest\Models\UserSession;
 
 /**
  * Who a durable turn runs as, and for how long that stays true. A request-bound
@@ -89,17 +88,21 @@ final class TurnAuthority
         return User::query()->find($this->userId);
     }
 
-    /** Reload the originating API key without ever serialising its secret. */
-    public function apiKey(): ?ApiKey
+    /**
+     * The originating key's public identifier, never its secret.
+     *
+     * Null when the turn came from a browser session, or when the key has
+     * since been revoked. The panel answers this; a package holds an id and
+     * asks, rather than carrying a credential for as long as a job sits in a
+     * queue.
+     */
+    public function apiKeyIdentifier(): ?string
     {
         if ($this->apiKeyId === null) {
             return null;
         }
 
-        return ApiKey::query()
-            ->whereKey($this->apiKeyId)
-            ->where('user_id', $this->userId)
-            ->first();
+        return UserAuthority::reader()->apiKeyIdentifier($this->userId, $this->apiKeyId);
     }
 
     /**
@@ -157,10 +160,6 @@ final class TurnAuthority
             return false;
         }
 
-        return UserSession::query()
-            ->where('user_id', $this->userId)
-            ->where('session_id', $this->sessionId)
-            ->active()
-            ->exists();
+        return UserAuthority::reader()->sessionActive($this->userId, $this->sessionId);
     }
 }

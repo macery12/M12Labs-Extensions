@@ -2,7 +2,8 @@
 
 namespace Everest\Extensions\Packages\ai\Agent;
 
-use Everest\Facades\LogBatch;
+use Everest\Extensions\Sdk\Services\ServerFiles;
+use Everest\Extensions\Sdk\Services\PanelActivity;
 use Everest\Extensions\Packages\ai\Models\AiToolCall;
 use Everest\Extensions\Packages\ai\Models\AiPendingAction;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +25,6 @@ use Everest\Extensions\Packages\ai\Tools\ToolInvocation;
 use Everest\Extensions\Packages\ai\Inference\InferenceGate;
 use Everest\Extensions\Packages\ai\Support\ToolCallSalvager;
 use Everest\Extensions\Packages\ai\Privacy\AiRedactionPolicy;
-use Everest\Repositories\Wings\DaemonFileRepository;
 use Everest\Extensions\Packages\ai\Exceptions\AIServiceException;
 use Everest\Extensions\Packages\ai\Tools\Definitions\AdminTools;
 use Everest\Extensions\Packages\ai\Tools\Definitions\ServerTools;
@@ -52,7 +52,6 @@ class AgentRunner
         private SystemPromptBuilder $promptBuilder,
         private AiRedactionPolicy $redactor,
         private DelegatedAccess $access,
-        private DaemonFileRepository $files,
         private FileDiffService $fileDiffs,
         private TurnCancellations $cancellations,
         private WorkingSetPlanner $planner,
@@ -87,18 +86,22 @@ class AgentRunner
 
         try {
             // One batch id across the turn, so every activity row a tool
-            // produces traces back to the conversation that caused it.
-            LogBatch::start();
+            // produces traces back to the conversation that caused it. The
+            // callback form is the only one the SDK offers, because a batch
+            // left open by a throw would swallow the next unrelated rows
+            // written in the same worker.
+            PanelActivity::batch(function () use ($context, $emit, $startedAt): void {
+                // Before the first inference, not after it. A user who typed a
+                // tool's registered name or one of its precise intent phrases
+                // has already done the retrieval; making the model spend a step
+                // rediscovering it is the most annoying failure this mechanism
+                // can produce.
+                $message = $this->lastUserMessage($context);
+                $this->executionPolicy->apply($context, $message);
+                $this->discovery->pinUserIntentTools($context, $message);
 
-            // Before the first inference, not after it. A user who typed a tool's
-            // registered name or one of its precise intent phrases has already
-            // done the retrieval; making the model spend a step rediscovering it
-            // is the most annoying failure this mechanism can produce.
-            $message = $this->lastUserMessage($context);
-            $this->executionPolicy->apply($context, $message);
-            $this->discovery->pinUserIntentTools($context, $message);
-
-            $this->loop($context, $emit, $startedAt);
+                $this->loop($context, $emit, $startedAt);
+            });
         } catch (\Throwable $e) {
             Log::error('AI agent turn failed.', [
                 'turn' => $context->turnId,
@@ -110,8 +113,6 @@ class AgentRunner
             // successful even though the only terminal event was an error.
             throw $e;
         } finally {
-            LogBatch::end();
-
             $elapsed = (int) round(($this->now() - $startedAt) * 1000);
             $this->gate->recordTurnDuration($elapsed);
         }
@@ -2066,9 +2067,7 @@ class AgentRunner
             // Add content read directly from Wings before persisting or rendering
             // the approval, bounded to the endpoint's accepted file size.
             try {
-                $liveContent = $this->files
-                    ->setServer($target)
-                    ->getContent($file, \Everest\Http\Requests\Api\Client\Servers\Files\WriteFileWithDiffRequest::MAX_CONTENT_BYTES);
+                $liveContent = ServerFiles::for($target)->read($file, self::MAX_ATTESTED_FILE_BYTES);
             } catch (DaemonConnectionException $exception) {
                 // Wings reports a missing path as 404. That is an expected
                 // refusal for an existing-file-only editor, not a failed agent
@@ -2435,6 +2434,15 @@ class AgentRunner
 
     /** How often a durable turn re-derives that it is still authorized. */
     public const AUTHORITY_RECHECK_SECONDS = 5.0;
+
+    /**
+     * The largest file a write attestation will read back from the node.
+     *
+     * Mirrors the panel's own diff-write endpoint, which is what ultimately
+     * applies the change: reading further than that endpoint would accept
+     * produces an approval diff against content it will refuse.
+     */
+    public const MAX_ATTESTED_FILE_BYTES = 4 * 1024 * 1024;
 
     public function maxSteps(): int
     {

@@ -4,7 +4,6 @@ namespace Everest\Extensions\Packages\ai\Benchmark;
 
 use Everest\Models\User;
 use Everest\Models\Server;
-use Everest\Models\AdminRole;
 use Everest\Extensions\Packages\ai\Data\AiTool;
 use Everest\Extensions\Packages\ai\Data\AiMessage;
 use Everest\Extensions\Packages\ai\Data\AiRequest;
@@ -640,11 +639,13 @@ class AdvancedAiModelBenchmark
         ]);
 
         if ($this->isAdminScenario((string) $scenario['id'])) {
-            $role = new AdminRole();
-            $role->is_owner = true;
-            $role->permissions = [];
-            $user->setRelation('adminRole', $role);
-            $context = new AgentContext($user, null, 'advanced-benchmark');
+            // An admin scenario needs a user the authorizer will actually say
+            // yes to, and the package cannot fabricate one: core owns the role
+            // vocabulary and hands packages constants, not the model. So use a
+            // real owner from this install. That is also the more honest
+            // benchmark -- it measures the tool set an operator really has
+            // rather than one synthesised to be maximal.
+            $context = new AgentContext($this->benchmarkOwner(), null, 'advanced-benchmark');
         } else {
             $server = new Server();
             $server->uuid = '00000000-0000-4000-8000-000000000001';
@@ -660,6 +661,28 @@ class AdvancedAiModelBenchmark
         (new TurnExecutionPolicy())->apply($context, (string) $scenario['prompt']);
 
         return $context;
+    }
+
+    /**
+     * A real panel owner, for the admin scenarios.
+     *
+     * @throws \RuntimeException when the install has none, which makes the
+     *                           admin suites unrunnable rather than silently
+     *                           measuring an agent that was offered no tools
+     */
+    private function benchmarkOwner(): User
+    {
+        $owner = User::query()
+            ->whereHas('adminRole', fn ($query) => $query->where('is_owner', true))
+            ->first();
+
+        if (!$owner instanceof User) {
+            throw new \RuntimeException(
+                'The admin benchmark suites need an owner account on this install; none was found.'
+            );
+        }
+
+        return $owner;
     }
 
     private function isAdminScenario(string $scenario): bool

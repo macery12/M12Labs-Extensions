@@ -2,98 +2,174 @@
 
 namespace Everest\Extensions\Packages\ai;
 
-use Everest\Models\Setting;
+use Illuminate\Support\Facades\DB;
+use Everest\Extensions\Sdk\DisplayException;
+use Everest\Extensions\Sdk\Services\PackageSecrets;
+use Everest\Extensions\Sdk\Services\PackageSettings;
 
 /**
  * Every AI configuration read, in one place.
  *
- * Before this, the module read its configuration from two stores directly and
- * in two spellings: `config('modules.ai.agent.max_steps')` and
- * `Setting::get('settings::modules:ai:agent:max_steps')`, with the second
- * overriding the first. Four classes had grown their own private `setting()`
- * helper doing the same string concatenation, and the precedence rule lived
- * nowhere except in the shape of about seventy call sites.
+ * In the panel this read two stores: `config('modules.ai.*')` and
+ * `Setting::get('settings::modules:ai:*')`. A package has neither —
+ * `config/modules/ai.php` went with the module, and core's settings table is
+ * not a package's to write. So the same dotted keys now resolve across three
+ * stores that are, and callers did not change.
  *
- * The rule is: **an administrator's saved setting wins; the config file is the
- * default.** That is what `config/modules/ai.php` is for -- it supplies the
- * packaged default and the environment variable, and the settings table holds
- * what somebody typed into the admin pages.
+ * The lookup order, first hit wins:
  *
- * ## Why this exists as its own class
+ * 1. **`enabled`** is the package's own enable state, not a setting. An
+ *    administrator switching the extension off in the panel is what turns the
+ *    module off; a second switch that could disagree with it would be a way to
+ *    have AI enabled and disabled at the same time.
+ * 2. **Credentials** come from the encrypted secret store. Never from
+ *    settings: `extension_configs.settings` is a plain JSON column the catalog
+ *    API returns, which is why the manifest has no `password` field type.
+ * 3. **Declared flat settings** — the 29 fields in the manifest. The key is
+ *    the dotted one with dots as underscores, because a manifest setting key
+ *    is flat: `agent.max_steps` is stored as `agent_max_steps`.
+ * 4. **`ext_ai_settings`**, this package's own table, for the structured
+ *    values a flat typed schema cannot express — the tool risk overrides, the
+ *    disabled-tool list, the console allowlist, the privacy categories, the
+ *    measured tool budgets — and for the retention and timeout values that
+ *    were environment-only in the panel.
+ * 5. **{@see DEFAULTS}**, the packaged fallback.
  *
- * The AI module is being extracted into an extension package, where neither
- * store is available: `config/modules/ai.php` is deleted with the module, and
- * `settings::modules:ai:*` is core's settings table, which a package may not
- * write to. Configuration moves to the package's declared settings, the
- * encrypted secret store, and one package-owned table for the structured
- * values a flat schema cannot express.
+ * ## Why the split is where it is
  *
- * Routing every read through here first means that swap is a change to this
- * file rather than to seventy call sites in twenty of them -- and, more to the
- * point, it is a change the module's existing tests can still prove, because
- * they are all present and passing on this side of the move.
+ * Anything the panel's generated settings form can render and validate belongs
+ * in the manifest, because that gets an operator a typed field, a range check
+ * and an approval diff for free — and because a declared setting is the only
+ * thing `capabilities.flags` can read, which is what keeps the sidebar entry
+ * hidden until a provider is actually configured.
  *
- * ## Keys
- *
- * One dotted key names a value in both stores: `agent.max_steps` reads
- * `settings::modules:ai:agent:max_steps` and falls back to
- * `config('modules.ai.agent.max_steps')`. Callers never spell either prefix.
- *
- * ## Three things about the two stores that are not obvious
- *
- * These were implicit in the old call sites and are written down here because
- * the extraction has to carry them across, and a fact that lives only in the
- * shape of seventy expressions does not survive being rewritten.
- *
- * 1. **`config()` is not just the file.** `SettingsServiceProvider::boot()`
- *    overlays every allowlisted setting onto config at boot, applying a
- *    string-to-type map on the way (`'true'` becomes `true`, `'1'` becomes
- *    `1`). So for an allowlisted key the two reads below usually agree, and
- *    the settings read is the one that has *not* been type-mapped. That is
- *    why the typed accessors here re-parse rather than cast: `(bool) 'false'`
- *    is `true`, and the raw settings value is where that string comes from.
- *
- * 2. **Secrets read back as a boolean through config.** For a key the secret
- *    encryption service recognises, boot deliberately sets
- *    `config($key, !empty($value))` rather than decrypting at boot. So
- *    `config('modules.ai.key')` is a presence flag and only the settings read
- *    returns the credential. A consequence worth knowing when this moves: an
- *    API key supplied by environment variable and never saved to the table
- *    resolves to the string `'1'`, because the fallback is that flag. The
- *    package's encrypted secret store has no such split and the problem goes
- *    away with it.
- *
- * 3. **Not every key is allowlisted.** The four structured blobs
- *    (`risk_overrides`, `disabled_tools`, `console.safe_commands`,
- *    `privacy.categories`), `agent.calibrated_tool_budgets`, and the
- *    `retention.*` and timeout values live in one store only. The lookup
- *    below is the same either way: an absent setting reads as null and the
- *    config value stands.
+ * Everything else is a JSON document that a `text`/`number`/`boolean` schema
+ * would have to lie about. Those live in a package-owned table rather than
+ * being squeezed into the flat one.
  */
 final class AiConfiguration
 {
-    /** The settings-table prefix. Colons, because that is how core keys settings. */
-    public const SETTING_PREFIX = 'settings::modules:ai:';
+    public const EXTENSION_ID = 'ai';
 
-    /** The config-file prefix. Dots, because that is how Laravel keys config. */
-    public const CONFIG_PREFIX = 'modules.ai.';
+    /** This package's own settings table, for what the flat schema cannot hold. */
+    public const TABLE = 'ext_ai_settings';
 
     /**
-     * The raw value: the saved setting if there is one, the config default if
-     * not, and `$default` if neither store has it.
+     * Credentials, by the dotted key the module has always used.
      *
-     * A setting absent from the table reads as null, which is what makes the
-     * fallback work. Note that a setting saved as an empty string is *not*
-     * absent -- several callers depend on that, because clearing a field in
-     * the admin UI is a deliberate act and some of them treat it as "use the
-     * packaged default" themselves rather than having it done for them here.
+     * Three rather than one because the provider slot is shared: an operator
+     * who configures Anthropic, switches to OpenAI and switches back should
+     * not have to paste the first key again.
      */
+    private const SECRETS = [
+        'key' => 'api_key',
+        'anthropic.key' => 'anthropic_key',
+        'openai.key' => 'openai_key',
+    ];
+
+    /**
+     * Packaged defaults for values with no declared setting.
+     *
+     * The retention and timeout values were environment variables in the
+     * panel (`AI_RETENTION_*`, `AI_TIMEOUT`). A package cannot read the
+     * operator's `.env`, so they become defaults that {@see TABLE} can
+     * override — which is a small improvement on being env-only, since an
+     * operator can now change them without a deploy.
+     */
+    private const DEFAULTS = [
+        'timeout' => 300,
+        'connect_timeout' => 10,
+        'agent.tool_rate_limit' => 240,
+
+        'retention.turn_events_days' => 2,
+        'retention.tool_calls_days' => 90,
+        'retention.usage_logs_days' => 180,
+        'retention.pending_actions_days' => 30,
+        'retention.turn_events_limit' => 50000,
+        'retention.tool_calls_limit' => 20000,
+        'retention.usage_logs_limit' => 20000,
+        'retention.pending_actions_limit' => 20000,
+    ];
+
+    /**
+     * The house system prompt, when an operator has not written one.
+     *
+     * A blank stored value falls back here rather than to no prompt at all: an
+     * admin who clears the field is asking for the default back, and a model
+     * given no framing answers as a generic chatbot with no idea it is inside
+     * a game server panel.
+     */
+    public const DEFAULT_SYSTEM_PROMPT =
+        'You are the assistant in a game-server hosting control panel. Be direct and concrete. '
+        . 'Lead with the outcome and match the level of detail to the request. '
+        . 'Prefer exact, verified paths, setting names and values over general advice. If a fact is not '
+        . 'verified, say what is unknown and how to check it. Explain user impact before suggesting work '
+        . 'that deletes data or interrupts players.';
+
+    /**
+     * The flat fields the manifest declares, which is what decides where a
+     * write goes.
+     *
+     * Spelled out rather than derived, because the only way to ask the panel
+     * would be to read the verified runtime plan -- core internals a package
+     * has no supported access to, and should not, since that projection is
+     * what gates the package itself. The manifest and this list live in the
+     * same repository and change in the same commit; a key in one and not the
+     * other means a write lands in the package's own table instead of the
+     * settings column, which is wrong but not dangerous.
+     */
+    private const DECLARED = [
+        'provider', 'mode', 'endpoint',
+        'model', 'max_tokens', 'temperature',
+        'context_tokens', 'keep_alive', 'warm',
+        'system_prompt', 'agent_enabled', 'agent_admin_enabled',
+        'agent_reasoning', 'agent_durable', 'agent_max_steps',
+        'agent_max_wall_seconds', 'agent_max_tool_seconds', 'agent_tool_result_bytes',
+        'agent_max_repairs', 'agent_max_tools', 'agent_max_batch_calls',
+        'agent_allow_destructive_batches', 'concurrency_slots', 'concurrency_queue_depth',
+        'concurrency_max_wait_seconds', 'concurrency_per_user', 'budget_enforce',
+        'budget_monthly_tokens', 'privacy_enabled',
+    ];
+
+    /** @var array<string, mixed>|null */
+    private static ?array $tableCache = null;
+
     public static function get(string $key, mixed $default = null): mixed
     {
-        return Setting::get(
-            self::settingKey($key),
-            config(self::CONFIG_PREFIX . $key, $default)
-        );
+        if ($key === 'enabled') {
+            return PackageSettings::for(self::EXTENSION_ID)->enabled();
+        }
+
+        if ($key === 'default_system_prompt') {
+            return self::DEFAULT_SYSTEM_PROMPT;
+        }
+
+        if (isset(self::SECRETS[$key])) {
+            return PackageSecrets::for(self::EXTENSION_ID)->get(self::SECRETS[$key]);
+        }
+
+        $flat = self::settingKey($key);
+
+        if (self::isDeclared($flat)) {
+            $settings = PackageSettings::for(self::EXTENSION_ID);
+
+            // A declared key that has never been written reads as absent, not
+            // as its declared default: the installer seeds the manifest's
+            // defaults into the column, so the only way to be here is an
+            // upgrade that added a field before anybody saved the page. Fall
+            // through to the packaged default rather than inventing one.
+            if ($settings->has($flat)) {
+                return $settings->all()[$flat];
+            }
+        }
+
+        $stored = self::table();
+
+        if (array_key_exists($key, $stored)) {
+            return $stored[$key];
+        }
+
+        return self::DEFAULTS[$key] ?? $default;
     }
 
     public static function string(string $key, string $default = ''): string
@@ -120,14 +196,10 @@ final class AiConfiguration
     /**
      * Anything the operator could have meant as true.
      *
-     * The settings table stores strings, the config file stores real booleans
-     * and an env var supplies "1" or "true", so all three spellings occur for
-     * the same switch depending on where it was last set.
-     *
-     * Only null means absent. An empty string is a *stored* false: saving a
-     * switch off through the settings repository writes `''`, so treating that
-     * as "never set, use the default" would turn every disabled toggle whose
-     * default is true back on. Same rule as `PackageSettings::boolean()`.
+     * Only null means absent. An empty string is a *stored* false, which is
+     * what a settings form writes for a switch turned off, so treating it as
+     * "never set, use the default" would turn every disabled toggle whose
+     * default is true back on.
      */
     public static function boolean(string $key, bool $default = false): bool
     {
@@ -143,16 +215,10 @@ final class AiConfiguration
     /**
      * A structured value -- a list or a map.
      *
-     * These are the four settings a flat schema cannot express (tool risk
-     * overrides, the disabled-tool list, the console command allowlist, the
-     * privacy categories). The settings table holds them as JSON text while
-     * the config file holds a real array, so both shapes have to be accepted
-     * for the same key.
-     *
      * Malformed JSON returns the default rather than throwing. A parse error
-     * here would take down whichever surface happened to read it first, and a
-     * single unparseable row is not a reason to refuse to answer a question
-     * about something else.
+     * here would take down whichever surface read it first, and one
+     * unparseable row is not a reason to refuse to answer a question about
+     * something else.
      *
      * @param array<array-key, mixed> $default
      *
@@ -175,54 +241,88 @@ final class AiConfiguration
         return $default;
     }
 
-    /**
-     * A credential.
-     *
-     * Separate from {@see string()} because of the trap described above: for a
-     * key the secret encryption service recognises, boot sets the config entry
-     * to `!empty($value)` rather than the value, so the fallback behind a
-     * missing setting is the boolean `true`, not a credential. Casting that to
-     * a string produces `'1'`, which is then sent to the provider as an API
-     * key and rejected — an install configured only by environment variable
-     * fails with an authentication error rather than "no key configured".
-     *
-     * So a boolean here means "the settings table has nothing", and that is
-     * what it reports.
-     */
+    /** A credential, or the empty string when none is configured. */
     public static function secret(string $key, string $default = ''): string
     {
         $value = self::get($key);
 
-        if (is_bool($value)) {
-            return $default;
-        }
-
-        return is_string($value) || is_numeric($value) ? (string) $value : $default;
+        return is_string($value) && $value !== '' ? $value : $default;
     }
 
     /**
      * Save an administrator's value.
      *
-     * Writes the settings table only. The config file is the packaged default
-     * and is never written at runtime -- which is also why clearing a value
-     * here does not restore the default: an empty string is a stored value,
-     * and the callers that want the default back on a blank field say so
-     * themselves.
+     * A declared field goes to the package's settings, through the validator
+     * that enforces its declared type and range. Everything else goes to this
+     * package's own table. A credential is refused outright: secrets are
+     * entered and rotated by an administrator through the panel's own secret
+     * UI, and a package writing its own credentials would mean a value in the
+     * store that no operator put there.
+     *
+     * @throws DisplayException on an attempt to write a credential
      */
     public static function set(string $key, mixed $value): void
     {
-        Setting::set(self::settingKey($key), $value);
+        if (isset(self::SECRETS[$key])) {
+            throw new DisplayException(sprintf(
+                'The credential [%s] is entered through the panel\'s encrypted secret store, not through settings.',
+                $key
+            ));
+        }
+
+        $flat = self::settingKey($key);
+
+        if (self::isDeclared($flat)) {
+            PackageSettings::for(self::EXTENSION_ID)->save([$flat => $value]);
+
+            return;
+        }
+
+        DB::table(self::TABLE)->updateOrInsert(
+            ['key' => $key],
+            ['value' => is_string($value) ? $value : json_encode($value), 'updated_at' => now()],
+        );
+
+        self::$tableCache = null;
     }
 
-    /** The settings-table key for a dotted key. */
+    /** The flat settings key for a dotted key: `agent.max_steps` -> `agent_max_steps`. */
     public static function settingKey(string $key): string
     {
-        return self::SETTING_PREFIX . str_replace('.', ':', $key);
+        return str_replace('.', '_', $key);
     }
 
-    /** The config-file key for a dotted key. */
-    public static function configKey(string $key): string
+    /**
+     * Forget the table cache.
+     *
+     * The cache is per-request and exists because a turn reads a dozen of
+     * these between steps. A queued turn outlives a request, which is the one
+     * place that has to say so.
+     */
+    public static function flush(): void
     {
-        return self::CONFIG_PREFIX . $key;
+        self::$tableCache = null;
+    }
+
+    private static function isDeclared(string $flatKey): bool
+    {
+        return in_array($flatKey, self::DECLARED, true);
+    }
+
+    /** @return array<string, mixed> */
+    private static function table(): array
+    {
+        if (self::$tableCache !== null) {
+            return self::$tableCache;
+        }
+
+        $rows = [];
+
+        foreach (DB::table(self::TABLE)->get(['key', 'value']) as $row) {
+            $decoded = json_decode((string) $row->value, true);
+            $rows[(string) $row->key] = $decoded === null && $row->value !== 'null' ? $row->value : $decoded;
+        }
+
+        return self::$tableCache = $rows;
     }
 }

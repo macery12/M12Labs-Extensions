@@ -2,7 +2,6 @@
 
 namespace Everest\Extensions\Packages\ai\Http\Requests;
 
-use Everest\Models\AdminRole;
 use Everest\Extensions\Sdk\Http\ApplicationApiRequest;
 
 /**
@@ -13,6 +12,6 @@ class ProbeToolCallingRequest extends ApplicationApiRequest
 {
     public function permission(): string
     {
-        return AdminRole::AI_UPDATE;
+        return 'ext.ai.admin.update';
     }
 }

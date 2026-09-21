@@ -2,8 +2,7 @@
 
 namespace Everest\Extensions\Packages\ai\Tools\Definitions;
 
-use Everest\Models\Ticket;
-use Everest\Models\AdminRole;
+use Everest\Extensions\Sdk\AdminCapability;
 use Everest\Extensions\Packages\ai\Tools\Prerequisite;
 use Everest\Extensions\Packages\ai\Tools\ToolDiscovery;
 use Everest\Extensions\Packages\ai\Tools\ToolDefinition;
@@ -111,7 +110,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/overview',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::OVERVIEW_READ],
+                permissions: [AdminCapability::OVERVIEW_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_PANEL,
                     aliases: ['panel overview', 'how is the panel doing', 'total users', 'total servers', 'node usage', 'dashboard', 'capacity'],
@@ -136,7 +135,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/users',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::USERS_READ],
+                permissions: [AdminCapability::USERS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_USERS,
                     aliases: ['find a user', 'search for a customer', 'look up an account', 'who is this', 'list users', 'find by email'],
@@ -163,7 +162,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/users/{user}',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::USERS_READ],
+                permissions: [AdminCapability::USERS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_USERS,
                     aliases: ['user details', 'account details', 'what servers does this user own', 'customer record'],
@@ -188,7 +187,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/servers',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::SERVERS_READ],
+                permissions: [AdminCapability::SERVERS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SERVERS,
                     aliases: ['find a server', 'search for a server', 'look up a server by name', 'list servers', 'which server is this', 'server id'],
@@ -217,7 +216,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/servers/{server}',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::SERVERS_READ],
+                permissions: [AdminCapability::SERVERS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SERVERS,
                     aliases: ['server record', 'server details', 'server limits', 'which node is it on', 'who owns this server', 'is it suspended'],
@@ -261,7 +260,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/activity',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::ACTIVITY_READ],
+                permissions: [AdminCapability::ACTIVITY_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SERVERS,
                     aliases: ['panel activity', 'audit log', 'who did what', 'recent admin actions', 'activity across the panel'],
@@ -301,7 +300,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/analytics',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: ['revenue', 'how much are we making', 'billing analytics', 'sales figures', 'mrr', 'income'],
@@ -317,7 +316,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/categories',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: ['product categories', 'list categories', 'store categories'],
@@ -345,7 +344,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/categories/{category}/products',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: ['list products', 'what plans do we sell', 'store catalogue', 'pricing', 'list plans'],
@@ -373,7 +372,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/categories/{category}/products/{product}',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: ['product details', 'plan details', 'what resources does this plan give', 'product limits'],
@@ -393,7 +392,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/categories/{category}/products/{product}/billing-cycles',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: ['billing cycles', 'monthly or yearly', 'payment periods', 'billing periods'],
@@ -443,7 +442,7 @@ class AdminTools
                 uriTemplate: self::BASE . '/billing/categories/{category}/products',
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_PRODUCTS_CREATE],
+                permissions: [AdminCapability::BILLING_PRODUCTS_CREATE],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: [
@@ -493,7 +492,7 @@ class AdminTools
                 uriTemplate: self::BASE . '/billing/categories/{category}/products/{product}',
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_PRODUCTS_UPDATE],
+                permissions: [AdminCapability::BILLING_PRODUCTS_UPDATE],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_BILLING,
                     aliases: ['edit a product', 'change a price', 'update a plan', 'raise prices', 'change plan limits', 'rename a plan'],
@@ -527,7 +526,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/coupons',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['list coupons', 'discount codes', 'promo codes', 'what coupons are active'],
@@ -554,7 +553,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/coupons/{coupon}',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['coupon details', 'how many times has this code been used', 'discount code details'],
@@ -585,7 +584,7 @@ class AdminTools
                 uriTemplate: self::BASE . '/billing/coupons',
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_UPDATE],
+                permissions: [AdminCapability::BILLING_UPDATE],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['create a coupon', 'make a discount code', 'new promo code', 'black friday code'],
@@ -617,7 +616,7 @@ class AdminTools
                 uriTemplate: self::BASE . '/billing/coupons/{coupon}',
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_UPDATE],
+                permissions: [AdminCapability::BILLING_UPDATE],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['edit a coupon', 'disable a coupon', 'change a discount', 'extend a promo code'],
@@ -639,7 +638,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/orders',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_ORDERS],
+                permissions: [AdminCapability::BILLING_ORDERS],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['list orders', 'recent purchases', 'who bought what', 'sales', 'order history'],
@@ -663,7 +662,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/billing/node-pricing',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_READ],
+                permissions: [AdminCapability::BILLING_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['node pricing', 'price multipliers', 'location pricing', 'why is this node more expensive'],
@@ -688,7 +687,7 @@ class AdminTools
                 uriTemplate: self::BASE . '/billing/node-pricing/{id}',
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::BILLING_UPDATE],
+                permissions: [AdminCapability::BILLING_UPDATE],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_COMMERCE,
                     aliases: ['change node pricing', 'set a price multiplier', 'make a location cheaper'],
@@ -722,17 +721,17 @@ class AdminTools
                 parameters: self::object([
                     'filter' => self::object([
                         'status' => self::enum([
-                            Ticket::STATUS_PENDING,
-                            Ticket::STATUS_IN_PROGRESS,
-                            Ticket::STATUS_UNRESOLVED,
-                            Ticket::STATUS_RESOLVED,
+                            'pending',
+                            'in-progress',
+                            'unresolved',
+                            'resolved',
                         ], 'Exact ticket status. "pending" is a new ticket nobody has answered yet — '
                             . 'that is what "open tickets" usually means.'),
                         'priority' => self::enum([
-                            Ticket::PRIORITY_LOW,
-                            Ticket::PRIORITY_MEDIUM,
-                            Ticket::PRIORITY_HIGH,
-                            Ticket::PRIORITY_CRITICAL,
+                            'low',
+                            'medium',
+                            'high',
+                            'critical',
                         ], 'Exact ticket priority.'),
                         'title' => self::string('Match on title, partial matches allowed.'),
                     ]),
@@ -742,7 +741,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/tickets',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::TICKETS_READ],
+                permissions: [AdminCapability::TICKETS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SUPPORT,
                     aliases: ['list tickets', 'open tickets', 'support queue', 'unanswered tickets', 'who needs help'],
@@ -778,7 +777,7 @@ class AdminTools
                 uriTemplate: '',
                 risk: ToolDefinition::RISK_SAFE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::TICKETS_READ],
+                permissions: [AdminCapability::TICKETS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SUPPORT,
                     aliases: ['read ticket and messages', 'get the full ticket context', 'what did the ticket say', 'read the support conversation'],
@@ -798,7 +797,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/tickets/{ticket}',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::TICKETS_READ],
+                permissions: [AdminCapability::TICKETS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SUPPORT,
                     aliases: ['ticket details', 'what is this ticket about', 'ticket subject', 'ticket status'],
@@ -834,7 +833,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/tickets/{ticket}/messages',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::TICKETS_READ],
+                permissions: [AdminCapability::TICKETS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_SUPPORT,
                     aliases: ['ticket conversation', 'read the ticket replies', 'what did the customer say', 'ticket history'],
@@ -879,7 +878,7 @@ class AdminTools
                 // decision a person makes, not a step the model takes.
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::SERVERS_ASSIST],
+                permissions: [AdminCapability::SERVERS_ASSIST],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_ASSIST,
                     aliases: ['look at a customer server', 'open a session on their server', 'diagnose their server', 'access a customer server', 'see what the owner sees', 'read their files'],
@@ -904,7 +903,7 @@ class AdminTools
                 uriTemplate: '',
                 risk: ToolDefinition::RISK_WRITE,
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::SERVERS_ASSIST],
+                permissions: [AdminCapability::SERVERS_ASSIST],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_ASSIST,
                     aliases: ['ask for write access', 'allow changes', 'escalate the session', 'let me fix it', 'writable session'],
@@ -935,7 +934,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/settings/features',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::SETTINGS_READ],
+                permissions: [AdminCapability::SETTINGS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_PANEL,
                     aliases: ['feature toggles', 'what modules are enabled', 'is billing turned on', 'panel features'],
@@ -950,7 +949,7 @@ class AdminTools
                 method: 'GET',
                 uriTemplate: self::BASE . '/servers/presets',
                 scope: ToolDefinition::SCOPE_ADMIN,
-                permissions: [AdminRole::SERVER_PRESETS_READ],
+                permissions: [AdminCapability::SERVER_PRESETS_READ],
                 discovery: new ToolDiscovery(
                     category: self::CATEGORY_PANEL,
                     aliases: ['server presets', 'preset templates', 'what presets exist', 'create-server templates'],

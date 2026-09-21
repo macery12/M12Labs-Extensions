@@ -2,17 +2,19 @@
 
 namespace Everest\Extensions\Packages\ai\Agent;
 
-use Everest\Models\Setting;
 use Everest\Extensions\Packages\ai\AiConfiguration;
 use Everest\Extensions\Packages\ai\Data\ProviderConfig;
 
 /** Stores an operator-requested, repeatedly measured tool budget per model. */
 class ToolBudgetCalibration
 {
+    /**
+     * Where a measured budget is kept.
+     *
+     * A map of provider/model fingerprints to measurements, so a flat typed
+     * settings field cannot hold it -- it goes in the package's own table.
+     */
     public const KEY = 'agent.calibrated_tool_budgets';
-
-    /** @deprecated Spell the key through {@see AiConfiguration}; kept for callers still naming the raw row. */
-    public const SETTING = AiConfiguration::SETTING_PREFIX . 'agent:calibrated_tool_budgets';
 
     /** @return array<string, mixed>|null */
     public function find(ProviderConfig $config): ?array
@@ -101,7 +103,7 @@ class ToolBudgetCalibration
             'evidence' => $recommendation['evidence'] ?? [],
         ];
 
-        Setting::set(self::SETTING, json_encode(
+        AiConfiguration::set(self::KEY, json_encode(
             $entries,
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ));
@@ -125,13 +127,6 @@ class ToolBudgetCalibration
     /** @return array<string, array<string, mixed>> */
     private function entries(): array
     {
-        $stored = Setting::get(self::SETTING, '');
-        if (!is_string($stored) || trim($stored) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($stored, true);
-
-        return is_array($decoded) ? $decoded : [];
+        return AiConfiguration::list(self::KEY);
     }
 }

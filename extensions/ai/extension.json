@@ -125,7 +125,7 @@
         "name": "agent",
         "longRunning": true,
         "maxAttempts": 1,
-        "timeoutSeconds": 900,
+        "timeoutSeconds": 960,
         "backoffSeconds": [30],
         "rateLimit": "120/minute",
         "maxConcurrent": 4,

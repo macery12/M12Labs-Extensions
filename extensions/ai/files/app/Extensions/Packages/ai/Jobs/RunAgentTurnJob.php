@@ -2,7 +2,7 @@
 
 namespace Everest\Extensions\Packages\ai\Jobs;
 
-use Everest\Jobs\Job;
+use Everest\Extensions\Sdk\Jobs\ExtensionJob;
 use Everest\Models\Server;
 use Everest\Extensions\Packages\ai\Models\AiUsageLog;
 use Everest\Extensions\Packages\ai\Models\AiConversation;
@@ -44,7 +44,7 @@ use Everest\Extensions\Packages\ai\Http\Concerns\HandlesAgentTurns;
  *   before a worker died, so `$tries = 1` and `failed()` records the terminal
  *   state rather than repeating calls the user watched succeed.
  */
-class RunAgentTurnJob extends Job implements ShouldQueue
+class RunAgentTurnJob extends ExtensionJob implements ShouldQueue
 {
     use Dispatchable;
     use HandlesAgentTurns;
@@ -52,17 +52,25 @@ class RunAgentTurnJob extends Job implements ShouldQueue
     use SerializesModels;
 
     /**
-     * Never replay a turn. See the class docblock: the effects are not
-     * idempotent and the queue has no way to learn which of them landed.
+     * The manifest's queue group, and the only thing this class says about how
+     * it is scheduled.
+     *
+     * Attempts, timeout, backoff, rate limit and the lane all come from
+     * `capabilities.queues` under this name, because a class that could set
+     * them itself could hold a dedicated worker for an hour without an
+     * operator ever having approved it. What used to be `$tries = 1` and
+     * `$timeout = 960` here are `maxAttempts` and `timeoutSeconds` there, and
+     * `longRunning: true` is what puts a 900-second turn on the long lane
+     * instead of starving the queue that short extension work shares.
+     *
+     * It answers from the class rather than from state, because Laravel reads
+     * the queue and connection when the job is pushed -- too late for anything
+     * a constructor assigned.
      */
-    public int $tries = 1;
-
-    /**
-     * Above `AgentRunner::MAX_WALL_SECONDS` with room for the terminal writes,
-     * and below the connection's `retry_after` so a running turn is never handed
-     * to a second worker. `QueueTopologyTest` enforces the second half.
-     */
-    public int $timeout = 960;
+    public function queueGroup(): string
+    {
+        return 'agent';
+    }
 
     /** Frames the worker produced, for the relay to hand to whoever is watching. */
     private ?AgentEventLog $events = null;
@@ -81,6 +89,8 @@ class RunAgentTurnJob extends Job implements ShouldQueue
         private ?array $leaseHandle,
         private ?array $budgetHandle,
     ) {
+        // Pins the lane and the connection from the manifest's queue group.
+        parent::__construct();
     }
 
     public function handle(

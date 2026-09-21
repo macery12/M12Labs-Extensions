@@ -2,7 +2,7 @@
 
 namespace Everest\Http\Controllers\Api\Application;
 
-use Everest\Facades\Activity;
+use Everest\Extensions\Sdk\Services\PanelActivity;
 use Illuminate\Http\Response;
 use Everest\Extensions\Packages\ai\Models\AiUsageLog;
 use Illuminate\Http\JsonResponse;
@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Everest\Extensions\Packages\ai\AiConfiguration;
 use Everest\Extensions\Packages\ai\ProviderFactory;
 use Everest\Extensions\Packages\ai\Agent\ToolBudget;
-use Everest\Services\Email\EmailRedactor;
+use Everest\Extensions\Packages\ai\Support\SensitiveKeyMask;
 use Everest\Extensions\Sdk\Services\PackageRedaction;
 use Everest\Extensions\Packages\ai\Data\ProviderConfig;
 use Everest\Extensions\Packages\ai\Privacy\AiRedactionPolicy;
@@ -152,12 +152,9 @@ class IntelligenceController extends ApplicationApiController
             AiConfiguration::set(str_replace(':', '.', $key), $value);
         }
 
-        $activitySettings = EmailRedactor::redactSensitivePayload(
-            $request->all(),
-            ['api_key', 'token', 'secret', 'password', 'authorization', 'key']
-        );
+        $activitySettings = SensitiveKeyMask::apply($request->all(), SensitiveKeyMask::SETTINGS_KEYS);
 
-        Activity::event('admin:ai:update')
+        PanelActivity::for('ai')->event('update')
             ->property('settings', $activitySettings)
             ->description('M12Labs-AI settings were updated')
             ->log();

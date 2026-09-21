@@ -5,7 +5,7 @@ namespace Everest\Http\Controllers\Api\Application;
 use Everest\Models\Server;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
-use Everest\Facades\Activity;
+use Everest\Extensions\Sdk\Services\PanelActivity;
 use Illuminate\Http\Response;
 use Illuminate\Http\JsonResponse;
 use Everest\Extensions\Packages\ai\Models\AiConversation;
@@ -573,7 +573,7 @@ class AiAgentController extends ApplicationApiController
         AiConfiguration::set('disabled_tools', json_encode($disabled));
         AiConfiguration::set('console.safe_commands', json_encode($console));
 
-        Activity::event('admin:ai:tools')
+        PanelActivity::for('ai')->event('tools')
             ->property('overrides', $overrides)
             ->property('disabled', $disabled)
             ->property('console_safe_commands', $console)
