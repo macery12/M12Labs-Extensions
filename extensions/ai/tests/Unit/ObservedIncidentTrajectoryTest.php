@@ -111,7 +111,7 @@ class ObservedIncidentTrajectoryTest extends AiPackageTestCase
     private function evalCase(string $id): array
     {
         $corpus = json_decode(
-            file_get_contents(base_path('tests/Fixtures/ai-agent-prompt-evals.json')),
+            file_get_contents(__DIR__ . '/Fixtures/ai-agent-prompt-evals.json'),
             true,
             flags: JSON_THROW_ON_ERROR,
         );

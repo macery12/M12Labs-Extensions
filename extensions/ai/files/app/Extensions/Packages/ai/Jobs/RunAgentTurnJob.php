@@ -7,17 +7,13 @@ use Everest\Models\Server;
 use Everest\Extensions\Packages\ai\Models\AiUsageLog;
 use Everest\Extensions\Packages\ai\Models\AiConversation;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Queue\SerializesModels;
 use Everest\Extensions\Packages\ai\Tools\RiskGate;
 use Everest\Extensions\Packages\ai\ProviderFactory;
-use Illuminate\Queue\InteractsWithQueue;
 use Everest\Extensions\Packages\ai\Agent\AgentEvent;
 use Everest\Extensions\Packages\ai\Agent\AgentRunner;
 use Everest\Extensions\Packages\ai\Agent\AgentContext;
 use Everest\Extensions\Packages\ai\Agent\TurnRecorder;
 use Everest\Extensions\Packages\ai\Tools\ToolRegistry;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
 use Everest\Extensions\Packages\ai\Agent\AgentEventLog;
 use Everest\Extensions\Packages\ai\Agent\TurnAuthority;
 use Everest\Extensions\Packages\ai\Inference\InferenceGate;
@@ -44,12 +40,9 @@ use Everest\Extensions\Packages\ai\Http\Concerns\HandlesAgentTurns;
  *   before a worker died, so `$tries = 1` and `failed()` records the terminal
  *   state rather than repeating calls the user watched succeed.
  */
-class RunAgentTurnJob extends ExtensionJob implements ShouldQueue
+class RunAgentTurnJob extends ExtensionJob
 {
-    use Dispatchable;
     use HandlesAgentTurns;
-    use InteractsWithQueue;
-    use SerializesModels;
 
     /**
      * The manifest's queue group, and the only thing this class says about how

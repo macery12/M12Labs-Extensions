@@ -9,7 +9,7 @@ class PromptEvalCorpusTest extends TestCase
 {
     public function testCorpusHasUniqueCompleteCasesAndZeroToleranceCoverage(): void
     {
-        $json = file_get_contents(dirname(__DIR__, 3) . '/Fixtures/ai-agent-prompt-evals.json');
+        $json = file_get_contents(__DIR__ . '/Fixtures/ai-agent-prompt-evals.json');
         $corpus = json_decode((string) $json, true, flags: JSON_THROW_ON_ERROR);
 
         $this->assertSame(1, $corpus['version']);

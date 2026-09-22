@@ -7,43 +7,33 @@ use Everest\Extensions\Packages\ai\Models\AiPendingAction;
 use Illuminate\Support\Facades\Schema;
 use Everest\Extensions\Packages\ai\Tools\RiskGate;
 use Everest\Extensions\Packages\ai\ProviderFactory;
-use Illuminate\Database\Schema\Blueprint;
 use Everest\Extensions\Packages\ai\Agent\AgentRunner;
 use Everest\Extensions\Packages\ai\Agent\TurnRecorder;
 use Everest\Extensions\Packages\ai\Tools\ToolRegistry;
 use Everest\Extensions\Packages\ai\Http\Concerns\HandlesAgentTurns;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class PendingActionClaimTest extends AiPackageTestCase
 {
+    // The package's tables carry real foreign keys to `users`, `servers` and
+    // each other, so the rows this test claims against need a panel to hang
+    // off. The fixture table it used to build had no keys at all, which is
+    // why it did not.
+    use RefreshDatabase;
+
     private PendingClaimHarness $harness;
+
+    private \Everest\Models\User $owner;
 
     public function setUp(): void
     {
         parent::setUp();
 
-        if (!Schema::hasTable('ext_ai_pending_actions')) {
-            Schema::create('ext_ai_pending_actions', function (Blueprint $table): void {
-                $table->id();
-                $table->uuid('turn_id')->unique();
-                $table->unsignedBigInteger('conversation_id')->nullable();
-                $table->unsignedInteger('user_id');
-                $table->char('server_uuid', 36)->nullable();
-                $table->string('scope', 16)->nullable();
-                $table->string('tool_name', 64);
-                $table->string('tool_call_id')->nullable();
-                $table->string('risk', 16);
-                $table->json('arguments');
-                $table->json('state');
-                $table->unsignedSmallInteger('step')->default(0);
-                $table->string('status', 16)->default('pending');
-                $table->uuid('execution_key')->nullable()->unique();
-                $table->timestamp('claimed_at')->nullable();
-                $table->timestamp('resolved_at')->nullable();
-                $table->string('failure_reason')->nullable();
-                $table->timestamp('expires_at');
-                $table->timestamps();
-            });
-        }
+        // The real table, created by the package's own migration in the base
+        // class -- which means its foreign key to `users` is real too, so the
+        // fixture owes it a users table. A hand-rolled copy without the key
+        // used to stand in here and quietly stopped testing the constraint.
+        $this->owner = $this->aiOwner();
 
         AiPendingAction::query()->delete();
         $this->harness = new PendingClaimHarness();
@@ -101,12 +91,26 @@ class PendingActionClaimTest extends AiPackageTestCase
         $this->assertNotSame($context->idempotencyKeyFor('child-1'), $context->idempotencyKeyFor('child-2'));
     }
 
+    /** A conversation for the pending row to belong to. */
+    private function conversation(): \Everest\Extensions\Packages\ai\Models\AiConversation
+    {
+        return \Everest\Extensions\Packages\ai\Models\AiConversation::query()->create([
+            'user_id' => $this->owner->id,
+            'server_uuid' => null,
+            'scope' => 'admin',
+            'title' => 'Claim test',
+        ]);
+    }
+
     private function pending(array $overrides = []): AiPendingAction
     {
         return AiPendingAction::create(array_merge([
             'turn_id' => 'aaaaaaaa-bbbb-4ccc-8ddd-' . str_pad((string) (AiPendingAction::count() + 1), 12, '0', STR_PAD_LEFT),
-            'conversation_id' => null,
-            'user_id' => 1,
+            // Both columns carry a real foreign key. The hand-rolled fixture
+            // table this test used to build had neither, so it could write a
+            // conversation-less row the package's own schema forbids.
+            'conversation_id' => $this->conversation()->id,
+            'user_id' => $this->owner->id,
             'server_uuid' => null,
             'scope' => 'admin',
             'tool_name' => 'admin_product_create',

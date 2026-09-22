@@ -232,8 +232,33 @@ trait ConfiguresAiPackage
     }
 
     /**
-     * Create the two tables the package's configuration lives in, if a
-     * migration has not already.
+     * Run the package's own migration, the way the installer does.
+     *
+     * Its tables were core's until the module was lifted out, so a test that
+     * migrated the panel used to get `ext_ai_*` for free and the package's
+     * tests passed without ever exercising the file that now creates them.
+     * They do not exist in a panel that has not installed this extension,
+     * which is the whole point, so the fixture installs it.
+     *
+     * The real migration rather than a hand-written schema: every create in it
+     * is guarded, so this is idempotent, and a column that drifts from what
+     * the package ships fails a test here instead of on a live install.
+     */
+    protected function migrateAiPackage(): void
+    {
+        $file = app_path('Extensions/Packages/ai/database/migrations/2026_09_21_000001_create_ext_ai_tables.php');
+
+        if (!is_file($file)) {
+            $this->fail(sprintf('The AI package migration is not staged at %s.', $file));
+        }
+
+        $migration = require $file;
+        $migration->up();
+    }
+
+    /**
+     * Create the stores the package reads and writes: the two its configuration
+     * lives in, and its own data tables.
      */
     protected function createAiStores(): void
     {
@@ -271,6 +296,8 @@ trait ConfiguresAiPackage
                 $table->timestamp('updated_at')->nullable();
             });
         }
+
+        $this->migrateAiPackage();
     }
 
     /**

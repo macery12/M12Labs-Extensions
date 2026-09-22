@@ -6,13 +6,27 @@ use Everest\Tests\Extensions\ai\AiPackageTestCase;
 
 class AgentFrontendLifecycleContractTest extends AiPackageTestCase
 {
-    public function testStreamRequiresSentinelAndRejectsMalformedFrames(): void
+    /**
+     * A stream that ends without saying so is a failure, not a completion.
+     *
+     * Framing and the `[DONE]` sentinel are the platform's now -- the package
+     * reads `createExtensionStream`, which parses each frame and closes on the
+     * sentinel -- so what is pinned here is the half the package still owns:
+     * if the transport resolves and nothing marked the turn finished, the
+     * caller is told, rather than being shown a half-written answer as though
+     * it were the whole one.
+     */
+    public function testAStreamThatEndsWithoutFinishingIsAnError(): void
     {
-        $source = file_get_contents(base_path('frontend/src/lib/aiStream.ts'));
+        $source = file_get_contents(base_path('frontend/src/extensions/packages/ai/agentStream.ts'));
+        $sdk = file_get_contents(base_path('frontend/src/extensions-sdk/stream.ts'));
 
         $this->assertStringContainsString('closed before the turn completed', $source);
-        $this->assertStringContainsString('sent malformed stream data', $source);
-        $this->assertStringNotContainsString('if (!finished) onComplete()', $source);
+        $this->assertStringContainsString('if (!finished) {', $source);
+
+        // The two guarantees that moved into the SDK with the transport.
+        $this->assertStringContainsString("if (raw === '[DONE]')", $sdk);
+        $this->assertStringContainsString('safeParse', $sdk);
     }
 
     /**
@@ -27,11 +41,14 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testPreStreamRefusalsAreReadInThePanelsOwnErrorShape(): void
     {
-        $reader = file_get_contents(base_path('frontend/src/lib/aiStream.ts'));
+        $sdk = file_get_contents(base_path('frontend/src/extensions-sdk/stream.ts'));
         $handler = file_get_contents(base_path('app/Exceptions/Handler.php'));
-        $trait = file_get_contents(base_path('app/Http/Controllers/Api/Concerns/HandlesAgentTurns.php'));
+        $trait = file_get_contents(base_path('app/Extensions/Packages/ai/Http/Concerns/HandlesAgentTurns.php'));
 
-        $this->assertStringContainsString('apiErrorDetail(await response.json())', $reader);
+        // Reading the envelope is the SDK's job now, and it is the same
+        // envelope: a sentence written for this reader has to survive to the
+        // screen rather than arriving as "Request failed (503)".
+        $this->assertStringContainsString('errors?.[0]?.detail', $sdk);
         $this->assertStringContainsString("'detail' => \$e instanceof HttpExceptionInterface", $handler);
 
         // And admission refusals have to become an HttpException to reach that
@@ -39,22 +56,36 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
         $this->assertStringContainsString('ServiceUnavailableHttpException', $trait);
     }
 
-    public function testPreStreamFailuresAlwaysHaveSafeActionableFallbacks(): void
+    /**
+     * A refusal reaches the user as a sentence, and never as a reference number.
+     *
+     * The module used to carry its own table of per-status sentences and an
+     * `X-AI-Error-Safe` header saying when a 5xx body could be quoted. Both
+     * belonged to a transport it no longer has. What replaces them is narrower
+     * and is what this pins: every refusal the package raises before the
+     * stream opens carries its own `detail`, written for this reader, so there
+     * is nothing for a status-code table to fall back to.
+     *
+     * `X-AI-Error-Reference` stays absent on purpose. An error the user cannot
+     * act on, identified by a number only an administrator can resolve, is a
+     * dead end presented as help.
+     */
+    public function testPreStreamRefusalsCarryTheirOwnSentence(): void
     {
-        $reader = file_get_contents(base_path('frontend/src/lib/aiStream.ts'));
-        $trait = file_get_contents(base_path('app/Http/Controllers/Api/Concerns/HandlesAgentTurns.php'));
+        $trait = file_get_contents(base_path('app/Extensions/Packages/ai/Http/Concerns/HandlesAgentTurns.php'));
+        $sdk = file_get_contents(base_path('frontend/src/extensions-sdk/stream.ts'));
 
-        $this->assertStringNotContainsString('Request failed (${response.status})', $reader);
-        $this->assertStringContainsString('The AI provider is unavailable or not responding right now', $reader);
-        $this->assertStringContainsString('The connection to the panel failed before the assistant could respond', $reader);
-        $this->assertStringContainsString("response.headers.get('X-AI-Error-Safe') === '1'", $reader);
+        // Every rejection goes through the one helper, which requires a message.
+        $this->assertStringContainsString('protected function rejectAgentRequest(string $message, string $reason): never', $trait);
         $this->assertStringNotContainsString('X-AI-Error-Reference', $trait);
-        $this->assertStringNotContainsString('Administrator reference:', $reader);
+
+        // And the reader prefers that sentence over anything it could invent.
+        $this->assertStringContainsString('errors?.[0]?.detail', $sdk);
     }
 
     public function testDecisionsCommitOnlyAfterHttpAcknowledgement(): void
     {
-        $source = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
+        $source = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
 
         $committed = strpos($source, "decision: decision === 'approve' ? 'approved' : 'rejected'");
         $accepted = strrpos(substr($source, 0, $committed), 'onAccepted: () =>');
@@ -71,21 +102,30 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
 
     public function testWatchdogUsesServerLimitAndReconcilesAcceptedDisconnects(): void
     {
-        $stream = file_get_contents(base_path('frontend/src/lib/aiStream.ts'));
-        $store = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
+        $stream = file_get_contents(base_path('frontend/src/extensions/packages/ai/agentStream.ts'));
+        $store = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
 
-        $this->assertStringContainsString("headers.get('X-Agent-Idle-Seconds')", $stream);
-        $this->assertStringContainsString("headers.get('X-Agent-Turn-Id')", $stream);
+        // Both used to be response headers on a hand-rolled SSE response. The
+        // stream is the platform's now and its headers are the platform's, so
+        // the two values the client needs are the first frame instead -- which
+        // also means a reconnected relay announces them again.
+        $this->assertStringContainsString("if (data.type === 'stream')", $stream);
+        $this->assertStringContainsString('onTurnId?.(data.turn_id)', $stream);
+        $this->assertStringContainsString('onIdleLimit?.(data.idle_seconds * 1000)', $stream);
         $this->assertStringContainsString('adapter.reconcileTurn(target, turnId)', $store);
         $this->assertStringContainsString('state.pending', $store);
-        $this->assertStringContainsString('if (streamAccepted && activeTurnId !== null)', $store);
+        $this->assertStringContainsString('if (!streamAccepted || activeTurnId === null) return;', $store);
     }
 
     public function testDoneSentinelFollowsTerminalPersistence(): void
     {
-        $source = file_get_contents(base_path('app/Http/Controllers/Api/Concerns/HandlesAgentTurns.php'));
+        $source = file_get_contents(base_path('app/Extensions/Packages/ai/Http/Concerns/HandlesAgentTurns.php'));
+        // The sentinel itself belongs to the platform's writer now; the
+        // package asks for it by closing the stream. The ordering is still
+        // the package's to get right, and is still the point: a client that
+        // sees the stream end believes the turn is durably recorded.
         $record = strrpos($source, 'app(AiTurnUsageRecorder::class)->record');
-        $done = strrpos($source, "write('data: [DONE]')");
+        $done = strrpos($source, '$this->sendTerminal();');
 
         $this->assertIsInt($record);
         $this->assertIsInt($done);
@@ -95,8 +135,8 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
 
     public function testApprovalTargetsRemainExactScrollableAndBidiIsolated(): void
     {
-        $meta = file_get_contents(base_path('frontend/src/components/ai/toolMeta.tsx'));
-        $card = file_get_contents(base_path('frontend/src/components/ai/ApprovalCard.tsx'));
+        $meta = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/toolMeta.tsx'));
+        $card = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/ApprovalCard.tsx'));
 
         $sharedPrefix = '/srv/' . str_repeat('same-prefix-', 12);
         $first = $sharedPrefix . "\u{202E}alpha\u{2066}/world-one.json";
@@ -122,18 +162,20 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
 
     public function testConversationHistoryIsUsableOnSmallScreensAndDeletionIsAcknowledged(): void
     {
-        $serverPage = file_get_contents(base_path('frontend/src/pages/server/ai/AiPage.tsx'));
-        $adminPage = file_get_contents(base_path('frontend/src/pages/admin/assistant/AssistantPage.tsx'));
-        $sharedRail = file_get_contents(base_path('frontend/src/components/ai/ConversationRail.tsx'));
-        $delete = file_get_contents(base_path('frontend/src/components/ai/DeleteConversationModal.tsx'));
+        $serverPage = file_get_contents(base_path('frontend/src/extensions/packages/ai/pages/server/assistant.tsx'));
+        $adminPage = file_get_contents(base_path('frontend/src/extensions/packages/ai/pages/admin/assistant.tsx'));
+        $sharedRail = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/ConversationRail.tsx'));
+        $delete = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/DeleteConversationModal.tsx'));
 
         foreach ([$serverPage, $adminPage] as $page) {
             $this->assertStringContainsString("window.matchMedia('(min-width: 1024px)')", $page);
             $this->assertStringContainsString('absolute inset-y-0 left-0 z-20', $page);
             $this->assertStringContainsString('lg:static', $page);
             $this->assertStringContainsString('closeMobileRail', $page);
-            $this->assertStringContainsString("m['server.ai.showHistory']()", $page);
-            $this->assertStringContainsString('@/components/ai/ConversationRail', $page);
+            // A package looks its strings up through its own translator with a
+            // fallback, rather than through the panel's typed catalogue.
+            $this->assertStringContainsString("t('server.showHistory', 'Show history')", $page);
+            $this->assertStringContainsString("from '../../components/ConversationRail'", $page);
         }
 
         // Hover cannot be a requirement on a touch screen.
@@ -152,18 +194,18 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
         $this->assertStringContainsString('mutationFn: onDelete', $delete);
         $this->assertStringContainsString('onSuccess: onClose', $delete);
         $this->assertStringContainsString('onError:', $delete);
-        $this->assertStringContainsString("m['server.ai.deleteBody']", $delete);
+        $this->assertStringContainsString("t('server.deleteBody'", $delete);
         $this->assertStringContainsString('<DeleteConversationModal', $serverPage);
         $this->assertStringContainsString('<DeleteConversationModal', $adminPage);
     }
 
     public function testAiRequestFailuresDoNotMasqueradeAsEmptyOrDisabledStates(): void
     {
-        $section = file_get_contents(base_path('frontend/src/pages/admin/ai/AiSection.tsx'));
-        $assistant = file_get_contents(base_path('frontend/src/pages/admin/assistant/AssistantPage.tsx'));
-        $overview = file_get_contents(base_path('frontend/src/pages/admin/ai/pages/OverviewPage.tsx'));
-        $logs = file_get_contents(base_path('frontend/src/pages/admin/ai/pages/LogsPage.tsx'));
-        $tools = file_get_contents(base_path('frontend/src/pages/admin/ai/pages/ToolsPage.tsx'));
+        $section = file_get_contents(base_path('frontend/src/extensions/packages/ai/admin/AiSection.tsx'));
+        $assistant = file_get_contents(base_path('frontend/src/extensions/packages/ai/pages/admin/assistant.tsx'));
+        $overview = file_get_contents(base_path('frontend/src/extensions/packages/ai/admin/pages/OverviewPage.tsx'));
+        $logs = file_get_contents(base_path('frontend/src/extensions/packages/ai/admin/pages/LogsPage.tsx'));
+        $tools = file_get_contents(base_path('frontend/src/extensions/packages/ai/admin/pages/ToolsPage.tsx'));
 
         foreach ([$section, $assistant, $overview, $logs, $tools] as $source) {
             $this->assertStringContainsString('isError', $source);
@@ -176,30 +218,45 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
         $this->assertStringContainsString('statsError', $overview);
     }
 
-    public function testCustomerAgentRouteDrawerAndPageShareTheDedicatedKillSwitch(): void
+    /**
+     * The drawer, the page and the chat agree on one switch.
+     *
+     * In the panel this was a bootstrap block each surface recomputed for
+     * itself -- three copies of `enabled && agent.enabled`, which is three
+     * chances to disagree, and the failure mode is a sidebar entry for a
+     * feature that cannot run. It is a declared flag now: the manifest states
+     * the predicate once, the panel composes it, and every surface reads the
+     * answer rather than the inputs.
+     */
+    public function testCustomerAgentSurfacesShareOneDeclaredFlag(): void
     {
-        $route = file_get_contents(base_path('frontend/src/routes/server.routes.ts'));
-        $drawer = file_get_contents(base_path('frontend/src/components/ai/AgentDrawer.tsx'));
-        $page = file_get_contents(base_path('frontend/src/pages/server/ai/AiPage.tsx'));
-        $chat = file_get_contents(base_path('frontend/src/components/ai/AgentChat.tsx'));
-        $composer = file_get_contents(base_path('app/Http/ViewComposers/EverestComposer.php'));
-
-        $this->assertStringContainsString("'feature_agent' => boolval(config('modules.ai.agent.enabled'", $composer);
-        $this->assertStringContainsString('f.ai.enabled && f.ai.feature_agent', $route);
-        $this->assertStringNotContainsString('f.ai.feature_server_assistant', $route);
+        $drawer = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/AgentDrawer.tsx'));
+        $page = file_get_contents(base_path('frontend/src/extensions/packages/ai/pages/server/assistant.tsx'));
+        $chat = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/AgentChat.tsx'));
 
         foreach ([$drawer, $page, $chat] as $source) {
-            $this->assertStringContainsString('everest?.ai.enabled && everest.ai.feature_agent', $source);
-            $this->assertStringNotContainsString('feature_server_assistant', $source);
+            $this->assertStringContainsString("useExtensionFlag('ai', 'agent-ready')", $source);
+
+            // None of them may rebuild the predicate from the settings, and
+            // none of them decides anything from who is looking.
+            $this->assertStringNotContainsString('agent_enabled &&', $source);
             $this->assertStringNotContainsString('admin_role_id', $source);
         }
+
+        // And the flag has to exist, with the provider in its predicate --
+        // that is what keeps the entry hidden until the module can answer.
+        $flags = $this->aiCapabilitySet()->flags;
+        $names = array_map(fn ($flag): string => $flag->name, $flags);
+
+        $this->assertContains('agent-ready', $names);
+        $this->assertContains('admin-agent-ready', $names);
     }
 
     public function testTranscriptLoadsAreBoundToTargetConversationAndLatestGeneration(): void
     {
-        $store = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
-        $serverPage = file_get_contents(base_path('frontend/src/pages/server/ai/AiPage.tsx'));
-        $adminPage = file_get_contents(base_path('frontend/src/pages/admin/assistant/AssistantPage.tsx'));
+        $store = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
+        $serverPage = file_get_contents(base_path('frontend/src/extensions/packages/ai/pages/server/assistant.tsx'));
+        $adminPage = file_get_contents(base_path('frontend/src/extensions/packages/ai/pages/admin/assistant.tsx'));
 
         $this->assertStringContainsString('beginTranscriptLoad: (target: string, conversationId: number) => number', $store);
         $this->assertStringContainsString('request.target !== target', $store);
@@ -228,7 +285,7 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
     {
         $runner = app(\Everest\Extensions\Packages\ai\Agent\AgentRunner::class);
         $rules = (new \Everest\Extensions\Packages\ai\Http\Requests\UpdateIntelligenceSettingsRequest())->rules();
-        $form = file_get_contents(base_path('frontend/src/pages/admin/ai/pages/AgentPage.tsx'));
+        $form = file_get_contents(base_path('frontend/src/extensions/packages/ai/admin/pages/AgentPage.tsx'));
 
         $this->assertSame(30, \Everest\Extensions\Packages\ai\Agent\AgentRunner::MIN_WALL_SECONDS);
         $this->assertSame(900, \Everest\Extensions\Packages\ai\Agent\AgentRunner::MAX_WALL_SECONDS);
@@ -252,7 +309,7 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testEveryValidatedAgentSettingHasAControl(): void
     {
-        $form = file_get_contents(base_path('frontend/src/pages/admin/ai/pages/AgentPage.tsx'));
+        $form = file_get_contents(base_path('frontend/src/extensions/packages/ai/admin/pages/AgentPage.tsx'));
         $rules = (new \Everest\Extensions\Packages\ai\Http\Requests\UpdateIntelligenceSettingsRequest())->rules();
 
         foreach (array_keys($rules) as $key) {
@@ -276,13 +333,14 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testBatchApprovalIsBlockedUntilEveryUnsafeChildIsOpened(): void
     {
-        $preview = file_get_contents(base_path('frontend/src/components/ai/BatchPreview.tsx'));
-        $card = file_get_contents(base_path('frontend/src/components/ai/ApprovalCard.tsx'));
+        $preview = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/BatchPreview.tsx'));
+        $card = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/ApprovalCard.tsx'));
 
         // The gate itself: the button the user presses is disabled while
         // anything is outstanding, and the count comes from the same function
         // the list renders from.
         $this->assertStringContainsString('export function unreviewedBatchCalls', $preview);
+        $this->assertStringContainsString('export function batchChildNeedsReview', $preview);
         $this->assertStringContainsString("return risk !== 'safe';", $preview);
         $this->assertStringContainsString('batchChildNeedsReview(call.risk) && !reviewed.has(index)', $preview);
         $this->assertStringContainsString('unreviewedBatchCalls(entry.preview, reviewed)', $card);
@@ -306,15 +364,15 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
 
         // And the model's own sentence is labelled as the model's, rather than
         // presented as the evidence.
-        $this->assertStringContainsString("m['server.ai.batch.summaryLabel']()", $preview);
+        $this->assertStringContainsString("t('server.batch.summaryLabel', 'The assistant says:')", $preview);
 
-        $messages = json_decode(file_get_contents(base_path('frontend/messages/en.json')), true);
+        $messages = json_decode(file_get_contents(base_path('frontend/src/extensions/packages/ai/messages/en.json')), true);
         foreach ([
-            'server.ai.batch.summaryLabel',
-            'server.ai.batch.reviewAll',
-            'server.ai.batch.unreviewed',
-            'server.ai.batch.noArguments',
-            'server.ai.approval.batchUnreviewed',
+            'ext.ai.server.batch.summaryLabel',
+            'ext.ai.server.batch.reviewAll',
+            'ext.ai.server.batch.unreviewed',
+            'ext.ai.server.batch.noArguments',
+            'ext.ai.server.approval.batchUnreviewed',
         ] as $key) {
             $this->assertArrayHasKey($key, $messages, $key);
         }
@@ -330,13 +388,16 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testStoppingATurnReachesTheBackendAndNotOnlyTheReader(): void
     {
-        $store = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
-        $api = file_get_contents(base_path('frontend/src/api/ai.ts'));
-        $adminApi = file_get_contents(base_path('frontend/src/api/adminAi.ts'));
+        $store = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
+        $api = file_get_contents(base_path('frontend/src/extensions/packages/ai/api.ts'));
+        $adminApi = file_get_contents(base_path('frontend/src/extensions/packages/ai/adminApi.ts'));
 
         $this->assertStringContainsString('adapter.cancelTurn(target, turnId)', $store);
-        $this->assertStringContainsString('ai/agent/turns/${turnId}/cancel', $api);
-        $this->assertStringContainsString('ai/agent/turns/${turnId}/cancel', $adminApi);
+        // Relative to the extension's own mount: the loader owns the prefix,
+        // so a package naming an absolute path would be claiming a namespace
+        // it does not have.
+        $this->assertStringContainsString('/agent/turns/${turnId}/cancel', $api);
+        $this->assertStringContainsString('/agent/turns/${turnId}/cancel', $adminApi);
 
         // Both surfaces, or the admin assistant keeps the old behaviour while
         // the customer one is fixed.
@@ -365,7 +426,7 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testAQueuedTurnRepresentsItsTicketWithoutReplayingTheTranscript(): void
     {
-        $store = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
+        $store = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
 
         $this->assertStringContainsString('ticket: queueTicket ?? undefined', $store);
         $this->assertStringContainsString('scheduleQueueRetry()', $store);
@@ -389,7 +450,7 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
 
     public function testReusedCallIdsOnlyUpdateTheLatestUnresolvedRowAndReplayAsAQueue(): void
     {
-        $store = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
+        $store = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
 
         $this->assertStringContainsString('const latestOpenToolIndex', $store);
         $this->assertStringContainsString("entry.status === 'pending' || entry.status === 'running'", $store);
@@ -406,7 +467,7 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testAnUnmatchedToolResultSynthesizesATerminalEvidenceRow(): void
     {
-        $store = file_get_contents(base_path('frontend/src/state/agentChat.ts'));
+        $store = file_get_contents(base_path('frontend/src/extensions/packages/ai/state/agentChat.ts'));
         $start = strpos($store, "case 'tool_result':");
         $end = strpos($store, "case 'approval_required':", $start);
 
@@ -438,9 +499,9 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
      */
     public function testFileWriteRowsClaimCompletionOnlyAfterASuccessfulResult(): void
     {
-        $meta = file_get_contents(base_path('frontend/src/components/ai/toolMeta.tsx'));
-        $row = file_get_contents(base_path('frontend/src/components/ai/ToolCallRow.tsx'));
-        $messages = json_decode(file_get_contents(base_path('frontend/messages/en.json')), true);
+        $meta = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/toolMeta.tsx'));
+        $row = file_get_contents(base_path('frontend/src/extensions/packages/ai/components/ToolCallRow.tsx'));
+        $messages = json_decode(file_get_contents(base_path('frontend/src/extensions/packages/ai/messages/en.json')), true);
 
         $this->assertStringContainsString('toolLifecycleLabel(entry.tool, entry.status)', $row);
         $this->assertStringContainsString("case 'pending':", $meta);
@@ -449,11 +510,11 @@ class AgentFrontendLifecycleContractTest extends AiPackageTestCase
         $this->assertStringContainsString("case 'partial':", $meta);
         $this->assertStringContainsString("case 'error':", $meta);
 
-        $this->assertSame('Write file', $messages['server.ai.tools.files_write']);
-        $this->assertSame('Preparing file write', $messages['server.ai.tools.files_write.pending']);
-        $this->assertSame('Attempting file write', $messages['server.ai.tools.files_write.running']);
-        $this->assertSame('Wrote', $messages['server.ai.tools.files_write.ok']);
-        $this->assertSame('File write incomplete', $messages['server.ai.tools.files_write.partial']);
-        $this->assertSame('File write failed', $messages['server.ai.tools.files_write.error']);
+        $this->assertSame('Write file', $messages['ext.ai.server.tools.files_write']);
+        $this->assertSame('Preparing file write', $messages['ext.ai.server.tools.files_write.pending']);
+        $this->assertSame('Attempting file write', $messages['ext.ai.server.tools.files_write.running']);
+        $this->assertSame('Wrote', $messages['ext.ai.server.tools.files_write.ok']);
+        $this->assertSame('File write incomplete', $messages['ext.ai.server.tools.files_write.partial']);
+        $this->assertSame('File write failed', $messages['ext.ai.server.tools.files_write.error']);
     }
 }

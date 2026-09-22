@@ -39,6 +39,17 @@ use Everest\Tests\Extensions\ai\ConfiguresAiPackage;
  */
 class AdminAgentToolExecutorTest extends IntegrationTestCase
 {
+    /**
+     * The package's own admin permissions, as the panel derives them.
+     *
+     * `AdminRole::AI_READ` went with the module: core no longer has a
+     * vocabulary entry for an extension's permissions, it has a rule --
+     * `ext.<id>.admin.<action>` -- and the manifest supplies the action.
+     */
+    private const READ = 'ext.ai.admin.read';
+
+    private const UPDATE = 'ext.ai.admin.update';
+
     use InstallsAiPackage;
     use ConfiguresAiPackage;
 
@@ -219,7 +230,7 @@ class AdminAgentToolExecutorTest extends IntegrationTestCase
 
     public function testAnAdminWithoutTheCapabilityGetsAForbiddenToolErrorNotData(): void
     {
-        $this->actAsParentRequest($this->delegatedAdmin([AdminRole::AI_READ]));
+        $this->actAsParentRequest($this->delegatedAdmin([self::READ]));
 
         $result = $this->tool('admin_users_list', 'GET', '/api/application/users');
 
@@ -233,7 +244,7 @@ class AdminAgentToolExecutorTest extends IntegrationTestCase
 
     public function testTheSameCallSucceedsForAnAdminWhoHoldsIt(): void
     {
-        $this->actAsParentRequest($this->delegatedAdmin([AdminRole::AI_READ, AdminRole::USERS_READ]));
+        $this->actAsParentRequest($this->delegatedAdmin([self::READ, AdminRole::USERS_READ]));
 
         $result = $this->tool('admin_users_list', 'GET', '/api/application/users');
 
@@ -253,7 +264,7 @@ class AdminAgentToolExecutorTest extends IntegrationTestCase
      */
     public function testReadAccessDoesNotImplyWriteAccess(): void
     {
-        $this->actAsParentRequest($this->delegatedAdmin([AdminRole::AI_READ, AdminRole::BILLING_READ]));
+        $this->actAsParentRequest($this->delegatedAdmin([self::READ, AdminRole::BILLING_READ]));
 
         $this->assertTrue($this->tool('admin_categories_list', 'GET', '/api/application/billing/categories')->ok);
 
@@ -521,7 +532,7 @@ class AdminAgentToolExecutorTest extends IntegrationTestCase
     {
         config()->set('app.debug', true);
 
-        $this->actAsParentRequest($this->delegatedAdmin([AdminRole::AI_READ]));
+        $this->actAsParentRequest($this->delegatedAdmin([self::READ]));
 
         $result = $this->tool('admin_users_list', 'GET', '/api/application/users');
         $payload = $result->toModelPayload();
