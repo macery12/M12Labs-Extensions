@@ -1,510 +1,510 @@
 {
-    "manifestVersion": 3,
-    "package": {
-        "id": "ai",
-        "version": "1.0.0",
-        "publisher": "M12Labs",
-        "license": "MIT",
-        "homepage": "https://github.com/macery12/M12Labs-Extensions"
-    },
-    "extension": {
-        "id": "ai",
-        "name": "AI Assistant",
-        "description": "A tool-using assistant for server owners and administrators. Answers questions about a server, reads and edits its files, runs console commands behind an approval step, and works against Ollama, OpenAI, Anthropic, OpenRouter or any OpenAI-compatible endpoint.",
-        "icon": "bot",
-        "defaults": {
-            "enabled": false,
-            "allowedNests": [],
-            "allowedEggs": [],
-            "settings": {
-                "provider": "ollama",
-                "mode": "ollama",
-                "model": "",
-                "endpoint": "",
-                "max_tokens": 1024,
-                "temperature": 0.3,
-                "context_tokens": 0,
-                "keep_alive": "10m",
-                "warm": false,
-                "system_prompt": "",
-                "agent_enabled": false,
-                "agent_admin_enabled": false,
-                "agent_reasoning": true,
-                "agent_durable": true,
-                "agent_max_steps": 12,
-                "agent_max_wall_seconds": 180,
-                "agent_max_tool_seconds": 90,
-                "agent_tool_result_bytes": 12288,
-                "agent_max_repairs": 2,
-                "agent_max_tools": 0,
-                "agent_max_batch_calls": 25,
-                "agent_allow_destructive_batches": false,
-                "concurrency_slots": 2,
-                "concurrency_queue_depth": 20,
-                "concurrency_max_wait_seconds": 120,
-                "concurrency_per_user": 1,
-                "budget_enforce": false,
-                "budget_monthly_tokens": 2000000,
-                "privacy_enabled": true
-            }
-        }
-    },
-    "compatiblePanelVersions": [
-        ">=Alpha 4.1 <Alpha 5.0"
-    ],
-    "capabilities": {
-        "routes": {
-            "client": true,
-            "admin": true
-        },
-        "pages": {
-            "server": [
-                {
-                    "slug": "assistant",
-                    "labelKey": "ext.ai.nav.server",
-                    "icon": "bot",
-                    "category": "general",
-                    "order": 60,
-                    "requiredFlags": [
-                        "agent-ready"
-                    ]
-                }
-            ],
-            "admin": [
-                {
-                    "slug": "settings",
-                    "labelKey": "ext.ai.nav.admin",
-                    "icon": "bot",
-                    "category": "modules",
-                    "order": 20,
-                    "requiredExtensionPermission": "read"
-                },
-                {
-                    "slug": "assistant",
-                    "labelKey": "ext.ai.nav.adminAssistant",
-                    "icon": "sparkles",
-                    "category": "management",
-                    "order": 20,
-                    "requiredExtensionPermission": "read",
-                    "requiredFlags": [
-                        "admin-agent-ready"
-                    ]
-                }
-            ]
-        },
-        "slots": [
-            {
-                "name": "server-layout.overlay",
-                "entry": "agent-drawer",
-                "order": 100,
-                "requiredFlags": [
-                    "agent-ready"
-                ]
-            }
-        ],
-        "flags": [
-            {
-                "name": "agent-ready",
-                "all": [
-                    {
-                        "setting": "agent_enabled",
-                        "equals": true
-                    }
-                ],
-                "any": [
-                    {
-                        "setting": "provider",
-                        "equals": "ollama"
-                    },
-                    {
-                        "setting": "provider",
-                        "equals": "openai_compatible"
-                    },
-                    {
-                        "secret": "api_key",
-                        "configured": true
-                    }
-                ]
-            },
-            {
-                "name": "admin-agent-ready",
-                "all": [
-                    {
-                        "setting": "agent_enabled",
-                        "equals": true
-                    },
-                    {
-                        "setting": "agent_admin_enabled",
-                        "equals": true
-                    }
-                ],
-                "any": [
-                    {
-                        "setting": "provider",
-                        "equals": "ollama"
-                    },
-                    {
-                        "setting": "provider",
-                        "equals": "openai_compatible"
-                    },
-                    {
-                        "secret": "api_key",
-                        "configured": true
-                    }
-                ]
-            }
-        ],
-        "streams": [
-            {
-                "name": "agent-turn",
-                "maxSeconds": 900,
-                "keepAliveSeconds": 15,
-                "maxConcurrentPerUser": 2
-            }
-        ],
-        "queues": [
-            {
-                "name": "agent",
-                "longRunning": true,
-                "maxAttempts": 1,
-                "timeoutSeconds": 960,
-                "backoffSeconds": [
-                    30
-                ],
-                "rateLimit": "120/minute",
-                "maxConcurrent": 4,
-                "maxOutstanding": 500
-            }
-        ],
-        "bindings": [
-            "Tools/ToolRegistry",
-            "Tools/ToolCatalogue",
-            "Agent/ToolBudget"
-        ],
-        "privileged": [
-            "internal_dispatch",
-            "delegated_access"
-        ],
-        "permissions": {
-            "admin": [
-                {
-                    "key": "read",
-                    "labelKey": "ext.ai.permission.read",
-                    "descriptionKey": "ext.ai.permission.read.description"
-                },
-                {
-                    "key": "update",
-                    "labelKey": "ext.ai.permission.update",
-                    "descriptionKey": "ext.ai.permission.update.description",
-                    "dangerous": true
-                }
-            ]
-        },
-        "database": {
-            "migrations": true,
-            "tables": [
-                "ext_ai_conversations",
-                "ext_ai_messages",
-                "ext_ai_tool_calls",
-                "ext_ai_pending_actions",
-                "ext_ai_turn_events",
-                "ext_ai_usage_logs",
-                "ext_ai_budget_reservations",
-                "ext_ai_settings"
-            ]
-        },
-        "schedule": true,
-        "commands": [
-            "p:ext:ai:prune",
-            "p:ext:ai:warm",
-            "p:ext:ai:benchmark"
-        ],
-        "secrets": [
-            {
-                "key": "api_key",
-                "labelKey": "ext.ai.secret.apiKey",
-                "helpKey": "ext.ai.secret.apiKey.help",
-                "rotatable": true
-            },
-            {
-                "key": "anthropic_key",
-                "labelKey": "ext.ai.secret.anthropicKey",
-                "helpKey": "ext.ai.secret.anthropicKey.help",
-                "rotatable": true
-            },
-            {
-                "key": "openai_key",
-                "labelKey": "ext.ai.secret.openaiKey",
-                "helpKey": "ext.ai.secret.openaiKey.help",
-                "rotatable": true
-            }
-        ],
-        "settings": {
-            "fields": [
-                {
-                    "key": "provider",
-                    "type": "select",
-                    "labelKey": "ext.ai.setting.provider",
-                    "helpKey": "ext.ai.setting.provider.help",
-                    "required": true,
-                    "default": "ollama",
-                    "enum": [
-                        "anthropic",
-                        "openai",
-                        "openrouter",
-                        "openai_compatible",
-                        "ollama"
-                    ]
-                },
-                {
-                    "key": "mode",
-                    "type": "select",
-                    "labelKey": "ext.ai.setting.mode",
-                    "helpKey": "ext.ai.setting.mode.help",
-                    "default": "ollama",
-                    "enum": [
-                        "openai",
-                        "ollama"
-                    ]
-                },
-                {
-                    "key": "endpoint",
-                    "type": "url",
-                    "labelKey": "ext.ai.setting.endpoint",
-                    "helpKey": "ext.ai.setting.endpoint.help",
-                    "maxLength": 255
-                },
-                {
-                    "key": "model",
-                    "type": "text",
-                    "labelKey": "ext.ai.setting.model",
-                    "helpKey": "ext.ai.setting.model.help",
-                    "maxLength": 100
-                },
-                {
-                    "key": "max_tokens",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.maxTokens",
-                    "helpKey": "ext.ai.setting.maxTokens.help",
-                    "default": 1024,
-                    "min": 50,
-                    "max": 32000
-                },
-                {
-                    "key": "temperature",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.temperature",
-                    "helpKey": "ext.ai.setting.temperature.help",
-                    "default": 0.3,
-                    "min": 0,
-                    "max": 1
-                },
-                {
-                    "key": "context_tokens",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.contextTokens",
-                    "helpKey": "ext.ai.setting.contextTokens.help",
-                    "default": 0,
-                    "min": 0,
-                    "max": 1000000
-                },
-                {
-                    "key": "keep_alive",
-                    "type": "select",
-                    "labelKey": "ext.ai.setting.keepAlive",
-                    "helpKey": "ext.ai.setting.keepAlive.help",
-                    "default": "10m",
-                    "enum": [
-                        "5m",
-                        "10m",
-                        "30m",
-                        "1h",
-                        "4h",
-                        "24h",
-                        "-1"
-                    ]
-                },
-                {
-                    "key": "warm",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.warm",
-                    "helpKey": "ext.ai.setting.warm.help",
-                    "default": false
-                },
-                {
-                    "key": "system_prompt",
-                    "type": "textarea",
-                    "labelKey": "ext.ai.setting.systemPrompt",
-                    "helpKey": "ext.ai.setting.systemPrompt.help",
-                    "maxLength": 1000
-                },
-                {
-                    "key": "agent_enabled",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.agentEnabled",
-                    "helpKey": "ext.ai.setting.agentEnabled.help",
-                    "default": false
-                },
-                {
-                    "key": "agent_admin_enabled",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.agentAdminEnabled",
-                    "helpKey": "ext.ai.setting.agentAdminEnabled.help",
-                    "default": false
-                },
-                {
-                    "key": "agent_reasoning",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.agentReasoning",
-                    "helpKey": "ext.ai.setting.agentReasoning.help",
-                    "default": true
-                },
-                {
-                    "key": "agent_durable",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.agentDurable",
-                    "helpKey": "ext.ai.setting.agentDurable.help",
-                    "default": true
-                },
-                {
-                    "key": "agent_max_steps",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentMaxSteps",
-                    "helpKey": "ext.ai.setting.agentMaxSteps.help",
-                    "default": 12,
-                    "min": 1,
-                    "max": 50
-                },
-                {
-                    "key": "agent_max_wall_seconds",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentMaxWallSeconds",
-                    "helpKey": "ext.ai.setting.agentMaxWallSeconds.help",
-                    "default": 180,
-                    "min": 30,
-                    "max": 900
-                },
-                {
-                    "key": "agent_max_tool_seconds",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentMaxToolSeconds",
-                    "helpKey": "ext.ai.setting.agentMaxToolSeconds.help",
-                    "default": 90,
-                    "min": 5,
-                    "max": 900
-                },
-                {
-                    "key": "agent_tool_result_bytes",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentToolResultBytes",
-                    "helpKey": "ext.ai.setting.agentToolResultBytes.help",
-                    "default": 12288,
-                    "min": 1024,
-                    "max": 131072
-                },
-                {
-                    "key": "agent_max_repairs",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentMaxRepairs",
-                    "helpKey": "ext.ai.setting.agentMaxRepairs.help",
-                    "default": 2,
-                    "min": 0,
-                    "max": 5
-                },
-                {
-                    "key": "agent_max_tools",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentMaxTools",
-                    "helpKey": "ext.ai.setting.agentMaxTools.help",
-                    "default": 0,
-                    "min": 0,
-                    "max": 64
-                },
-                {
-                    "key": "agent_max_batch_calls",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.agentMaxBatchCalls",
-                    "helpKey": "ext.ai.setting.agentMaxBatchCalls.help",
-                    "default": 25,
-                    "min": 2,
-                    "max": 100
-                },
-                {
-                    "key": "agent_allow_destructive_batches",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.agentAllowDestructiveBatches",
-                    "helpKey": "ext.ai.setting.agentAllowDestructiveBatches.help",
-                    "default": false
-                },
-                {
-                    "key": "concurrency_slots",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.concurrencySlots",
-                    "helpKey": "ext.ai.setting.concurrencySlots.help",
-                    "default": 2,
-                    "min": 1,
-                    "max": 64
-                },
-                {
-                    "key": "concurrency_queue_depth",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.concurrencyQueueDepth",
-                    "helpKey": "ext.ai.setting.concurrencyQueueDepth.help",
-                    "default": 20,
-                    "min": 0,
-                    "max": 500
-                },
-                {
-                    "key": "concurrency_max_wait_seconds",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.concurrencyMaxWaitSeconds",
-                    "helpKey": "ext.ai.setting.concurrencyMaxWaitSeconds.help",
-                    "default": 120,
-                    "min": 5,
-                    "max": 600
-                },
-                {
-                    "key": "concurrency_per_user",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.concurrencyPerUser",
-                    "helpKey": "ext.ai.setting.concurrencyPerUser.help",
-                    "default": 1,
-                    "min": 0,
-                    "max": 16
-                },
-                {
-                    "key": "budget_enforce",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.budgetEnforce",
-                    "helpKey": "ext.ai.setting.budgetEnforce.help",
-                    "default": false
-                },
-                {
-                    "key": "budget_monthly_tokens",
-                    "type": "number",
-                    "labelKey": "ext.ai.setting.budgetMonthlyTokens",
-                    "helpKey": "ext.ai.setting.budgetMonthlyTokens.help",
-                    "default": 2000000,
-                    "min": 0,
-                    "max": 1000000000
-                },
-                {
-                    "key": "privacy_enabled",
-                    "type": "boolean",
-                    "labelKey": "ext.ai.setting.privacyEnabled",
-                    "helpKey": "ext.ai.setting.privacyEnabled.help",
-                    "default": true
-                }
-            ]
-        }
-    },
-    "requirements": {
-        "panelServices": [
-            "http-client",
-            "queue",
-            "schedule",
-            "secrets"
-        ],
-        "extensions": []
+  "manifestVersion": 3,
+  "package": {
+    "id": "ai",
+    "version": "1.0.1",
+    "publisher": "M12Labs",
+    "license": "MIT",
+    "homepage": "https://github.com/macery12/M12Labs-Extensions"
+  },
+  "extension": {
+    "id": "ai",
+    "name": "AI Assistant",
+    "description": "A tool-using assistant for server owners and administrators. Answers questions about a server, reads and edits its files, runs console commands behind an approval step, and works against Ollama, OpenAI, Anthropic, OpenRouter or any OpenAI-compatible endpoint.",
+    "icon": "bot",
+    "defaults": {
+      "enabled": false,
+      "allowedNests": [],
+      "allowedEggs": [],
+      "settings": {
+        "provider": "ollama",
+        "mode": "ollama",
+        "model": "",
+        "endpoint": "",
+        "max_tokens": 1024,
+        "temperature": 0.3,
+        "context_tokens": 0,
+        "keep_alive": "10m",
+        "warm": false,
+        "system_prompt": "",
+        "agent_enabled": false,
+        "agent_admin_enabled": false,
+        "agent_reasoning": true,
+        "agent_durable": true,
+        "agent_max_steps": 12,
+        "agent_max_wall_seconds": 180,
+        "agent_max_tool_seconds": 90,
+        "agent_tool_result_bytes": 12288,
+        "agent_max_repairs": 2,
+        "agent_max_tools": 0,
+        "agent_max_batch_calls": 25,
+        "agent_allow_destructive_batches": false,
+        "concurrency_slots": 2,
+        "concurrency_queue_depth": 20,
+        "concurrency_max_wait_seconds": 120,
+        "concurrency_per_user": 1,
+        "budget_enforce": false,
+        "budget_monthly_tokens": 2000000,
+        "privacy_enabled": true
+      }
     }
+  },
+  "compatiblePanelVersions": [
+    ">=Alpha 4.1 <Alpha 5.0"
+  ],
+  "capabilities": {
+    "routes": {
+      "client": true,
+      "admin": true
+    },
+    "pages": {
+      "server": [
+        {
+          "slug": "assistant",
+          "labelKey": "ext.ai.nav.server",
+          "icon": "bot",
+          "category": "general",
+          "order": 60,
+          "requiredFlags": [
+            "agent-ready"
+          ]
+        }
+      ],
+      "admin": [
+        {
+          "slug": "settings",
+          "labelKey": "ext.ai.nav.admin",
+          "icon": "bot",
+          "category": "modules",
+          "order": 20,
+          "requiredExtensionPermission": "read"
+        },
+        {
+          "slug": "assistant",
+          "labelKey": "ext.ai.nav.adminAssistant",
+          "icon": "sparkles",
+          "category": "management",
+          "order": 20,
+          "requiredExtensionPermission": "read",
+          "requiredFlags": [
+            "admin-agent-ready"
+          ]
+        }
+      ]
+    },
+    "slots": [
+      {
+        "name": "server-layout.overlay",
+        "entry": "agent-drawer",
+        "order": 100,
+        "requiredFlags": [
+          "agent-ready"
+        ]
+      }
+    ],
+    "flags": [
+      {
+        "name": "agent-ready",
+        "all": [
+          {
+            "setting": "agent_enabled",
+            "equals": true
+          }
+        ],
+        "any": [
+          {
+            "setting": "provider",
+            "equals": "ollama"
+          },
+          {
+            "setting": "provider",
+            "equals": "openai_compatible"
+          },
+          {
+            "secret": "api_key",
+            "configured": true
+          }
+        ]
+      },
+      {
+        "name": "admin-agent-ready",
+        "all": [
+          {
+            "setting": "agent_enabled",
+            "equals": true
+          },
+          {
+            "setting": "agent_admin_enabled",
+            "equals": true
+          }
+        ],
+        "any": [
+          {
+            "setting": "provider",
+            "equals": "ollama"
+          },
+          {
+            "setting": "provider",
+            "equals": "openai_compatible"
+          },
+          {
+            "secret": "api_key",
+            "configured": true
+          }
+        ]
+      }
+    ],
+    "streams": [
+      {
+        "name": "agent-turn",
+        "maxSeconds": 900,
+        "keepAliveSeconds": 15,
+        "maxConcurrentPerUser": 2
+      }
+    ],
+    "queues": [
+      {
+        "name": "agent",
+        "longRunning": true,
+        "maxAttempts": 1,
+        "timeoutSeconds": 960,
+        "backoffSeconds": [
+          30
+        ],
+        "rateLimit": "120/minute",
+        "maxConcurrent": 4,
+        "maxOutstanding": 500
+      }
+    ],
+    "bindings": [
+      "Tools/ToolRegistry",
+      "Tools/ToolCatalogue",
+      "Agent/ToolBudget"
+    ],
+    "privileged": [
+      "internal_dispatch",
+      "delegated_access"
+    ],
+    "permissions": {
+      "admin": [
+        {
+          "key": "read",
+          "labelKey": "ext.ai.permission.read",
+          "descriptionKey": "ext.ai.permission.read.description"
+        },
+        {
+          "key": "update",
+          "labelKey": "ext.ai.permission.update",
+          "descriptionKey": "ext.ai.permission.update.description",
+          "dangerous": true
+        }
+      ]
+    },
+    "database": {
+      "migrations": true,
+      "tables": [
+        "ext_ai_conversations",
+        "ext_ai_messages",
+        "ext_ai_tool_calls",
+        "ext_ai_pending_actions",
+        "ext_ai_turn_events",
+        "ext_ai_usage_logs",
+        "ext_ai_budget_reservations",
+        "ext_ai_settings"
+      ]
+    },
+    "schedule": true,
+    "commands": [
+      "p:ext:ai:prune",
+      "p:ext:ai:warm",
+      "p:ext:ai:benchmark"
+    ],
+    "secrets": [
+      {
+        "key": "api_key",
+        "labelKey": "ext.ai.secret.apiKey",
+        "helpKey": "ext.ai.secret.apiKey.help",
+        "rotatable": true
+      },
+      {
+        "key": "anthropic_key",
+        "labelKey": "ext.ai.secret.anthropicKey",
+        "helpKey": "ext.ai.secret.anthropicKey.help",
+        "rotatable": true
+      },
+      {
+        "key": "openai_key",
+        "labelKey": "ext.ai.secret.openaiKey",
+        "helpKey": "ext.ai.secret.openaiKey.help",
+        "rotatable": true
+      }
+    ],
+    "settings": {
+      "fields": [
+        {
+          "key": "provider",
+          "type": "select",
+          "labelKey": "ext.ai.setting.provider",
+          "helpKey": "ext.ai.setting.provider.help",
+          "required": true,
+          "default": "ollama",
+          "enum": [
+            "anthropic",
+            "openai",
+            "openrouter",
+            "openai_compatible",
+            "ollama"
+          ]
+        },
+        {
+          "key": "mode",
+          "type": "select",
+          "labelKey": "ext.ai.setting.mode",
+          "helpKey": "ext.ai.setting.mode.help",
+          "default": "ollama",
+          "enum": [
+            "openai",
+            "ollama"
+          ]
+        },
+        {
+          "key": "endpoint",
+          "type": "url",
+          "labelKey": "ext.ai.setting.endpoint",
+          "helpKey": "ext.ai.setting.endpoint.help",
+          "maxLength": 255
+        },
+        {
+          "key": "model",
+          "type": "text",
+          "labelKey": "ext.ai.setting.model",
+          "helpKey": "ext.ai.setting.model.help",
+          "maxLength": 100
+        },
+        {
+          "key": "max_tokens",
+          "type": "number",
+          "labelKey": "ext.ai.setting.maxTokens",
+          "helpKey": "ext.ai.setting.maxTokens.help",
+          "default": 1024,
+          "min": 50,
+          "max": 32000
+        },
+        {
+          "key": "temperature",
+          "type": "number",
+          "labelKey": "ext.ai.setting.temperature",
+          "helpKey": "ext.ai.setting.temperature.help",
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "context_tokens",
+          "type": "number",
+          "labelKey": "ext.ai.setting.contextTokens",
+          "helpKey": "ext.ai.setting.contextTokens.help",
+          "default": 0,
+          "min": 0,
+          "max": 1000000
+        },
+        {
+          "key": "keep_alive",
+          "type": "select",
+          "labelKey": "ext.ai.setting.keepAlive",
+          "helpKey": "ext.ai.setting.keepAlive.help",
+          "default": "10m",
+          "enum": [
+            "5m",
+            "10m",
+            "30m",
+            "1h",
+            "4h",
+            "24h",
+            "-1"
+          ]
+        },
+        {
+          "key": "warm",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.warm",
+          "helpKey": "ext.ai.setting.warm.help",
+          "default": false
+        },
+        {
+          "key": "system_prompt",
+          "type": "textarea",
+          "labelKey": "ext.ai.setting.systemPrompt",
+          "helpKey": "ext.ai.setting.systemPrompt.help",
+          "maxLength": 1000
+        },
+        {
+          "key": "agent_enabled",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.agentEnabled",
+          "helpKey": "ext.ai.setting.agentEnabled.help",
+          "default": false
+        },
+        {
+          "key": "agent_admin_enabled",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.agentAdminEnabled",
+          "helpKey": "ext.ai.setting.agentAdminEnabled.help",
+          "default": false
+        },
+        {
+          "key": "agent_reasoning",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.agentReasoning",
+          "helpKey": "ext.ai.setting.agentReasoning.help",
+          "default": true
+        },
+        {
+          "key": "agent_durable",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.agentDurable",
+          "helpKey": "ext.ai.setting.agentDurable.help",
+          "default": true
+        },
+        {
+          "key": "agent_max_steps",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentMaxSteps",
+          "helpKey": "ext.ai.setting.agentMaxSteps.help",
+          "default": 12,
+          "min": 1,
+          "max": 50
+        },
+        {
+          "key": "agent_max_wall_seconds",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentMaxWallSeconds",
+          "helpKey": "ext.ai.setting.agentMaxWallSeconds.help",
+          "default": 180,
+          "min": 30,
+          "max": 900
+        },
+        {
+          "key": "agent_max_tool_seconds",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentMaxToolSeconds",
+          "helpKey": "ext.ai.setting.agentMaxToolSeconds.help",
+          "default": 90,
+          "min": 5,
+          "max": 900
+        },
+        {
+          "key": "agent_tool_result_bytes",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentToolResultBytes",
+          "helpKey": "ext.ai.setting.agentToolResultBytes.help",
+          "default": 12288,
+          "min": 1024,
+          "max": 131072
+        },
+        {
+          "key": "agent_max_repairs",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentMaxRepairs",
+          "helpKey": "ext.ai.setting.agentMaxRepairs.help",
+          "default": 2,
+          "min": 0,
+          "max": 5
+        },
+        {
+          "key": "agent_max_tools",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentMaxTools",
+          "helpKey": "ext.ai.setting.agentMaxTools.help",
+          "default": 0,
+          "min": 0,
+          "max": 64
+        },
+        {
+          "key": "agent_max_batch_calls",
+          "type": "number",
+          "labelKey": "ext.ai.setting.agentMaxBatchCalls",
+          "helpKey": "ext.ai.setting.agentMaxBatchCalls.help",
+          "default": 25,
+          "min": 2,
+          "max": 100
+        },
+        {
+          "key": "agent_allow_destructive_batches",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.agentAllowDestructiveBatches",
+          "helpKey": "ext.ai.setting.agentAllowDestructiveBatches.help",
+          "default": false
+        },
+        {
+          "key": "concurrency_slots",
+          "type": "number",
+          "labelKey": "ext.ai.setting.concurrencySlots",
+          "helpKey": "ext.ai.setting.concurrencySlots.help",
+          "default": 2,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "key": "concurrency_queue_depth",
+          "type": "number",
+          "labelKey": "ext.ai.setting.concurrencyQueueDepth",
+          "helpKey": "ext.ai.setting.concurrencyQueueDepth.help",
+          "default": 20,
+          "min": 0,
+          "max": 500
+        },
+        {
+          "key": "concurrency_max_wait_seconds",
+          "type": "number",
+          "labelKey": "ext.ai.setting.concurrencyMaxWaitSeconds",
+          "helpKey": "ext.ai.setting.concurrencyMaxWaitSeconds.help",
+          "default": 120,
+          "min": 5,
+          "max": 600
+        },
+        {
+          "key": "concurrency_per_user",
+          "type": "number",
+          "labelKey": "ext.ai.setting.concurrencyPerUser",
+          "helpKey": "ext.ai.setting.concurrencyPerUser.help",
+          "default": 1,
+          "min": 0,
+          "max": 16
+        },
+        {
+          "key": "budget_enforce",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.budgetEnforce",
+          "helpKey": "ext.ai.setting.budgetEnforce.help",
+          "default": false
+        },
+        {
+          "key": "budget_monthly_tokens",
+          "type": "number",
+          "labelKey": "ext.ai.setting.budgetMonthlyTokens",
+          "helpKey": "ext.ai.setting.budgetMonthlyTokens.help",
+          "default": 2000000,
+          "min": 0,
+          "max": 1000000000
+        },
+        {
+          "key": "privacy_enabled",
+          "type": "boolean",
+          "labelKey": "ext.ai.setting.privacyEnabled",
+          "helpKey": "ext.ai.setting.privacyEnabled.help",
+          "default": true
+        }
+      ]
+    }
+  },
+  "requirements": {
+    "panelServices": [
+      "http-client",
+      "queue",
+      "schedule",
+      "secrets"
+    ],
+    "extensions": []
+  }
 }
