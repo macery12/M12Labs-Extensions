@@ -93,7 +93,7 @@ return new class () extends Migration {
             $flat = AiConfiguration::settingKey($dotted);
 
             if (AiConfiguration::declares($flat)) {
-                $declared[$flat] = $this->coerce($value);
+                $declared[$flat] = AiConfiguration::coerceDeclared($flat, $value);
 
                 continue;
             }
@@ -160,31 +160,5 @@ return new class () extends Migration {
                 'created_at' => $existing->created_at ?? now(),
             ],
         );
-    }
-
-    /**
-     * The stored string as the type the field is declared with.
-     *
-     * Everything in `settings` is text, and a settings form reading `"30"`
-     * where it declared a number renders an empty field. The accessors coerce
-     * on read, so this is not correctness -- it is the difference between a
-     * page that shows an operator their own configuration back and one that
-     * looks like it lost it.
-     */
-    private function coerce(string $value): mixed
-    {
-        if (in_array($value, ['1', 'true'], true)) {
-            return true;
-        }
-
-        if (in_array($value, ['0', 'false'], true)) {
-            return false;
-        }
-
-        if (is_numeric($value)) {
-            return str_contains($value, '.') ? (float) $value : (int) $value;
-        }
-
-        return $value;
     }
 };

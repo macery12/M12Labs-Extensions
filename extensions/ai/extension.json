@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "ai",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"

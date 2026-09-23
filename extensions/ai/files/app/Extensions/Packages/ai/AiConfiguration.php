@@ -137,6 +137,23 @@ final class AiConfiguration
         'budget_monthly_tokens', 'privacy_enabled',
     ];
 
+    /**
+     * The declared fields that are switches, and the ones that are text.
+     * Everything else in {@see DECLARED} is a number.
+     *
+     * Needed wherever a value arrives as a string and has to become the
+     * declared type -- the panel's old settings rows, for one. Guessing the
+     * type from the string instead turned a per-user limit of `"1"` into
+     * `true`, and the settings validator then refused every later save of
+     * any field, because a save validates the whole stored set.
+     */
+    public const BOOLEAN_SETTINGS = [
+        'warm', 'agent_enabled', 'agent_admin_enabled', 'agent_reasoning', 'agent_durable',
+        'agent_allow_destructive_batches', 'budget_enforce', 'privacy_enabled',
+    ];
+
+    public const TEXT_SETTINGS = ['provider', 'mode', 'endpoint', 'model', 'keep_alive', 'system_prompt'];
+
     /** @var array<string, mixed>|null */
     private static ?array $tableCache = null;
 
@@ -373,6 +390,37 @@ final class AiConfiguration
     public static function declares(string $flatKey): bool
     {
         return in_array($flatKey, self::DECLARED, true);
+    }
+
+    /**
+     * A value as the type its declared field has, or unchanged when it cannot
+     * honestly be one (the validator then says so, naming the field).
+     */
+    public static function coerceDeclared(string $flatKey, mixed $value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (in_array($flatKey, self::BOOLEAN_SETTINGS, true)) {
+            return is_bool($value)
+                ? $value
+                : (filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $value);
+        }
+
+        if (in_array($flatKey, self::TEXT_SETTINGS, true)) {
+            return is_scalar($value) && !is_bool($value) ? (string) $value : $value;
+        }
+
+        if (is_bool($value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && is_numeric($value)) {
+            return str_contains($value, '.') ? (float) $value : (int) $value;
+        }
+
+        return $value;
     }
 
     /** @return array<string, mixed> */

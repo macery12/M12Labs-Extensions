@@ -357,6 +357,37 @@ class IntelligenceController extends ApplicationApiController
     /**
      * Return aggregated usage statistics from ext_ai_usage_logs.
      */
+    /**
+     * An aggregate row as the numbers its keys promise.
+     *
+     * `SUM()` over no rows is NULL, not zero, and MySQL returns every aggregate
+     * as a string -- so an empty usage log (a fresh install) sent `null` where
+     * the page formatted a number and crashed, and a populated one sent `"3"`
+     * where the overview added buckets together and got `"31"`. Counts are
+     * integers, zero when there is nothing to count; `$nullable` keys (a mean,
+     * a maximum) stay null, because there is no honest zero for those.
+     *
+     * @param array<int, string> $counts
+     * @param array<int, string> $nullable
+     *
+     * @return array<string, int|null>
+     */
+    private function aggregates(?object $row, array $counts, array $nullable = []): array
+    {
+        $out = [];
+
+        foreach ($counts as $key) {
+            $out[$key] = (int) ($row->{$key} ?? 0);
+        }
+
+        foreach ($nullable as $key) {
+            $value = $row->{$key} ?? null;
+            $out[$key] = is_numeric($value) ? (int) round((float) $value) : null;
+        }
+
+        return $out;
+    }
+
     public function stats(GetIntelligenceRequest $request): JsonResponse
     {
         $now = now();
@@ -428,7 +459,7 @@ class IntelligenceController extends ApplicationApiController
             $date = $now->copy()->subDays($i)->format('Y-m-d');
             $series[] = [
                 'date' => $date,
-                'requests' => $dailySeries[$date]->requests ?? 0,
+                'requests' => (int) ($dailySeries[$date]->requests ?? 0),
             ];
         }
 
@@ -444,7 +475,7 @@ class IntelligenceController extends ApplicationApiController
             ->map(fn ($row) => [
                 'username' => $row->user?->username ?? 'unknown',
                 'email' => $row->user?->email ?? null,
-                'requests' => $row->requests,
+                'requests' => (int) $row->requests,
             ]);
 
         // Every source that produced traffic in the window, not a fixed pair.
@@ -455,14 +486,15 @@ class IntelligenceController extends ApplicationApiController
             ->selectRaw('source, COUNT(*) as requests')
             ->groupBy('source')
             ->get()
-            ->pluck('requests', 'source');
+            ->pluck('requests', 'source')
+            ->map(fn ($requests) => (int) $requests);
 
         return response()->json([
-            'all_time' => $allTime,
-            'last_24h' => $last24h,
-            'last_7d' => $last7d,
+            'all_time' => $this->aggregates($allTime, ['total_requests', 'successful', 'errors', 'cache_hits', 'total_tokens'], ['avg_latency_ms']),
+            'last_24h' => $this->aggregates($last24h, ['requests', 'tokens']),
+            'last_7d' => $this->aggregates($last7d, ['requests', 'tokens', 'prompt_tokens', 'completion_tokens', 'cache_hits', 'errors']),
             'month_to_date_tokens' => $monthTokens,
-            'latency' => $latency,
+            'latency' => $this->aggregates($latency, ['under_1s', 'to_5s', 'to_15s', 'to_60s', 'over_60s'], ['slowest_ms', 'avg_ms']),
             'daily_series' => $series,
             'top_users' => $topUsers,
             'source_breakdown' => $sourceBreakdown,

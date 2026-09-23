@@ -30,6 +30,10 @@ class AdoptsPanelSettingsTest extends AiPackageTestCase
         'settings::modules:ai:agent:max_steps' => '30',
         'settings::modules:ai:agent:allow_destructive_batches' => '',
         'settings::modules:ai:agent:max_tools' => '',
+        // A number that reads like a switch. Guessing the type from the
+        // string made these `true` and `false`, and every later save failed.
+        'settings::modules:ai:concurrency:per_user' => '1',
+        'settings::modules:ai:concurrency:queue_depth' => '0',
         'settings::modules:ai:privacy:categories' => '["email","ip"]',
         'settings::modules:ai:risk_overrides' => '{"files_write":"write"}',
         'settings::modules:ai:key' => 'encrypted-blob',
@@ -71,6 +75,46 @@ class AdoptsPanelSettingsTest extends AiPackageTestCase
         $this->assertSame(30, AiConfiguration::get('agent.max_steps'));
     }
 
+    public function testANumberThatReadsLikeASwitchStaysANumber(): void
+    {
+        $this->adopt();
+
+        $settings = json_decode((string) DB::table('extension_configs')->where('extension_id', 'ai')->value('settings'), true);
+
+        $this->assertSame(1, $settings['concurrency_per_user']);
+        $this->assertSame(0, $settings['concurrency_queue_depth']);
+        $this->assertTrue($settings['agent_enabled']);
+    }
+
+    /** An install that already adopted the wrong types gets them put back. */
+    public function testTheRepairMigrationRetypesWhatAnEarlierAdoptionGotWrong(): void
+    {
+        DB::table('extension_configs')->insert([
+            'extension_id' => 'ai',
+            'enabled' => true,
+            'settings' => json_encode([
+                'provider' => 'anthropic',
+                'concurrency_per_user' => true,
+                'concurrency_queue_depth' => false,
+                'agent_enabled' => '1',
+                'max_tokens' => 2500,
+            ]),
+        ]);
+
+        $migration = require app_path(
+            'Extensions/Packages/ai/database/migrations/2026_09_23_000001_repair_adopted_setting_types.php'
+        );
+        $migration->up();
+
+        $settings = json_decode((string) DB::table('extension_configs')->where('extension_id', 'ai')->value('settings'), true);
+
+        $this->assertSame(1, $settings['concurrency_per_user']);
+        $this->assertSame(0, $settings['concurrency_queue_depth']);
+        $this->assertTrue($settings['agent_enabled']);
+        $this->assertSame('anthropic', $settings['provider']);
+        $this->assertSame(2500, $settings['max_tokens']);
+    }
+
     public function testStructuredValuesGoToThePackagesOwnTable(): void
     {
         $this->adopt();
@@ -96,9 +140,9 @@ class AdoptsPanelSettingsTest extends AiPackageTestCase
     }
 
     /**
-     * The credential cannot come across: a package has no writer for the
-     * encrypted secret store, which is what stops a secret existing that no
-     * operator entered.
+     * The credential cannot come across: a package writes the encrypted secret
+     * store only on behalf of a signed-in administrator, and a migration has
+     * none -- which is what stops a secret existing that no operator entered.
      */
     public function testTheCredentialIsNotAdopted(): void
     {

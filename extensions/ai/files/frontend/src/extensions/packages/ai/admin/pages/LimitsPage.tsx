@@ -55,7 +55,7 @@ export default function LimitsPage() {
                     stats ? (
                         <span className="text-xs text-[var(--color-ink-faint)] tabular-nums">
                             {t('admin.settings.tokensLast7d', '{tokens} tokens in the last 7 days', {
-                                tokens: stats.last_7d.tokens.toLocaleString(),
+                                tokens: (stats.last_7d?.tokens ?? 0).toLocaleString(),
                             })}
                         </span>
                     ) : undefined
