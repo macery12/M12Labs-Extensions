@@ -52,6 +52,7 @@ class SensitiveSettingsLoggingTest extends AiPackageTestCase
         $request = \Mockery::mock(UpdateIntelligenceSettingsRequest::class);
         $request->shouldReceive('changesProviderConnection')->once()->andReturn(false);
         $request->shouldReceive('normalize')->once()->andReturn([]);
+        $request->shouldReceive('user')->andReturn(null);
         $request->shouldReceive('all')->once()->andReturn([
             'key' => 'super-secret-ai-key',
             'mode' => 'openai',

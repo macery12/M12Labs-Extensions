@@ -20,7 +20,9 @@ class UpdateIntelligenceSettingsRequest extends ApplicationApiRequest
         $openRouter = ((string) $this->input('provider', '') ?: $this->storedProvider()) === ProviderConfig::PROVIDER_OPENROUTER;
 
         return [
-            'enabled' => 'nullable|bool',
+            // No `enabled`: the module is on when the extension is, and that
+            // switch lives in the panel's extension drawer. Accepting it here
+            // wrote a value nothing read.
             'key' => 'nullable',
             'provider' => 'nullable|string|in:' . implode(',', ProviderConfig::PROVIDERS),
 
@@ -86,7 +88,7 @@ class UpdateIntelligenceSettingsRequest extends ApplicationApiRequest
             // Zero is an allowance of zero once enforcement is on, not
             // "unlimited" — see `AiBudgetService::assertWithinBudget()`. The
             // way to run unenforced is to leave `budget.enforce` off.
-            'budget.monthly_tokens' => 'nullable|integer|min:0',
+            'budget.monthly_tokens' => 'nullable|integer|min:0|max:1000000000',
 
             'endpoint' => [...($openRouter ? ['sometimes', 'required'] : ['nullable']), $this->endpointRule()],
             'model' => [...($openRouter ? ['sometimes', 'required'] : ['nullable']), 'string', 'max:100', $this->modelRule()],

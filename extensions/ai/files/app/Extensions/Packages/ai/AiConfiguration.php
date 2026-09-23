@@ -2,6 +2,7 @@
 
 namespace Everest\Extensions\Packages\ai;
 
+use Everest\Models\User;
 use Illuminate\Support\Facades\DB;
 use Everest\Extensions\Sdk\DisplayException;
 use Everest\Extensions\Sdk\Services\PackageSecrets;
@@ -25,6 +26,9 @@ use Everest\Extensions\Sdk\Services\PackageSettings;
  * 2. **Credentials** come from the encrypted secret store. Never from
  *    settings: `extension_configs.settings` is a plain JSON column the catalog
  *    API returns, which is why the manifest has no `password` field type.
+ *    They are *written* from this package's own settings page as well as the
+ *    panel's extension drawer -- both through the same store, on behalf of the
+ *    administrator who typed the value ({@see set()}).
  * 3. **Declared flat settings** — the 29 fields in the manifest. The key is
  *    the dotted one with dots as underscores, because a manifest setting key
  *    is flat: `agent.max_steps` is stored as `agent_max_steps`.
@@ -57,14 +61,16 @@ final class AiConfiguration
     /**
      * Credentials, by the dotted key the module has always used.
      *
-     * Three rather than one because the provider slot is shared: an operator
-     * who configures Anthropic, switches to OpenAI and switches back should
-     * not have to paste the first key again.
+     * One slot, shared by every provider. There used to be two more
+     * (`anthropic.key`, `openai.key`) declared for a per-provider design that
+     * was never wired up: nothing read them, yet the extension drawer offered
+     * all three, so an operator could paste a key into a box that did nothing.
+     * A provider switch clears this one instead
+     * ({@see Http\Requests\UpdateIntelligenceSettingsRequest}), so a key
+     * approved for one origin never follows the connection to another.
      */
     private const SECRETS = [
         'key' => 'api_key',
-        'anthropic.key' => 'anthropic_key',
-        'openai.key' => 'openai_key',
     ];
 
     /**
@@ -250,40 +256,91 @@ final class AiConfiguration
     }
 
     /**
-     * Save an administrator's value.
+     * Save one administrator's value. See {@see setMany()}.
      *
-     * A declared field goes to the package's settings, through the validator
-     * that enforces its declared type and range. Everything else goes to this
-     * package's own table. A credential is refused outright: secrets are
-     * entered and rotated by an administrator through the panel's own secret
-     * UI, and a package writing its own credentials would mean a value in the
-     * store that no operator put there.
-     *
-     * @throws DisplayException on an attempt to write a credential
+     * @throws DisplayException on a credential with no administrator behind it
      */
-    public static function set(string $key, mixed $value): void
+    public static function set(string $key, mixed $value, ?User $actor = null): void
     {
-        if (isset(self::SECRETS[$key])) {
+        self::setMany([$key => $value], $actor);
+    }
+
+    /**
+     * Save a page's worth of an administrator's values.
+     *
+     * - A **declared** field goes to the package's settings, all of them in one
+     *   validated write -- so a page either saves or does not, instead of
+     *   stopping half way with the first rejected field.
+     * - A **credential** goes to the encrypted secret store on behalf of
+     *   `$actor`, the administrator who typed it; the store requires them to
+     *   hold `extensions.update` and audits the write. An empty value removes
+     *   it, which is what the "remove key" button and a provider switch send.
+     *   With no actor it is refused: the package never writes a credential of
+     *   its own accord.
+     * - **Everything else** goes to this package's own table.
+     *
+     * @param array<string, mixed> $values dotted keys, as {@see get()} reads them
+     *
+     * @throws DisplayException on a credential with no administrator behind it
+     * @throws \Illuminate\Validation\ValidationException on a declared value outside its declared range
+     */
+    public static function setMany(array $values, ?User $actor = null): void
+    {
+        $declared = [];
+
+        foreach ($values as $key => $value) {
+            $flat = self::settingKey($key);
+
+            if (!isset(self::SECRETS[$key]) && self::declares($flat)) {
+                $declared[$flat] = $value;
+            }
+        }
+
+        // Settings first: they are validated, and a credential written ahead
+        // of a rejected page would leave the key for a provider that was
+        // never saved.
+        if ($declared !== []) {
+            PackageSettings::for(self::EXTENSION_ID)->save($declared);
+        }
+
+        foreach ($values as $key => $value) {
+            if (isset(self::SECRETS[$key])) {
+                self::writeSecret($key, $value, $actor);
+
+                continue;
+            }
+
+            if (self::declares(self::settingKey($key))) {
+                continue;
+            }
+
+            DB::table(self::TABLE)->updateOrInsert(
+                ['key' => $key],
+                ['value' => is_string($value) ? $value : json_encode($value), 'updated_at' => now()],
+            );
+        }
+
+        self::$tableCache = null;
+    }
+
+    private static function writeSecret(string $key, mixed $value, ?User $actor): void
+    {
+        if ($actor === null) {
             throw new DisplayException(sprintf(
-                'The credential [%s] is entered through the panel\'s encrypted secret store, not through settings.',
+                'The credential [%s] can only be changed by an administrator.',
                 $key
             ));
         }
 
-        $flat = self::settingKey($key);
+        $secrets = PackageSecrets::for(self::EXTENSION_ID);
 
-        if (self::declares($flat)) {
-            PackageSettings::for(self::EXTENSION_ID)->save([$flat => $value]);
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            $secrets->forget($actor, self::SECRETS[$key]);
 
             return;
         }
 
-        DB::table(self::TABLE)->updateOrInsert(
-            ['key' => $key],
-            ['value' => is_string($value) ? $value : json_encode($value), 'updated_at' => now()],
-        );
-
-        self::$tableCache = null;
+        $secrets->put($actor, self::SECRETS[$key], (string) $value);
     }
 
     /** The flat settings key for a dotted key: `agent.max_steps` -> `agent_max_steps`. */

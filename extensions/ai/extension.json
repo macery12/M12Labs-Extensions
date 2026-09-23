@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "ai",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -50,7 +50,7 @@
     }
   },
   "compatiblePanelVersions": [
-    ">=Alpha 4.1 <Alpha 5.0"
+    ">=Alpha 4.2 <Alpha 5.0"
   ],
   "capabilities": {
     "routes": {
@@ -225,18 +225,6 @@
         "labelKey": "ext.ai.secret.apiKey",
         "helpKey": "ext.ai.secret.apiKey.help",
         "rotatable": true
-      },
-      {
-        "key": "anthropic_key",
-        "labelKey": "ext.ai.secret.anthropicKey",
-        "helpKey": "ext.ai.secret.anthropicKey.help",
-        "rotatable": true
-      },
-      {
-        "key": "openai_key",
-        "labelKey": "ext.ai.secret.openaiKey",
-        "helpKey": "ext.ai.secret.openaiKey.help",
-        "rotatable": true
       }
     ],
     "settings": {
@@ -265,21 +253,62 @@
           "enum": [
             "openai",
             "ollama"
-          ]
+          ],
+          "visibility": "internal"
         },
         {
           "key": "endpoint",
           "type": "url",
           "labelKey": "ext.ai.setting.endpoint",
           "helpKey": "ext.ai.setting.endpoint.help",
-          "maxLength": 255
+          "maxLength": 255,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "anthropic"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai_compatible"
+              },
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              }
+            ]
+          }
         },
         {
           "key": "model",
           "type": "text",
           "labelKey": "ext.ai.setting.model",
           "helpKey": "ext.ai.setting.model.help",
-          "maxLength": 100
+          "maxLength": 100,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "anthropic"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai_compatible"
+              },
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              }
+            ]
+          }
         },
         {
           "key": "max_tokens",
@@ -306,7 +335,15 @@
           "helpKey": "ext.ai.setting.contextTokens.help",
           "default": 0,
           "min": 0,
-          "max": 1000000
+          "max": 1000000,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              }
+            ]
+          }
         },
         {
           "key": "keep_alive",
@@ -322,14 +359,30 @@
             "4h",
             "24h",
             "-1"
-          ]
+          ],
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              }
+            ]
+          }
         },
         {
           "key": "warm",
           "type": "boolean",
           "labelKey": "ext.ai.setting.warm",
           "helpKey": "ext.ai.setting.warm.help",
-          "default": false
+          "default": false,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              }
+            ]
+          }
         },
         {
           "key": "system_prompt",
@@ -350,21 +403,45 @@
           "type": "boolean",
           "labelKey": "ext.ai.setting.agentAdminEnabled",
           "helpKey": "ext.ai.setting.agentAdminEnabled.help",
-          "default": false
+          "default": false,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_reasoning",
           "type": "boolean",
           "labelKey": "ext.ai.setting.agentReasoning",
           "helpKey": "ext.ai.setting.agentReasoning.help",
-          "default": true
+          "default": true,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_durable",
           "type": "boolean",
           "labelKey": "ext.ai.setting.agentDurable",
           "helpKey": "ext.ai.setting.agentDurable.help",
-          "default": true
+          "default": true,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_max_steps",
@@ -373,7 +450,15 @@
           "helpKey": "ext.ai.setting.agentMaxSteps.help",
           "default": 12,
           "min": 1,
-          "max": 50
+          "max": 50,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_max_wall_seconds",
@@ -382,7 +467,15 @@
           "helpKey": "ext.ai.setting.agentMaxWallSeconds.help",
           "default": 180,
           "min": 30,
-          "max": 900
+          "max": 900,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_max_tool_seconds",
@@ -391,7 +484,15 @@
           "helpKey": "ext.ai.setting.agentMaxToolSeconds.help",
           "default": 90,
           "min": 5,
-          "max": 900
+          "max": 900,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_tool_result_bytes",
@@ -400,7 +501,15 @@
           "helpKey": "ext.ai.setting.agentToolResultBytes.help",
           "default": 12288,
           "min": 1024,
-          "max": 131072
+          "max": 131072,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_max_repairs",
@@ -409,7 +518,15 @@
           "helpKey": "ext.ai.setting.agentMaxRepairs.help",
           "default": 2,
           "min": 0,
-          "max": 5
+          "max": 5,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_max_tools",
@@ -418,7 +535,15 @@
           "helpKey": "ext.ai.setting.agentMaxTools.help",
           "default": 0,
           "min": 0,
-          "max": 64
+          "max": 64,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_max_batch_calls",
@@ -427,14 +552,30 @@
           "helpKey": "ext.ai.setting.agentMaxBatchCalls.help",
           "default": 25,
           "min": 2,
-          "max": 100
+          "max": 100,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "agent_allow_destructive_batches",
           "type": "boolean",
           "labelKey": "ext.ai.setting.agentAllowDestructiveBatches",
           "helpKey": "ext.ai.setting.agentAllowDestructiveBatches.help",
-          "default": false
+          "default": false,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "agent_enabled",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "concurrency_slots",
@@ -443,7 +584,19 @@
           "helpKey": "ext.ai.setting.concurrencySlots.help",
           "default": 2,
           "min": 1,
-          "max": 64
+          "max": 64,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai_compatible"
+              }
+            ]
+          }
         },
         {
           "key": "concurrency_queue_depth",
@@ -452,7 +605,19 @@
           "helpKey": "ext.ai.setting.concurrencyQueueDepth.help",
           "default": 20,
           "min": 0,
-          "max": 500
+          "max": 500,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai_compatible"
+              }
+            ]
+          }
         },
         {
           "key": "concurrency_max_wait_seconds",
@@ -461,7 +626,19 @@
           "helpKey": "ext.ai.setting.concurrencyMaxWaitSeconds.help",
           "default": 120,
           "min": 5,
-          "max": 600
+          "max": 600,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai_compatible"
+              }
+            ]
+          }
         },
         {
           "key": "concurrency_per_user",
@@ -470,7 +647,19 @@
           "helpKey": "ext.ai.setting.concurrencyPerUser.help",
           "default": 1,
           "min": 0,
-          "max": 16
+          "max": 16,
+          "visibleWhen": {
+            "any": [
+              {
+                "setting": "provider",
+                "equals": "ollama"
+              },
+              {
+                "setting": "provider",
+                "equals": "openai_compatible"
+              }
+            ]
+          }
         },
         {
           "key": "budget_enforce",
@@ -486,7 +675,15 @@
           "helpKey": "ext.ai.setting.budgetMonthlyTokens.help",
           "default": 2000000,
           "min": 0,
-          "max": 1000000000
+          "max": 1000000000,
+          "visibleWhen": {
+            "all": [
+              {
+                "setting": "budget_enforce",
+                "equals": true
+              }
+            ]
+          }
         },
         {
           "key": "privacy_enabled",

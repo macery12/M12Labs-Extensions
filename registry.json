@@ -9,6 +9,22 @@
       "id": "ai",
       "versions": [
         {
+          "version": "1.1.0",
+          "archive": "packages/ai/1.1.0/ai.M12LabsExtension",
+          "sha256": "f2a666f3336dc818096aea217c1c909a34584e22a035db543b6de8acb79acb55",
+          "publishedAt": "2026-09-23T05:43:04Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.2 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "Nk0N/VW+Aomi1Yom3E/xRAFEiUakad9e6eEHCFkz1Z7/gsH5wLxhxw6IS0f9j4HwNafLsvl9lcQeY9ZxeiMiDA==",
+            "canonicalManifestSha256": "9e7bdb552b78cb86b797c7fb435c05cb81f9e25366de0597462e4570f0f9fa07"
+          }
+        },
+        {
           "version": "1.0.2",
           "archive": "packages/ai/1.0.2/ai.M12LabsExtension",
           "sha256": "187454de68018d50288b87440fa13087472c7cb886df8900088382d9aef5f49a",
@@ -72,7 +88,7 @@
         "hooks": [],
         "queues": 1,
         "permissions": 2,
-        "secrets": 3,
+        "secrets": 1,
         "settings": 29,
         "privileged": [
           "delegated_access",

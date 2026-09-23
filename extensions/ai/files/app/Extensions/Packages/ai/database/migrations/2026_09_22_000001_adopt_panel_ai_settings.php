@@ -28,11 +28,13 @@ use Illuminate\Database\Migrations\Migration;
  * ## What is not adopted, and why
  *
  * **The credentials.** `settings::modules:ai:key` and the two provider keys are
- * encrypted with the panel's own key and context. A package has no writer for
- * the extension secret store -- deliberately, because a secret an operator did
- * not enter is a secret nobody can account for -- so the API key has to be
- * pasted in once after installing. The rest of the configuration surviving is
- * what makes that a single field rather than a page.
+ * encrypted with the panel's own key and context. A package writes the
+ * extension secret store only on behalf of a signed-in administrator, and a
+ * migration has none -- deliberately, because a secret an operator did not
+ * enter is a secret nobody can account for -- so the API key has to be pasted
+ * in once after installing, on the AI Settings page or in the extension
+ * drawer. The rest of the configuration surviving is what makes that a single
+ * field rather than a page.
  *
  * **Empty values.** In the panel an empty string meant two different things
  * depending on the key: a false switch, or "unset, fall back to config". The

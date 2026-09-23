@@ -149,13 +149,19 @@ class IntelligenceController extends ApplicationApiController
 
         // `normalize()` also blanks the endpoint and key when the provider is
         // changing, since both are a single slot shared across providers.
+        $changes = [];
         foreach ($request->normalize() as $key => $value) {
             if ($key == 'key' && is_bool($value)) {
                 continue;
             }
 
-            AiConfiguration::set(str_replace(':', '.', $key), $value);
+            $changes[str_replace(':', '.', $key)] = $value;
         }
+
+        // One write, on behalf of the administrator making it: a credential on
+        // this page goes to the same encrypted store the extension drawer
+        // uses, audited against them.
+        AiConfiguration::setMany($changes, $request->user());
 
         $activitySettings = SensitiveKeyMask::apply($request->all(), SensitiveKeyMask::SETTINGS_KEYS);
 
