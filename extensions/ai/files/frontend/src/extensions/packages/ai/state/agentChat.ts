@@ -978,7 +978,20 @@ export function createAgentChatStore(
         /** Shared teardown for both the start and resume streams. */
         const streamCallbacks = (
             overrides: Partial<Pick<AgentStreamCallbacks, 'onAccepted' | 'onError'>> = {},
-        ): AgentStreamCallbacks => ({
+        ): AgentStreamCallbacks => {
+            /**
+             * Whether this stream handed its turn to the relay.
+             *
+             * A durable start says "accepted" and then closes, in the same
+             * breath. The close is this request finishing, not the turn — so
+             * once the relay has it, this stream's end must not settle the
+             * surface. It did: the relay opened and the composer read "idle"
+             * over a turn that was very much running, until a reload rejoined
+             * it through `resumeActive()`.
+             */
+            let handedOff = false;
+
+            return {
             onEvent: handleEvent,
             onActivity: armStall,
             onIdleLimit: milliseconds => {
@@ -996,6 +1009,7 @@ export function createAgentChatStore(
                 // the turn is not. The stream it is read through is therefore
                 // opened separately, and can be dropped and reopened for the
                 // rest of the turn's life without the turn ever noticing.
+                handedOff = true;
                 activeTurnId = accepted.turn_id;
                 streamAccepted = true;
 
@@ -1010,6 +1024,8 @@ export function createAgentChatStore(
                 overrides.onAccepted?.();
             },
             onComplete: () => {
+                if (handedOff) return;
+
                 // Turned away for want of an inference slot. Nothing ran, the
                 // transcript is untouched, and the composer stays locked — from
                 // the user's side this is still one turn in progress, and the
@@ -1030,6 +1046,10 @@ export function createAgentChatStore(
                 settle();
             },
             onError: (error: Error) => {
+                // The relay owns the turn now; this request ending badly after
+                // handing it over says nothing about the turn.
+                if (handedOff) return;
+
                 overrides.onError?.(error);
 
                 // A dropped relay is a dropped *reader*. Reopening it from the
@@ -1060,7 +1080,8 @@ export function createAgentChatStore(
                     fail(error.message);
                 }
             },
-        });
+            };
+        };
 
         attachRelay = (turnId, after) => {
             const target = get().target;

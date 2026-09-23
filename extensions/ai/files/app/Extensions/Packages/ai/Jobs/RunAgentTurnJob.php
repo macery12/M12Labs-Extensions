@@ -206,6 +206,7 @@ class RunAgentTurnJob extends ExtensionJob
             ->where('status', 'running')
             ->whereNull('claimed_at')
             ->whereNull('cancel_requested_at')
+            ->where(fn ($query) => $query->whereNull('deadline_at')->orWhere('deadline_at', '>', now()))
             ->update(['claimed_at' => now(), 'heartbeat_at' => now()]);
 
         if ($claimed === 1) {
@@ -221,6 +222,16 @@ class RunAgentTurnJob extends ExtensionJob
             // Stopped while it waited, and the Stop arrived through a path
             // that did not finalize it. Finalize it here instead.
             $this->finishWithoutRunning('revoked', TurnCancellations::STOPPED_BEFORE_START);
+
+            return false;
+        }
+
+        if ($row !== null && $row->status === 'running' && $row->claimed_at === null) {
+            // Waited past its whole deadline for a worker. The person who
+            // asked has long since been shown a spinner that gave up; an
+            // answer arriving now, with tools acting on a server whose state
+            // has moved on, is not the turn they asked for.
+            $this->finishWithoutRunning('error', 'No worker picked this turn up in time. Please ask again.');
 
             return false;
         }

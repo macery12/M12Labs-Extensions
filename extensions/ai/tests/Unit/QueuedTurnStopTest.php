@@ -84,6 +84,20 @@ class QueuedTurnStopTest extends AiPackageTestCase
         $this->assertNull($usage->claimed_at);
     }
 
+    /** Picked up after its deadline: told plainly, not run ten minutes late. */
+    public function testAWorkerDoesNotRunATurnThatWaitedPastItsDeadline(): void
+    {
+        $usage = $this->turn();
+        AiUsageLog::whereKey($usage->id)->update(['deadline_at' => now()->subMinute()]);
+
+        $this->runJob((string) $usage->turn_id);
+
+        $usage->refresh();
+        $this->assertSame('error', $usage->status);
+        $this->assertStringContainsString('in time', (string) $usage->error_message);
+        $this->assertNull($usage->claimed_at);
+    }
+
     public function testAWorkerClaimsATurnBeforeRunningIt(): void
     {
         $usage = $this->turn();
