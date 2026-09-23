@@ -355,13 +355,32 @@ class TurnCancellationTest extends AiPackageTestCase
         $this->assertNotNull($usage->fresh()->cancel_requested_at);
     }
 
+    /**
+     * A turn no worker has picked up has nothing to deliver a Stop to, so the
+     * Stop ends it -- rather than leaving it `running` until the deadline with
+     * the composer locked, which is what an unstaffed queue lane produced.
+     */
+    public function testStoppingAQueuedTurnEndsItRatherThanWaitingForAWorker(): void
+    {
+        $usage = $this->usage('running', claimed: false);
+        $owner = User::find($usage->user_id);
+
+        $response = (new AgentTurnOutcomeHarness())->cancel($owner, $usage->turn_id, null, ToolDefinition::SCOPE_ADMIN);
+
+        $payload = json_decode((string) $response->getContent(), true)['data'];
+
+        $this->assertSame('cancelled', $payload['status']);
+        $this->assertSame('cancelled', $usage->fresh()->status);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Fixtures
     |--------------------------------------------------------------------------
     */
 
-    private function usage(string $status): AiUsageLog
+    /** A turn something is executing, unless `$claimed` says it is still queued. */
+    private function usage(string $status, bool $claimed = true): AiUsageLog
     {
         return AiUsageLog::create([
             'user_id' => User::factory()->create()->id,
@@ -372,6 +391,7 @@ class TurnCancellationTest extends AiPackageTestCase
             'status' => $status,
             'step' => 1,
             'tool_calls_count' => 0,
+            'claimed_at' => $claimed ? now() : null,
         ]);
     }
 

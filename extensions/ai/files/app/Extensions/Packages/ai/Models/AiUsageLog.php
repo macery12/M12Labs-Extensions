@@ -41,6 +41,7 @@ class AiUsageLog extends Model
         'heartbeat_at',
         'deadline_at',
         'cancel_requested_at',
+        'claimed_at',
     ];
 
     protected $casts = [
@@ -53,6 +54,7 @@ class AiUsageLog extends Model
         'heartbeat_at' => 'datetime',
         'deadline_at' => 'datetime',
         'cancel_requested_at' => 'datetime',
+        'claimed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

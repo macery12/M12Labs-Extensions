@@ -390,6 +390,10 @@ trait HandlesAgentTurns
             'deadline_at' => now()->addSeconds($grace),
         ]);
 
+        // A Stop that arrives before any worker does has to be able to give
+        // these back; see TurnCancellations::stopUnclaimed().
+        app(TurnCancellations::class)->stash($context->turnId, $lease?->handle(), $budgetReservation?->handle(), $grace);
+
         // Dispatched after the row above is committed, so a worker that starts
         // instantly cannot find the turn it was given no trace of.
         RunAgentTurnJob::dispatch(
@@ -467,6 +471,10 @@ trait HandlesAgentTurns
                 'error_message' => null,
                 'heartbeat_at' => now(),
                 'deadline_at' => $deadlineAt,
+                // Executing now, whether in this request or in a worker that
+                // already claimed it: a Stop from here on is delivered at the
+                // next boundary, not by finalizing the row out from under it.
+                'claimed_at' => now(),
             ]);
 
             // Flush a comment immediately so proxies do not 504 while the model
@@ -774,8 +782,20 @@ trait HandlesAgentTurns
             abort(409, 'That turn is waiting for your decision. Decline the action instead.');
         }
 
+        $cancellations = app(TurnCancellations::class);
+
+        // Nothing has started it: end it here, rather than leave a note for a
+        // worker that may be minutes away or never come.
+        if ($usage->status === 'running' && $usage->claimed_at === null && $cancellations->stopUnclaimed($usage)) {
+            return response()->json(['data' => [
+                'turn_id' => $turnId,
+                'status' => 'cancelled',
+                'cancel_requested' => true,
+            ]]);
+        }
+
         $recorded = $usage->status === 'running'
-            && app(TurnCancellations::class)->request($usage);
+            && $cancellations->request($usage);
 
         return response()->json(['data' => [
             'turn_id' => $turnId,

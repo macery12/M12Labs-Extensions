@@ -2,6 +2,7 @@
 
 namespace Everest\Extensions\Packages\ai\Http\Controllers;
 
+use Everest\Extensions\Packages\ai\Agent\TurnCancellations;
 use Everest\Extensions\Packages\ai\Http\Requests\Client\ServerConversationRequest;
 use Everest\Models\Server;
 use Illuminate\Http\Request;
@@ -61,6 +62,10 @@ class AIConversationController extends ClientApiController
     public function destroy(ServerConversationRequest $request, Server $server, int $conversationId): JsonResponse
     {
         $conversation = $this->resolveConversation($request, $server, $conversationId);
+
+        // A turn still running here would lose its conversation to the foreign
+        // key and carry on, holding the composer and reattaching on reload.
+        app(TurnCancellations::class)->stopForConversation($conversation->id, $request->user()->id);
 
         $conversation->delete();
 

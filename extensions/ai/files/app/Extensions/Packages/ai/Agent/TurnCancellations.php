@@ -4,6 +4,9 @@ namespace Everest\Extensions\Packages\ai\Agent;
 
 use Everest\Extensions\Packages\ai\Models\AiUsageLog;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use Everest\Extensions\Packages\ai\Inference\InferenceGate;
+use Everest\Extensions\Packages\ai\Support\AiBudgetService;
 
 /**
  * Stopping a turn that is already running. Two properties pull in opposite
@@ -34,6 +37,11 @@ class TurnCancellations
      */
     private const RECHECK_SECONDS = 1.0;
 
+    /** What a turn stopped before any worker picked it up is recorded as. */
+    public const STOPPED_BEFORE_START = 'You stopped this turn before it started.';
+
+    private const STASH_KEY = 'ext-ai:turn-handles:';
+
     /** @var array<string, bool> */
     private array $cancelled = [];
 
@@ -60,6 +68,127 @@ class TurnCancellations
         }
 
         return $recorded === 1;
+    }
+
+    /**
+     * Stop a turn nothing has started executing yet, completely and now.
+     *
+     * A queued turn has no worker to deliver a Stop to, and may never get
+     * one -- a lane with no process, a backlog, a worker pool being restarted.
+     * Leaving a note for it kept the turn `running` until its deadline, the
+     * composer locked, and the user's slot and budget held the whole time.
+     * Conditional on the row being unclaimed, so a worker that claims it first
+     * wins and this does nothing; the worker then sees the Stop at its first
+     * boundary instead.
+     *
+     * @return bool whether this call ended the turn
+     */
+    public function stopUnclaimed(AiUsageLog $usage): bool
+    {
+        $stopped = AiUsageLog::whereKey($usage->id)
+            ->where('status', 'running')
+            ->whereNull('claimed_at')
+            ->update([
+                'status' => 'cancelled',
+                'error_message' => self::STOPPED_BEFORE_START,
+                'cancel_requested_at' => $usage->cancel_requested_at ?? now(),
+                'heartbeat_at' => now(),
+            ]);
+
+        if ($stopped !== 1) {
+            return false;
+        }
+
+        $this->cancelled[(string) $usage->turn_id] = true;
+
+        try {
+            // So a relay reading the log closes rather than waiting for frames
+            // no worker will ever write.
+            app(AgentEventLog::class)->append((string) $usage->turn_id, AgentEvent::done('cancelled'));
+        } catch (\Throwable $e) {
+            Log::warning('Could not close the event log of a turn stopped before it started.', [
+                'turn' => $usage->turn_id,
+                'exception' => $e::class,
+            ]);
+        }
+
+        $this->releaseStashed((string) $usage->turn_id);
+
+        return true;
+    }
+
+    /**
+     * Stop whatever is running in a conversation that is about to be deleted.
+     *
+     * Deleting the chat used to leave its turn going: the row lost its
+     * conversation to the foreign key and carried on, still holding the
+     * composer, still reattached on every reload.
+     */
+    public function stopForConversation(int $conversationId, int $userId): void
+    {
+        $running = AiUsageLog::query()
+            ->where('conversation_id', $conversationId)
+            ->where('user_id', $userId)
+            ->where('status', 'running')
+            ->get();
+
+        foreach ($running as $usage) {
+            if (!$this->stopUnclaimed($usage)) {
+                $this->request($usage);
+            }
+        }
+    }
+
+    /**
+     * Keep what a queued turn is holding where a Stop can give it back.
+     *
+     * The inference slot and budget reservation travel to the worker inside
+     * the job, which is no help to a Stop that arrives before any worker does.
+     * Both releases are owner-qualified and idempotent, so the worker releasing
+     * its own copy later is harmless.
+     *
+     * @param array<string, mixed>|null $lease
+     * @param array<string, mixed>|null $budget
+     */
+    public function stash(string $turnId, ?array $lease, ?array $budget, int $ttlSeconds): void
+    {
+        if ($lease === null && $budget === null) {
+            return;
+        }
+
+        Cache::put(self::STASH_KEY . $turnId, ['lease' => $lease, 'budget' => $budget], $ttlSeconds);
+    }
+
+    /** The worker claimed the turn and holds its own copy; drop this one. */
+    public function forgetStash(string $turnId): void
+    {
+        Cache::forget(self::STASH_KEY . $turnId);
+    }
+
+    private function releaseStashed(string $turnId): void
+    {
+        $held = Cache::pull(self::STASH_KEY . $turnId);
+
+        if (!is_array($held)) {
+            return;
+        }
+
+        try {
+            if (is_array($held['lease'] ?? null)) {
+                app(InferenceGate::class)->releaseHandle($held['lease']);
+            }
+
+            if (is_array($held['budget'] ?? null)) {
+                app(AiBudgetService::class)->releaseHandle($held['budget']);
+            }
+        } catch (\Throwable $e) {
+            // Both self-expire; failing to hand them back early is a delay,
+            // not a leak.
+            Log::warning('Could not release what a stopped queued turn was holding.', [
+                'turn' => $turnId,
+                'exception' => $e::class,
+            ]);
+        }
     }
 
     /**

@@ -1043,7 +1043,11 @@ export function createAgentChatStore(
                     const turnId = activeTurnId;
                     const after = cursor;
 
-                    setTimeout(() => attachRelay(turnId, after), RELAY_RETRY_MS * relayRetries);
+                    // Only if this is still the turn being followed: New chat
+                    // detaches without waiting for a pending reconnect.
+                    setTimeout(() => {
+                        if (activeTurnId === turnId) attachRelay(turnId, after);
+                    }, RELAY_RETRY_MS * relayRetries);
 
                     return;
                 }
@@ -1265,7 +1269,37 @@ export function createAgentChatStore(
             },
 
             newChat: () => {
-                if (get().loading) return;
+                // Starting over mid-turn used to do nothing at all: the button
+                // returned early while `loading`, and a turn that never
+                // finished kept the old chat on screen and the composer locked.
+                // Now it is Stop plus a clean slate — the server is asked to
+                // end the turn (a queued one ends at once), and this surface
+                // stops following it rather than waiting to hear back.
+                if (get().loading) {
+                    const { target } = get();
+                    const turnId = activeTurnId;
+                    const accepted = streamAccepted;
+                    const ticket = clearQueueRetry();
+
+                    controller?.abort();
+                    controller = null;
+                    clearSlowTimer();
+                    clearStallTimer();
+                    ++reconciliationGeneration;
+                    activeTurnId = null;
+                    streamAccepted = false;
+                    relaying = false;
+                    relayRetries = 0;
+
+                    if (target && ticket !== null) {
+                        void adapter.releaseQueue(target, ticket).catch(() => undefined);
+                    }
+
+                    if (target && accepted && turnId !== null) {
+                        void adapter.cancelTurn(target, turnId).catch(() => undefined);
+                    }
+                }
+
                 ++transcriptGeneration;
                 transcriptRequest = null;
                 // A new conversation is a new session: whatever server the last
@@ -1273,9 +1307,11 @@ export function createAgentChatStore(
                 set({
                     conversationId: null,
                     entries: [],
+                    loading: false,
                     queue: null,
                     step: null,
                     activity: null,
+                    slowHint: false,
                     redactions: {},
                     assist: null,
                 });

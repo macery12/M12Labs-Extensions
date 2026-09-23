@@ -2,6 +2,7 @@
 
 namespace Everest\Extensions\Packages\ai\Http\Controllers;
 
+use Everest\Extensions\Packages\ai\Agent\TurnCancellations;
 use Everest\Models\Server;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
@@ -418,7 +419,12 @@ class AiAgentController extends ApplicationApiController
 
     public function deleteConversation(AgentConversationRequest $request, int $conversationId): Response
     {
-        $this->ownConversations($request->user()->id)->findOrFail($conversationId)->delete();
+        $conversation = $this->ownConversations($request->user()->id)->findOrFail($conversationId);
+
+        // See AIConversationController::destroy().
+        app(TurnCancellations::class)->stopForConversation($conversation->id, $request->user()->id);
+
+        $conversation->delete();
 
         return $this->returnNoContent();
     }

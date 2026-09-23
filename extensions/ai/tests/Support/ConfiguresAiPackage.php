@@ -246,14 +246,24 @@ trait ConfiguresAiPackage
      */
     protected function migrateAiPackage(): void
     {
-        $file = app_path('Extensions/Packages/ai/database/migrations/2026_09_21_000001_create_ext_ai_tables.php');
+        $files = glob(app_path('Extensions/Packages/ai/database/migrations/*.php')) ?: [];
+        sort($files);
 
-        if (!is_file($file)) {
-            $this->fail(sprintf('The AI package migration is not staged at %s.', $file));
+        if ($files === []) {
+            $this->fail('The AI package migrations are not staged.');
         }
 
-        $migration = require $file;
-        $migration->up();
+        foreach ($files as $file) {
+            // Schema only. The settings adoption is a one-time data move with
+            // a marker; running it here would set the marker before the test
+            // that exercises it has put anything in place to adopt.
+            if (str_contains($file, 'adopt_panel_ai_settings')) {
+                continue;
+            }
+
+            $migration = require $file;
+            $migration->up();
+        }
     }
 
     /**

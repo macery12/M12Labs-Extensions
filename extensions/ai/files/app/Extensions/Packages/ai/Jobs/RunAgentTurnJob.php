@@ -5,6 +5,7 @@ namespace Everest\Extensions\Packages\ai\Jobs;
 use Everest\Extensions\Sdk\Jobs\ExtensionJob;
 use Everest\Models\Server;
 use Everest\Extensions\Packages\ai\Models\AiUsageLog;
+use Everest\Extensions\Packages\ai\Agent\TurnCancellations;
 use Everest\Extensions\Packages\ai\Models\AiConversation;
 use Illuminate\Support\Facades\Log;
 use Everest\Extensions\Packages\ai\Tools\RiskGate;
@@ -92,6 +93,15 @@ class RunAgentTurnJob extends ExtensionJob
         TurnRecorder $recorder,
     ): void {
         $this->events = $events;
+
+        // Claim the turn before anything else. The row has said `running` since
+        // the request accepted it, but until now nothing was executing it: the
+        // user may have stopped it while it waited, or the deadline sweep may
+        // have failed it because no worker came. Running it anyway would spend
+        // budget on something the user was already told had ended.
+        if (!$this->claim()) {
+            return;
+        }
 
         $authority = TurnAuthority::fromArray($this->authority);
         $user = $authority->user();
@@ -181,6 +191,50 @@ class RunAgentTurnJob extends ExtensionJob
         ]);
 
         $this->finishWithoutRunning('error', 'The agent stopped unexpectedly before finishing.');
+    }
+
+    /**
+     * Take the turn, atomically, or explain why not.
+     *
+     * Conditional on it still being `running`, unclaimed and not stopped, so
+     * exactly one delivery of this job runs it, and none does once the user or
+     * the sweep has ended it.
+     */
+    private function claim(): bool
+    {
+        $claimed = AiUsageLog::where('turn_id', $this->turnId)
+            ->where('status', 'running')
+            ->whereNull('claimed_at')
+            ->whereNull('cancel_requested_at')
+            ->update(['claimed_at' => now(), 'heartbeat_at' => now()]);
+
+        if ($claimed === 1) {
+            // This worker holds its own copy of the slot and reservation now.
+            app(TurnCancellations::class)->forgetStash($this->turnId);
+
+            return true;
+        }
+
+        $row = AiUsageLog::where('turn_id', $this->turnId)->first(['status', 'claimed_at', 'cancel_requested_at']);
+
+        if ($row !== null && $row->status === 'running' && $row->claimed_at === null && $row->cancel_requested_at !== null) {
+            // Stopped while it waited, and the Stop arrived through a path
+            // that did not finalize it. Finalize it here instead.
+            $this->finishWithoutRunning('revoked', TurnCancellations::STOPPED_BEFORE_START);
+
+            return false;
+        }
+
+        // Already ended, or already claimed by another delivery of this job.
+        // Either way it is not this worker's to run, and what the request
+        // handed over still has to go back.
+        Log::info('Durable AI agent turn was not claimable; skipping.', [
+            'turn' => $this->turnId,
+            'status' => $row?->status,
+        ]);
+        $this->releaseHeldResources();
+
+        return false;
     }
 
     /**
