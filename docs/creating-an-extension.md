@@ -188,6 +188,11 @@ export M12LABS_RELEASE_KEY=/path/to/release.private.b64
 
 Without one the archive is unsigned, which is fine for local testing: a panel with a pinned signing root installs it only with an explicit typed acknowledgement, and such a package may declare neither hooks, nor queues, nor a permission marked dangerous.
 
+Only `build` permits that local-development mode. `publish` and `sync` refuse
+to write an unsigned official release, and the repository gate rejects any
+manifest-v3 registry entry whose archive or registry metadata lacks a valid,
+root-authorized signature.
+
 The signature covers the **canonical manifest**, not the archive's bytes — it ships inside the archive, so covering the archive hash would change the hash it just committed to. Nothing is lost: the manifest carries a sha256 for every file, and the panel installs only files the manifest lists, verifying each one. See `tools/signing.py`.
 
 Install the built archive in a development panel (example panel path `/var/www/m12labs`):
