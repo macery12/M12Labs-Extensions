@@ -289,17 +289,6 @@
           ],
           "manifestVersion": 2,
           "revoked": false
-        },
-        {
-          "version": "1.0.0",
-          "archive": "packages/discordsrv_helper/1.0.0/discordsrv_helper.M12LabsExtension",
-          "sha256": "7252b1f3618334368ed48efc33830caca9d79e0a3cc6baf05f0f3be86d328f07",
-          "publishedAt": "2026-04-18T15:27:39Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
-          ],
-          "manifestVersion": 2,
-          "revoked": false
         }
       ],
       "name": "DiscordSRV Helper",
@@ -368,28 +357,6 @@
           "publishedAt": "2026-07-18T05:15:07Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ],
-          "manifestVersion": 2,
-          "revoked": false
-        },
-        {
-          "version": "1.0.1",
-          "archive": "packages/minecraft_icon_builder/1.0.1/minecraft_icon_builder.M12LabsExtension",
-          "sha256": "636a1c3b72e72765a71009a89658280d3886f9797af4656bc64d95ae3269b673",
-          "publishedAt": "2026-04-28T00:24:24Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
-          ],
-          "manifestVersion": 2,
-          "revoked": false
-        },
-        {
-          "version": "1.0.0",
-          "archive": "packages/minecraft_icon_builder/1.0.0/minecraft_icon_builder.M12LabsExtension",
-          "sha256": "337654991268177c87e0722b564c964c28df2ebb2e0b3d7531b028734d3c888c",
-          "publishedAt": "2026-04-19T01:01:43Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
           ],
           "manifestVersion": 2,
           "revoked": false
@@ -464,17 +431,6 @@
           ],
           "manifestVersion": 2,
           "revoked": false
-        },
-        {
-          "version": "1.0.0",
-          "archive": "packages/minecraft_log_uploader/1.0.0/minecraft_log_uploader.M12LabsExtension",
-          "sha256": "80f5aef94ba17a3413524803d943ee76b451d48bf04c19bf8dfbebf9ea26bad0",
-          "publishedAt": "2026-04-28T03:12:33Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
-          ],
-          "manifestVersion": 2,
-          "revoked": false
         }
       ],
       "name": "Minecraft Log Uploader",
@@ -546,17 +502,6 @@
           ],
           "manifestVersion": 2,
           "revoked": false
-        },
-        {
-          "version": "1.0.1",
-          "archive": "packages/minecraft_player_manager/1.0.1/minecraft_player_manager.M12LabsExtension",
-          "sha256": "a564b3a086273001453bbf2cc915fbb2bf5bc6e55572140e45182f3853386622",
-          "publishedAt": "2026-04-18T15:27:14Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
-          ],
-          "manifestVersion": 2,
-          "revoked": false
         }
       ],
       "name": "Minecraft Player Manager",
@@ -625,17 +570,6 @@
           "publishedAt": "2026-07-18T05:53:34Z",
           "compatiblePanelVersions": [
             "Alpha 3.0"
-          ],
-          "manifestVersion": 2,
-          "revoked": false
-        },
-        {
-          "version": "1.0.0",
-          "archive": "packages/minecraft_startup_editor/1.0.0/minecraft_startup_editor.M12LabsExtension",
-          "sha256": "7ec7d4a01a2ca83f591e5bd3440f94c3ad84b5e3c86136684885d4f6a6ae33a1",
-          "publishedAt": "2026-04-26T00:36:29Z",
-          "compatiblePanelVersions": [
-            "2.0.0-m12-alpha-2.7"
           ],
           "manifestVersion": 2,
           "revoked": false
