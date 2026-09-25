@@ -50,7 +50,7 @@ MANIFEST_VERSION = 3
 CAPABILITY_KEYS = {
     'routes', 'pages', 'permissions', 'database', 'hooks',
     'queues', 'schedule', 'commands', 'secrets', 'settings',
-    'privileged', 'bindings', 'streams', 'slots', 'flags',
+    'privileged', 'bindings', 'streams', 'slots', 'flags', 'nav',
 }
 
 

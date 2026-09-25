@@ -62,7 +62,7 @@ Note what is **not** there. `extension.route`, `extension.admin` and top-level `
 
 Compatibility entries accept exact labels and normalized semver ranges. For example, `Alpha 4.0` is normalized to `4.0-alpha`, and the example range covers that release up to, but excluding, `Alpha 5.0`. Check the panel's `config('app.version')` and test the bounds you declare. An empty list imposes no compatibility restriction and is rejected by this repository's CI.
 
-The full capability vocabulary is a closed allowlist — `routes`, `pages`, `permissions`, `database`, `hooks`, `queues`, `schedule`, `commands`, `secrets`, `settings`. Declare only what you ship: the packaging tool and the panel both check the pairing in **both** directions, so a declaration without its file and a file without its declaration are equally rejected.
+The full capability vocabulary is a closed allowlist — `routes`, `pages`, `permissions`, `database`, `hooks`, `queues`, `schedule`, `commands`, `secrets`, `settings`, `privileged`, `bindings`, `streams`, `slots`, `flags` and `nav`. Declare only what you ship: the packaging tool and the panel both check the pairing in **both** directions, so a declaration without its file and a file without its declaration are equally rejected.
 
 ## Client routes and permissions
 
@@ -162,7 +162,29 @@ Default-export the page. **Every `@/` import must come from `@/extensions-sdk`**
 
 Keep credential values out of browser stores, query caches and error metadata. Localize production text through `messages/en.json` and optional locale fragments under the frontend package root, with keys prefixed `ext.example_extension.` and the inlang schema marker; every `labelKey` in the manifest must resolve there. Use `createTranslator('example_extension')` from the SDK. See `node_health_history` for a working example.
 
-A package may now ship **several pages per surface** rather than the single `index.tsx`/`admin.tsx` v2 allowed. Each declares its own sidebar category, order and permission, and appears in that category rather than behind a generic "Extensions" tab. Supporting components may live in a subdirectory beside a page without being declared.
+A package may now ship **several pages per surface** rather than the single `index.tsx`/`admin.tsx` v2 allowed. Each declares its own sidebar category, order and permission. Supporting components may live in a subdirectory beside a page without being declared.
+
+Server pages appear in the server sidebar category they declare. Admin pages do not: the panel folds all of a package's admin pages under **one entry in the admin sidebar's Extensions group**, whatever category they declare (the field still orders pages within the entry). Only the panel operator can move that entry to another group, from Admin → Navigation. A package cannot place itself among the panel's own pages.
+
+To control how that entry reads, declare `capabilities.nav.admin`:
+
+```json
+"nav": {
+  "admin": {
+    "labelKey": "ext.example_extension.nav.group",
+    "icon": "server",
+    "order": 50
+  }
+}
+```
+
+- `labelKey` — the entry's label, from your own `ext.<id>.` catalog. Without a `nav` block the panel shows the extension's `name` verbatim.
+- `icon` — from the approved icon set. Defaults to the extension's icon.
+- `order` — 0 to 1000 (default 100). Lower comes first among installed extensions; ties sort by name.
+
+There is deliberately no placement field, and `nav` needs at least one admin page. Because the entry is the parent, give nested page labels short names ("Settings", not "Example Settings"). A package with a single admin page links straight to it under the entry's label.
+
+`nav` needs a panel release that understands it: panels without it reject the whole manifest, so raise `compatiblePanelVersions` when you adopt it.
 
 For the remaining capabilities read [admin pages](admin-pages.md), [database migrations](database-migrations.md), [scheduled tasks](scheduled-tasks.md), and [settings schemas](settings-schema.md). Use only `ext_<id>_*` database tables, declared under `capabilities.database.tables`. Disabled packages execute no routes, commands, schedules, hooks or queued jobs.
 
