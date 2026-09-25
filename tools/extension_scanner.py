@@ -50,6 +50,7 @@ MANIFEST_VERSION = 3
 CAPABILITY_KEYS = {
     'routes', 'pages', 'permissions', 'database', 'hooks',
     'queues', 'schedule', 'commands', 'secrets', 'settings',
+    'privileged', 'bindings', 'streams', 'slots', 'flags',
 }
 
 
@@ -258,6 +259,49 @@ def check_structure(manifest: dict, files: dict[str, bytes], is_archive: bool) -
                                             f'Ships a {surface} page that capabilities.pages.{surface} does not '
                                             'declare.'))
 
+    # Slots: declared entry <-> slots/<entry>.tsx, both directions. An entry is
+    # a slug, never a path. An undeclared slot matters more than an undeclared
+    # page: a slot mounts on pages the user did not navigate to, so it is code
+    # running somewhere the administrator was never shown.
+    declared_entries = {str(s.get('entry', '')) for s in (capabilities.get('slots') or []) if isinstance(s, dict)}
+    slot_prefix = f'{frontend_root}slots/'
+
+    for entry in sorted(declared_entries):
+        if not ships(f'{slot_prefix}{entry}.tsx'):
+            findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                    f'Declares the frontend slot entry "{entry}" but ships no '
+                                    f'{slot_prefix}{entry}.tsx.'))
+
+    for path in declared_paths:
+        # Only a top-level entry is mounted; supporting components may sit in a
+        # subdirectory below slots/.
+        if path.startswith(slot_prefix) and path.endswith('.tsx') and '/' not in path[len(slot_prefix):]:
+            if path[len(slot_prefix):-len('.tsx')] not in declared_entries:
+                findings.append(Finding('block', 'capability.files-without-declaration', path, 0,
+                                        'Ships a frontend slot entry that capabilities.slots does not declare.'))
+
+    # Bindings: one-directional. A declared binding must ship its class; the
+    # reverse is not a fault, since a package ships plenty of classes it has no
+    # reason to share.
+    for binding in (capabilities.get('bindings') or []):
+        binding = str(binding)
+
+        if not re.fullmatch(r'[A-Z][A-Za-z0-9]*(/[A-Z][A-Za-z0-9]*)*', binding):
+            findings.append(Finding('block', 'capability.binding-malformed', MANIFEST_FILENAME, 0,
+                                    f'Declares the binding "{binding}", which is not a StudlyCase path inside the '
+                                    'package. The file and the class name are both derived from it, which is what '
+                                    'keeps a binding from naming anything outside its own directory.'))
+        elif not ships(f'{backend_root}{binding}.php'):
+            findings.append(Finding('block', 'capability.declared-without-files', MANIFEST_FILENAME, 0,
+                                    f'Declares the binding "{binding}" but ships no {backend_root}{binding}.php.'))
+
+    # Privileged services are consent, not containment: the panel runs package
+    # PHP in-process either way. Surface them so a reviewer reads them.
+    for privilege in sorted({str(p) for p in (capabilities.get('privileged') or [])}):
+        findings.append(Finding('info', 'capability.privileged', MANIFEST_FILENAME, 0,
+                                f'Declares the privileged service "{privilege}". An administrator approves this at '
+                                'install and again if an update adds one; confirm the package genuinely needs it.'))
+
     for legacy in ('meta.json', 'index.tsx', 'admin.tsx'):
         if ships(f'{frontend_root}{legacy}'):
             findings.append(Finding('block', 'layout.v2-remnant', f'{frontend_root}{legacy}', 0,
@@ -284,7 +328,11 @@ def check_structure(manifest: dict, files: dict[str, bytes], is_archive: bool) -
 # PHP checks
 # ---------------------------------------------------------------------------
 
-PHP_BLOCK_CALLS = re.compile(r'(?<![\w$>])(eval|assert|exec|shell_exec|system|passthru|proc_open|popen|pcntl_exec)\s*\(')
+# `(?<!function )` because a method may legitimately be *named* one of these.
+# `AiMessage::system()` is a factory for a system-role message, not a call to
+# PHP's system(); refusing an install over a declaration would be a gate that
+# cannot be satisfied except by renaming working code.
+PHP_BLOCK_CALLS = re.compile(r'(?<![\w$>])(?<!function )(eval|assert|exec|shell_exec|system|passthru|proc_open|popen|pcntl_exec)\s*\(')
 PHP_BACKTICK = re.compile(r'(?<![\\\'"])`[^`\n]{2,}`')
 PHP_B64_NEAR_EVAL = re.compile(r'base64_decode[\s\S]{0,200}?(eval|include|require|assert)\s*\(|(eval|include|require|assert)\s*\([\s\S]{0,200}?base64_decode')
 PHP_HTTP_CALL = re.compile(r'''(file_get_contents|curl_init|curl_setopt|Http::\w+|fopen)\s*\(\s*['"](https?://[^'"]+)''')
@@ -315,6 +363,100 @@ def has_form_request_param(params: str) -> bool:
     return False
 
 
+def php_code_view(text: str) -> str:
+    """A copy of the source with comments and string bodies blanked out.
+
+    Same length, same line breaks, same offsets — only the bytes inside a
+    comment or a string literal become spaces. Detection runs against this;
+    excerpts still come from the original, so a finding quotes the real line.
+
+    This is what the panel's own PHP scanner does (ExtensionPhpSourceView), and
+    the reason is the same: prose is full of things that look like code. A
+    docblock describing a tool's `next` field, or a prompt written for a model
+    in Markdown, is not a shell command — and a gate that refuses an install
+    over a sentence in a comment is worse than no gate, because the author
+    cannot tell a real finding from a quoted one.
+    """
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+
+        if ch == '/' and i + 1 < n and text[i + 1] == '/':
+            while i < n and text[i] != '\n':
+                out[i] = ' '
+                i += 1
+            continue
+
+        if ch == '#':
+            while i < n and text[i] != '\n':
+                out[i] = ' '
+                i += 1
+            continue
+
+        if ch == '/' and i + 1 < n and text[i + 1] == '*':
+            out[i] = out[i + 1] = ' '
+            i += 2
+            while i < n and not (text[i] == '*' and i + 1 < n and text[i + 1] == '/'):
+                if text[i] != '\n':
+                    out[i] = ' '
+                i += 1
+            if i < n:
+                out[i] = ' '
+                if i + 1 < n:
+                    out[i + 1] = ' '
+                i += 2
+            continue
+
+        if ch in ('"', "'"):
+            quote = ch
+            i += 1
+            while i < n and text[i] != quote:
+                if text[i] == '\\':
+                    out[i] = ' '
+                    i += 1
+                    if i < n and text[i] != '\n':
+                        out[i] = ' '
+                    i += 1
+                    continue
+                if text[i] != '\n':
+                    out[i] = ' '
+                i += 1
+            i += 1
+            continue
+
+        # Heredoc and nowdoc: everything up to the closing label is content.
+        if ch == '<' and text.startswith('<<<', i):
+            j = i + 3
+            while j < n and text[j] in ' \t':
+                j += 1
+            wrap = ''
+            if j < n and text[j] in ('"', "'"):
+                wrap = text[j]
+                j += 1
+            label_start = j
+            while j < n and (text[j].isalnum() or text[j] == '_'):
+                j += 1
+            label = text[label_start:j]
+            if not label:
+                i += 1
+                continue
+            if wrap and j < n and text[j] == wrap:
+                j += 1
+            end = text.find('\n' + label, j)
+            if end == -1:
+                end = n
+            for k in range(j, min(end, n)):
+                if text[k] != '\n':
+                    out[k] = ' '
+            i = min(end + 1 + len(label), n)
+            continue
+
+        i += 1
+
+    return ''.join(out)
+
+
 def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
     findings: list[Finding] = []
     backend_root, _ = allowed_roots(extension_id)
@@ -323,18 +465,32 @@ def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
     is_controller = '/Http/Controllers/' in path
     is_form_request = '/Http/Requests/' in path
 
-    for i, line in enumerate(text.splitlines(), start=1):
+    # Two views of the same bytes at identical offsets. `code` has comments and
+    # string bodies blanked out and is what the operator/keyword rules read, so
+    # a backtick in a docblock table or a Markdown code span inside a prompt
+    # written for a model is not mistaken for the shell operator.
+    #
+    # The content rules keep reading the real line, because blanking is exactly
+    # what would hide what they look for: an interpolated variable inside a raw
+    # SQL string, or the host in a hardcoded URL.
+    code = php_code_view(text)
+    source_lines = text.splitlines()
+    code_lines = code.splitlines()
+
+    for i, line in enumerate(source_lines, start=1):
         stripped = line.strip()
+        code_line = code_lines[i - 1] if i - 1 < len(code_lines) else ''
+
         if stripped.startswith(('//', '*', '/*', '#')):
             continue
 
-        for match in PHP_BLOCK_CALLS.finditer(line):
+        for match in PHP_BLOCK_CALLS.finditer(code_line):
             findings.append(Finding('block', f'php.dangerous-call.{match.group(1)}', path, i,
                                     f'Call to {match.group(1)}() — extensions must never execute code or shell commands dynamically.', stripped[:160]))
-        if PHP_BACKTICK.search(line):
+        if PHP_BACKTICK.search(code_line):
             findings.append(Finding('block', 'php.backtick-exec', path, i,
                                     'Backtick operator executes shell commands.', stripped[:160]))
-        if 'Symfony\\Component\\Process' in line or 'Symfony\\Process' in line:
+        if 'Symfony\\Component\\Process' in code_line or 'Symfony\\Process' in code_line:
             findings.append(Finding('warn', 'php.symfony-process', path, i,
                                     'Uses Symfony Process (spawns OS processes) — verify what is executed and why.', stripped[:160]))
         for match in PHP_HTTP_CALL.finditer(line):
@@ -350,33 +506,33 @@ def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
             if f'Extensions/Packages/{extension_id}' not in line and 'storage_path' not in line:
                 findings.append(Finding('warn', 'php.delete-outside-package', path, i,
                                         f'{match.group(1)}() targeting a path that is not obviously inside the extension or storage — verify the target.', stripped[:160]))
-        if PHP_SUPERGLOBAL.search(line):
+        if PHP_SUPERGLOBAL.search(code_line):
             findings.append(Finding('warn', 'php.superglobal', path, i,
                                     'Direct superglobal access bypasses FormRequest validation/authorization.', stripped[:160]))
-        if PHP_WITHOUT_MW.search(line):
+        if PHP_WITHOUT_MW.search(code_line):
             findings.append(Finding('block', 'php.without-middleware', path, i,
                                     'withoutMiddleware() can strip the inherited admin-auth stack from extension routes. Prohibited.', stripped[:160]))
-        if PHP_ROUTE_CALL.search(line) and not is_route_file:
+        if PHP_ROUTE_CALL.search(code_line) and not is_route_file:
             findings.append(Finding('warn', 'php.route-outside-routes', path, i,
                                     'Route registration outside routes/*.php escapes the reviewed route surface.', stripped[:160]))
-        if is_controller and PHP_BARE_REQUEST.search(line):
+        if is_controller and PHP_BARE_REQUEST.search(code_line):
             findings.append(Finding('warn', 'php.bare-request', path, i,
                                     'Controller action takes a bare Request; use a FormRequest with permission()/authorize() instead.', stripped[:160]))
 
     if is_route_file:
-        for match in PHP_ROUTE_CLOSURE.finditer(text):
-            line_no = text[:match.start()].count('\n') + 1
+        for match in PHP_ROUTE_CLOSURE.finditer(code):
+            line_no = code[:match.start()].count('\n') + 1
             findings.append(Finding('block', 'php.route-closure', path, line_no,
                                     'Route handler is a closure — extension routes must use [Controller::class, \'method\'] so the action goes through a reviewable FormRequest and survives route:cache.',
                                     text.splitlines()[line_no - 1].strip()[:160]))
 
     if is_controller:
-        for match in PHP_PUBLIC_METHOD.finditer(text):
+        for match in PHP_PUBLIC_METHOD.finditer(code):
             method, params = match.group(1), match.group(2)
             if method.startswith('__') and method != '__invoke':
                 continue
             if not has_form_request_param(params):
-                line_no = text[:match.start()].count('\n') + 1
+                line_no = code[:match.start()].count('\n') + 1
                 findings.append(Finding('block', 'php.action-without-formrequest', path, line_no,
                                         f'Public controller method "{method}" has no FormRequest parameter — every action must validate/authorize through a FormRequest (make non-action helpers protected/private).',
                                         f'public function {method}({params.strip()[:100]})'))
@@ -385,7 +541,7 @@ def scan_php(extension_id: str, path: str, text: str) -> list[Finding]:
         findings.append(Finding('block', 'php.admin-request-without-permission', path, 0,
                                 'Admin FormRequest (extends ApplicationApiRequest) does not define permission() — every admin endpoint needs an explicit admin-permission gate.'))
 
-    if PHP_B64_NEAR_EVAL.search(text):
+    if PHP_B64_NEAR_EVAL.search(code):
         findings.append(Finding('block', 'php.b64-near-eval', path, 0,
                                 'base64_decode used near eval/include/assert — classic obfuscated-payload pattern.'))
 

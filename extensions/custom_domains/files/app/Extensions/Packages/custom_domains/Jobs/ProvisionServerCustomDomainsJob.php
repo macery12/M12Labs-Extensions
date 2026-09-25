@@ -2,7 +2,7 @@
 
 namespace Everest\Extensions\Packages\custom_domains\Jobs;
 
-use Everest\Extensions\Jobs\ExtensionJob;
+use Everest\Extensions\Sdk\Jobs\ExtensionJob;
 use Everest\Extensions\Packages\custom_domains\Models\ServerCustomDomain;
 use Everest\Extensions\Packages\custom_domains\Services\CustomDomainProvisioningService;
 

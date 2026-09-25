@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "minecraft_icon_builder",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -14,13 +14,15 @@
     "icon": "palette",
     "defaults": {
       "enabled": false,
-      "allowedNests": [1],
+      "allowedNests": [
+        1
+      ],
       "allowedEggs": [],
       "settings": {}
     }
   },
   "compatiblePanelVersions": [
-    ">=Alpha 4.0 <Alpha 5.0"
+    ">=Alpha 4.1 <Alpha 5.0"
   ],
   "capabilities": {
     "routes": {
@@ -40,7 +42,9 @@
     }
   },
   "requirements": {
-    "phpExtensions": ["gd"],
+    "phpExtensions": [
+      "gd"
+    ],
     "panelServices": [],
     "extensions": []
   }

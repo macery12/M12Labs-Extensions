@@ -4,15 +4,13 @@ namespace Everest\Extensions\Packages\node_health_history\Http\Controllers;
 
 use Everest\Extensions\Packages\node_health_history\Http\Requests\GetNodeHealthHistoryRequest;
 use Everest\Extensions\Packages\node_health_history\Services\NodeHealthPoller;
-use Everest\Http\Controllers\Api\Application\ApplicationApiController;
-use Everest\Models\Node;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
+use Everest\Extensions\Sdk\Http\ApplicationApiController;
+use Everest\Extensions\Sdk\Services\PanelNodes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class NodeHealthHistoryController extends ApplicationApiController
 {
-    use RespondsWithExtensionEnvelope;
 
     /**
      * Per-node current status + uptime, plus a recent time series for charting.
@@ -27,7 +25,7 @@ class NodeHealthHistoryController extends ApplicationApiController
             ->orderBy('captured_at')
             ->get();
 
-        $nodeNames = Node::query()->pluck('name', 'id');
+        $nodeNames = PanelNodes::reader()->names();
 
         $byNode = [];
         foreach ($rows as $row) {

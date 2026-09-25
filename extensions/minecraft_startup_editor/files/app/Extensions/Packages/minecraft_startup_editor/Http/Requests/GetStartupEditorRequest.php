@@ -2,9 +2,9 @@
 
 namespace Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests;
 
-use Everest\Models\Permission;
-use Everest\Contracts\Http\ClientPermissionsRequest;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Permission;
+use Everest\Extensions\Sdk\Http\ClientPermissionsRequest;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 class GetStartupEditorRequest extends ClientApiRequest implements ClientPermissionsRequest
 {

@@ -1,0 +1,238 @@
+<?php
+
+namespace Everest\Extensions\Packages\ai\Tools;
+
+use Illuminate\Support\Str;
+use Everest\Extensions\Packages\ai\AiConfiguration;
+use Everest\Extensions\Sdk\Http\InternalResponse;
+use Everest\Extensions\Sdk\Services\InternalDispatch;
+use Everest\Exceptions\Service\Access\InternalDispatchException;
+
+/**
+ * Runs a tool by dispatching an internal sub-request through the panel's real
+ * HTTP pipeline.
+ *
+ * The core security decision of the agent: every tool call traverses the exact
+ * middleware a browser request does — `AuthenticateServerAccess`,
+ * `ResourceBelongsToServer`, the endpoint's FormRequest `permission()` gate and
+ * its validation — so there is no second authorization path to drift.
+ *
+ * The dispatch itself is core's ({@see InternalDispatch}), along with the six
+ * constraints that make it safe to do at all. What is here is the half that is
+ * genuinely about *the agent*: how long a tool call may take under this
+ * panel's AI settings, and how a response becomes something a model can read
+ * and act on. That second part is most of the file, and none of it is
+ * general-purpose — it is prose written for a model, and it leaks nothing.
+ */
+class ToolExecutor
+{
+    private InternalDispatch $dispatch;
+
+    /**
+     * The dispatcher is built here rather than injected, because
+     * {@see InternalDispatch} is an SDK facade: it has no public constructor
+     * and is reached through `::for($extensionId)`, which is what binds every
+     * sub-request to this package's declared privilege. A constructor
+     * parameter would make this class unresolvable by the container -- and
+     * since the whole agent is autowired from `AgentRunner`, that is not a
+     * theoretical failure.
+     */
+    public function __construct()
+    {
+        $this->dispatch = InternalDispatch::for(AiConfiguration::EXTENSION_ID);
+    }
+
+    public function execute(
+        ToolInvocation $invocation,
+        ?int $maxSeconds = null,
+    ): ToolResult {
+        try {
+            return $this->toResult($this->send($invocation, $maxSeconds));
+        } catch (\Throwable $e) {
+            // Kernel::handle already renders most throwables; anything reaching
+            // here is unexpected, so report it and give the model something
+            // terse that leaks nothing.
+            report($e);
+
+            return ToolResult::internalError('The tool call could not be completed.');
+        }
+    }
+
+    /**
+     * How long one call out to a node may block.
+     *
+     * The point is that the fifteen-minute archive timeout cannot be inherited
+     * by a model that will simply sit there; an overrun becomes a failed tool
+     * call the model can route around. Bounded by whatever is left of the turn
+     * as well, so the last tool call of a turn does not get a fresh full budget.
+     */
+    /**
+     * Dispatch the invocation through the SDK, by verb.
+     *
+     * The SDK exposes named verbs rather than a request object, which is the
+     * right shape for a package -- but a tool's method is data, chosen by the
+     * catalogue, so this is where the two meet. An unexpected verb is a
+     * catalogue bug and refuses rather than guessing.
+     */
+    private function send(ToolInvocation $invocation, ?int $maxSeconds): InternalResponse
+    {
+        $node = $this->nodeTimeout($maxSeconds);
+        $uri = $invocation->uri;
+
+        return match (strtoupper($invocation->method)) {
+            'GET' => $this->dispatch->get($uri, $invocation->query, $maxSeconds, $node),
+            'POST' => $this->dispatch->post($uri, $invocation->body, $invocation->idempotencyKey, $maxSeconds, $node),
+            'PUT' => $this->dispatch->put($uri, $invocation->body, $invocation->idempotencyKey, $maxSeconds, $node),
+            'PATCH' => $this->dispatch->patch($uri, $invocation->body, $invocation->idempotencyKey, $maxSeconds, $node),
+            'DELETE' => $this->dispatch->delete($uri, $invocation->body, $maxSeconds, $node),
+            default => throw new \LogicException(sprintf('Unsupported tool method [%s].', $invocation->method)),
+        };
+    }
+
+    protected function nodeTimeout(?int $remainingSeconds): int
+    {
+        $ceiling = max(5, AiConfiguration::integer('agent.max_tool_seconds', 90));
+
+        return $remainingSeconds === null ? $ceiling : max(1, min($ceiling, $remainingSeconds));
+    }
+
+    protected function toResult(InternalResponse $response): ToolResult
+    {
+        // A refusal is not the panel's answer -- the request was never sent --
+        // and it must not be dressed up as one. Each of the three means "stop,
+        // this cannot work as asked", so none of them is retryable, which is
+        // exactly what a 500 mapped through toError() would have claimed.
+        if ($response->refused()) {
+            return match ($response->refusedReason) {
+                InternalDispatchException::REASON_DEADLINE => ToolResult::error(
+                    'time_limit',
+                    'The tool call exceeded the remaining turn time.',
+                ),
+                InternalDispatchException::REASON_UNREADABLE => ToolResult::error(
+                    'unsupported_response',
+                    'This endpoint streams its response and cannot be called as a tool.',
+                ),
+                default => ToolResult::internalError('Tool calls may not run inside a database transaction.'),
+            };
+        }
+
+        // The SDK has already decoded the body and kept the raw text beside
+        // it, so there is no second json_decode here and no response object to
+        // accidentally send.
+        if ($response->ok()) {
+            // Do not cap here. A JSON response must remain decoded until its
+            // tool-specific shaper and privacy redactor have run; the runner
+            // applies the final serialized-byte cap after both.
+            return ToolResult::ok($response->json ?? $response->body);
+        }
+
+        return $this->toError($response->status, $response->json);
+    }
+
+    protected function toError(int $status, ?array $decoded): ToolResult
+    {
+        $errors = is_array($decoded['errors'] ?? null) ? $decoded['errors'] : [];
+        $first = is_array($errors[0] ?? null) ? $errors[0] : [];
+
+        // 422 carries one entry per field with the offending rule — genuinely
+        // good retry signal, so it is surfaced rather than flattened.
+        $fields = null;
+        if ($status === 422 && $errors !== []) {
+            $fields = [];
+            foreach ($errors as $error) {
+                if (!is_array($error)) {
+                    continue;
+                }
+                $field = $error['meta']['source_field'] ?? null;
+                $fields[$field ?: 'request'] = (string) ($error['detail'] ?? 'Invalid value.');
+            }
+        }
+
+        return ToolResult::error(
+            code: $this->errorCode($status, $first),
+            detail: $this->errorDetail($status, $first),
+            status: $status,
+            // 409 means "start the server first"; 422 means "fix your
+            // arguments"; 429/5xx mean "back off". 403/404 mean stop.
+            retryable: in_array($status, [409, 422, 429, 500, 502, 503, 504], true),
+            fields: $fields,
+        );
+    }
+
+    protected function errorCode(int $status, array $first): string
+    {
+        $code = $first['code'] ?? null;
+
+        // The panel renders every exception with `class_basename($e)` as its
+        // code, so passing one through puts PHP class names like
+        // `DaemonConnectionException` into the model's context and onto the
+        // user's screen. Only an already-stable machine code is trusted; a
+        // class name is StudlyCase and fails this deliberately.
+        if (is_string($code) && preg_match('/^[a-z][a-z0-9_]*$/', $code)) {
+            return $code;
+        }
+
+        return match (true) {
+            $status === 403 => 'forbidden',
+            $status === 404 => 'not_found',
+            $status === 409 => 'conflict',
+            $status === 422 => 'validation_failed',
+            $status === 429 => 'rate_limited',
+            // The node, not the panel, is what failed. Worth distinguishing:
+            // the model should wait and retry rather than rephrase.
+            in_array($status, [502, 503, 504], true) => 'node_unavailable',
+            default => 'http_error',
+        };
+    }
+
+    /**
+     * Build the message the model sees.
+     *
+     * Only the detail string is ever read, never the envelope:
+     * `convertExceptionToArray()` injects `source.file`, `source.line` and a
+     * full `meta.trace` under APP_DEBUG, none of which may reach the model and
+     * thence the user's screen over SSE.
+     *
+     * 5xx details are dropped in every mode. Debug-on they carry SQL, table
+     * names and paths; debug-off, controllers that wrap failures leak the same
+     * through the same door. None of it is actionable anyway — a 5xx means wait
+     * and retry, and the exception is already in the log. Node-raised 5xx use
+     * the table below for the same reason.
+     */
+    protected function errorDetail(int $status, array $first): string
+    {
+        $detail = $status < 500 ? ($first['detail'] ?? null) : null;
+
+        if (is_string($detail) && ($cleaned = $this->unwrapDaemonMessage($detail)) !== '') {
+            return Str::limit($cleaned, 500);
+        }
+
+        return match (true) {
+            $status === 403 => 'You do not have permission to do that on this server.',
+            $status === 404 => 'That does not exist. List the parent directory to see what is actually there rather than guessing another path.',
+            $status === 409 => 'The server is not in a state that allows this right now.',
+            $status === 429 => 'Too many requests. Wait a moment before trying again.',
+            in_array($status, [502, 503, 504], true) => 'The machine running this server is not responding right now.',
+            $status >= 500 => 'The panel could not complete that request. It has been logged. Wait a moment and try again, or tell the user it failed.',
+            default => 'The request failed with status ' . $status . '.',
+        };
+    }
+
+    /**
+     * Unwrap the daemon's error envelope. `DaemonConnectionException` wraps the
+     * node's prose and appends a request id, turning "no such directory" into
+     * "An error occurred on the remote host: … (request id: <nil>)" — noise the
+     * model reasons past, at a token cost on every later step of the turn.
+     */
+    protected function unwrapDaemonMessage(string $detail): string
+    {
+        if (preg_match('/^An error occurred on the remote host: (.+?)\.?\s*\(request id:.*$/is', $detail, $matches)) {
+            $detail = $matches[1];
+        }
+
+        // The 5xx variant instead carries a trailing "(code: N) (request_id: X)".
+        $detail = preg_replace('/\s*\((?:code|request[ _]id):[^)]*\)/i', '', $detail) ?? $detail;
+
+        return trim($detail);
+    }
+}

@@ -7,10 +7,9 @@ use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
-use Everest\Exceptions\DisplayException;
-use Everest\Repositories\Wings\DaemonFileRepository;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
-use Everest\Http\Controllers\Api\Client\ClientApiController;
+use Everest\Extensions\Sdk\DisplayException;
+use Everest\Extensions\Sdk\Services\ServerFiles;
+use Everest\Extensions\Sdk\Http\ClientApiController;
 use Everest\Extensions\Packages\minecraft_log_uploader\Http\Requests\GetLogRequest;
 use Everest\Extensions\Packages\minecraft_log_uploader\Http\Requests\ListLogsRequest;
 use Everest\Extensions\Packages\minecraft_log_uploader\Http\Requests\UploadLogRequest;
@@ -31,7 +30,6 @@ use Everest\Extensions\Packages\minecraft_log_uploader\Http\Requests\UploadLogRe
  */
 class LogUploaderController extends ClientApiController
 {
-    use RespondsWithExtensionEnvelope;
 
     /** Maximum bytes to read when previewing a log file (512 KiB). */
     private const PREVIEW_LIMIT_BYTES = 524_288;
@@ -93,9 +91,8 @@ class LogUploaderController extends ClientApiController
         '/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/i' => 'Bearer [REDACTED]',
     ];
 
-    public function __construct(
-        private DaemonFileRepository $fileRepository,
-    ) {
+    public function __construct()
+    {
         parent::__construct();
     }
 
@@ -131,7 +128,7 @@ class LogUploaderController extends ClientApiController
     public function listLogs(ListLogsRequest $request, Server $server): JsonResponse
     {
         try {
-            $files = $this->fileRepository->setServer($server)->getDirectory('/logs');
+            $files = ServerFiles::for($server)->list('/logs');
         } catch (\Throwable) {
             // A server with no /logs directory yet is the common case, not an
             // error worth surfacing.
@@ -266,7 +263,7 @@ class LogUploaderController extends ClientApiController
         $fetchLimit = $isCompressed ? self::MAX_COMPRESSED_BYTES : $limit + 1;
 
         try {
-            $raw = $this->fileRepository->setServer($server)->getContent("/logs/{$filename}", $fetchLimit);
+            $raw = ServerFiles::for($server)->read("/logs/{$filename}", $fetchLimit);
         } catch (\Throwable $exception) {
             $this->logFailure('log read failed', $server, $exception);
 

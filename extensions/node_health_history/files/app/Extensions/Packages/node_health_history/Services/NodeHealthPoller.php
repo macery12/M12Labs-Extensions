@@ -3,9 +3,9 @@
 namespace Everest\Extensions\Packages\node_health_history\Services;
 
 use Everest\Exceptions\Http\Connection\DaemonConnectionException;
-use Everest\Models\ExtensionConfig;
+use Everest\Extensions\Sdk\Services\PanelNodes;
+use Everest\Extensions\Sdk\Services\PackageSettings;
 use Everest\Models\Node;
-use Everest\Repositories\Wings\DaemonConfigurationRepository;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,8 +18,9 @@ class NodeHealthPoller
     public const EXTENSION_ID = 'node_health_history';
     public const TABLE = 'ext_node_health_history_snapshots';
 
-    public function __construct(private DaemonConfigurationRepository $repository)
+    private function nodes(): PanelNodes
     {
+        return PanelNodes::reader();
     }
 
     /**
@@ -29,13 +30,12 @@ class NodeHealthPoller
      */
     public function poll(): array
     {
-        $config = ExtensionConfig::getByExtensionId(self::EXTENSION_ID);
-        $retentionDays = (int) ($config?->settings['retention_days'] ?? 30);
+        $retentionDays = PackageSettings::for(self::EXTENSION_ID)->integer('retention_days', 30);
 
         $polled = 0;
         $healthy = 0;
 
-        foreach (Node::all() as $node) {
+        foreach ($this->nodes()->all() as $node) {
             $polled++;
             $snapshot = $this->sampleNode($node);
             if ($snapshot['healthy']) {
@@ -68,7 +68,7 @@ class NodeHealthPoller
         $startedAt = microtime(true);
 
         try {
-            $info = $this->repository->setNode($node)->getSystemInformation();
+            $info = $this->nodes()->systemInformation($node);
         } catch (DaemonConnectionException $exception) {
             return array_merge($base, ['error' => substr($exception->getMessage(), 0, 250)]);
         } catch (\Throwable $exception) {

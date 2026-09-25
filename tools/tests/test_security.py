@@ -168,6 +168,90 @@ class SecurityTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             packaging.stage_extension(self.source)
 
+    # -- the capabilities added after the v3 vocabulary shipped ----------
+
+    def test_the_five_newer_capability_keys_are_accepted(self):
+        """The tooling mirrors ExtensionCapabilityVocabulary::CAPABILITY_KEYS.
+
+        These five landed in the panel after the packager was written, so a
+        manifest declaring any of them died here with "unknown capability key"
+        before an archive was ever built — the tool refusing something the
+        panel would have accepted.
+        """
+        self.write('app/Extensions/Packages/demo/Tools/Catalogue.php', '<?php class Catalogue {}')
+        self.write('frontend/src/extensions/packages/demo/slots/drawer.tsx', 'export default null;')
+        self.descriptor['capabilities'].update({
+            'privileged': ['internal_dispatch'],
+            'bindings': ['Tools/Catalogue'],
+            'streams': [{'name': 'turn', 'maxSeconds': 900, 'keepAliveSeconds': 15}],
+            'slots': [{'name': 'server-layout.overlay', 'entry': 'drawer', 'order': 100}],
+            'flags': [{'name': 'ready', 'all': [{'setting': 'enabled', 'equals': True}]}],
+        })
+        self.save_descriptor()
+
+        self.assertFalse(self.rules())
+
+        summary = packaging.capability_summary(self.descriptor['capabilities'])
+        self.assertEqual(['internal_dispatch'], summary['privileged'])
+        self.assertEqual(['server-layout.overlay'], summary['slots'])
+        self.assertEqual(1, summary['streams'])
+        self.assertEqual(1, summary['flags'])
+        self.assertEqual(1, summary['bindings'])
+
+    def test_a_declared_slot_entry_must_ship(self):
+        self.descriptor['capabilities']['slots'] = [
+            {'name': 'server-layout.overlay', 'entry': 'drawer', 'order': 100},
+        ]
+        self.save_descriptor()
+        self.assertIn('capability.declared-without-files', self.rules())
+        with self.assertRaises(SystemExit):
+            packaging.stage_extension(self.source)
+
+    def test_an_undeclared_slot_entry_is_rejected(self):
+        """Worse than an undeclared page: a slot mounts on pages the user never navigated to."""
+        self.write('frontend/src/extensions/packages/demo/slots/drawer.tsx', 'export default null;')
+        self.assertIn('capability.files-without-declaration', self.rules())
+        with self.assertRaises(SystemExit):
+            packaging.stage_extension(self.source)
+
+    def test_components_below_a_slot_directory_need_no_declaration(self):
+        self.write('frontend/src/extensions/packages/demo/slots/drawer.tsx', 'export default null;')
+        self.write('frontend/src/extensions/packages/demo/slots/components/Row.tsx', 'export default null;')
+        self.descriptor['capabilities']['slots'] = [
+            {'name': 'server-layout.overlay', 'entry': 'drawer', 'order': 100},
+        ]
+        self.save_descriptor()
+        self.assertFalse(self.rules())
+
+    def test_a_declared_binding_must_ship_its_class(self):
+        self.descriptor['capabilities']['bindings'] = ['Tools/Catalogue']
+        self.save_descriptor()
+        self.assertIn('capability.declared-without-files', self.rules())
+        with self.assertRaises(SystemExit):
+            packaging.stage_extension(self.source)
+
+    def test_a_binding_that_is_not_a_studly_path_is_rejected(self):
+        """Both the file and the class name are derived from the declaration,
+        so a traversing or dotted spelling must never reach the derivation."""
+        for spelling in ('../../Services/Core', 'tools/catalogue', '/Tools/Catalogue', 'Tools/../Core'):
+            with self.subTest(spelling=spelling):
+                self.descriptor['capabilities']['bindings'] = [spelling]
+                self.save_descriptor()
+                self.assertIn('capability.binding-malformed', self.rules())
+
+    def test_an_undeclared_shared_class_is_not_a_fault(self):
+        """Bindings are one-directional: a package ships plenty of classes it
+        has no reason to make shared, and declaring each would be paperwork."""
+        self.write('app/Extensions/Packages/demo/Tools/Catalogue.php', '<?php class Catalogue {}')
+        self.assertFalse(self.rules())
+
+    def test_a_privileged_declaration_is_surfaced_to_the_reviewer(self):
+        self.descriptor['capabilities']['privileged'] = ['delegated_access', 'internal_dispatch']
+        self.save_descriptor()
+        findings = {f.rule for f in scan_target(self.source)}
+        self.assertIn('capability.privileged', findings)
+        self.assertFalse(self.rules(), 'declaring a privilege is consent, not a blocking finding')
+
     # -- signing -------------------------------------------------------
 
     def signed(self):

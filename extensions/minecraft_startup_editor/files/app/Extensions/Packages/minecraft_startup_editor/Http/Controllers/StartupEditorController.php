@@ -3,11 +3,10 @@
 namespace Everest\Extensions\Packages\minecraft_startup_editor\Http\Controllers;
 
 use Everest\Models\Server;
-use Everest\Facades\Activity;
+use Everest\Extensions\Sdk\Services\ServerStartup;
+use Everest\Extensions\Sdk\Services\PanelActivity;
 use Illuminate\Http\JsonResponse;
-use Everest\Services\Servers\StartupCommandService;
-use Everest\Http\Controllers\Api\Client\ClientApiController;
-use Everest\Traits\Controllers\RespondsWithExtensionEnvelope;
+use Everest\Extensions\Sdk\Http\ClientApiController;
 use Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests\GetStartupEditorRequest;
 use Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests\ResetStartupEditorRequest;
 use Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests\SaveStartupEditorRequest;
@@ -27,25 +26,27 @@ use Everest\Extensions\Packages\minecraft_startup_editor\MinecraftStartupOptions
  */
 class StartupEditorController extends ClientApiController
 {
-    use RespondsWithExtensionEnvelope;
 
-    public function __construct(
-        private StartupCommandService $startupCommandService,
-    ) {
+    public function __construct()
+    {
         parent::__construct();
+    }
+
+    private function activity(): PanelActivity
+    {
+        return PanelActivity::for('minecraft_startup_editor');
     }
 
     public function index(GetStartupEditorRequest $request, Server $server): JsonResponse
     {
-        $rawStartup       = $server->startup;
-        $eggDefault       = $server->egg->startup;
-        $isUsingEggDefault = is_null($rawStartup) || $rawStartup === '';
+        $startup    = ServerStartup::for($server);
+        $eggDefault = $server->egg->startup;
 
         return $this->extensionItemResponse('minecraft_startup_editor_state', [
-            'raw_startup' => $rawStartup,
+            'raw_startup' => $startup->raw(),
             'egg_default' => $eggDefault,
-            'rendered_command' => $this->startupCommandService->handle($server),
-            'is_using_egg_default' => $isUsingEggDefault,
+            'rendered_command' => $startup->rendered(),
+            'is_using_egg_default' => $startup->usesEggDefault(),
             'egg_name' => $server->egg->name,
             'detected_loader' => MinecraftStartupOptions::detectLoader($server->egg->name),
             // The heap the allocation supports, so the editor can bound its own
@@ -63,18 +64,22 @@ class StartupEditorController extends ClientApiController
         $jarVar          = MinecraftStartupOptions::extractJarVariable($server->egg->startup);
         $startup         = MinecraftStartupOptions::buildStartupCommand($selectedOptions, $jarVar, $xmsMb, $xmxMb);
 
-        $server->startup = $startup;
-        $server->save();
+        // Through the SDK, not $server->save(): writing the column directly
+        // leaves ServerUpdatedHook undispatched, so every extension subscribed
+        // to server.updated silently misses a startup change. The command is
+        // rendered above from the validated allowlist and never from request
+        // input, which is what makes a client-permission write to this column
+        // safe -- see ServerStartup::replace().
+        $startupWriter = ServerStartup::for($server);
+        $startupWriter->replace($startup);
 
-        Activity::event('server:startup.command')
-            ->property([
-                'old' => $original,
-                'new' => $startup,
-            ])
-            ->log();
+        $this->activity()->record('startup.command', [
+            'old' => $original,
+            'new' => $startup,
+        ]);
 
         return $this->extensionItemResponse('minecraft_startup_editor_save', [
-            'rendered_command' => $this->startupCommandService->handle($server),
+            'rendered_command' => $startupWriter->rendered(),
             'raw_startup' => $startup,
             'is_using_egg_default' => false,
         ]);
@@ -84,18 +89,16 @@ class StartupEditorController extends ClientApiController
     {
         $original = $server->startup;
 
-        $server->startup = null;
-        $server->save();
+        $startupWriter = ServerStartup::for($server);
+        $startupWriter->replace(null);
 
-        Activity::event('server:startup.command')
-            ->property([
-                'old' => $original,
-                'new' => null,
-            ])
-            ->log();
+        $this->activity()->record('startup.command', [
+            'old' => $original,
+            'new' => null,
+        ]);
 
         return $this->extensionItemResponse('minecraft_startup_editor_save', [
-            'rendered_command' => $this->startupCommandService->handle($server),
+            'rendered_command' => $startupWriter->rendered(),
             'raw_startup' => null,
             'is_using_egg_default' => true,
             'egg_default' => $server->egg->startup,

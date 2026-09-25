@@ -2,8 +2,8 @@
 
 namespace Everest\Extensions\Packages\discordsrv_helper\Http\Requests;
 
-use Everest\Models\Permission;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Permission;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 
 /**
  * Installing the DiscordSRV jar.

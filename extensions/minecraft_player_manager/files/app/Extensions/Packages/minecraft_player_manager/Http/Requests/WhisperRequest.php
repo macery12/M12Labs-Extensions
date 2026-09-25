@@ -2,7 +2,7 @@
 
 namespace Everest\Extensions\Packages\minecraft_player_manager\Http\Requests;
 
-use Everest\Models\Permission;
+use Everest\Extensions\Sdk\Permission;
 
 /**
  * Sending a private message to a player. Console only.

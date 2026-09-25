@@ -3,7 +3,7 @@
 namespace Everest\Extensions\Packages\custom_domains\Hooks;
 
 use Illuminate\Support\Facades\Log;
-use Everest\Extensions\Hooks\HookHandler;
+use Everest\Extensions\Sdk\Hooks\HookHandler;
 use Everest\Extensions\Packages\custom_domains\Models\ServerCustomDomain;
 use Everest\Extensions\Packages\custom_domains\Services\CustomDomainProvisioningService;
 

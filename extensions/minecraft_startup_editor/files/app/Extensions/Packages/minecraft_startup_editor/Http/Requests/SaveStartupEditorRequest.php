@@ -3,10 +3,10 @@
 namespace Everest\Extensions\Packages\minecraft_startup_editor\Http\Requests;
 
 use Everest\Models\Server;
-use Everest\Models\Permission;
+use Everest\Extensions\Sdk\Permission;
 use Illuminate\Validation\Validator;
-use Everest\Contracts\Http\ClientPermissionsRequest;
-use Everest\Http\Requests\Api\Client\ClientApiRequest;
+use Everest\Extensions\Sdk\Http\ClientPermissionsRequest;
+use Everest\Extensions\Sdk\Http\ClientApiRequest;
 use Everest\Extensions\Packages\minecraft_startup_editor\MinecraftStartupOptions;
 
 /**
