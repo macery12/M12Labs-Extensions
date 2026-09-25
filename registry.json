@@ -9,6 +9,22 @@
       "id": "ai",
       "versions": [
         {
+          "version": "1.2.0",
+          "archive": "packages/ai/1.2.0/ai.M12LabsExtension",
+          "sha256": "a7637949fb4beffa658caade95d811cb8bd18b655f166b9fabb1b6f5b3467729",
+          "publishedAt": "2026-09-25T20:10:14Z",
+          "manifestVersion": 3,
+          "compatiblePanelVersions": [
+            ">=Alpha 4.3 <Alpha 5.0"
+          ],
+          "revoked": false,
+          "signature": {
+            "keyId": "m12labs-release-2026a",
+            "value": "xZEl94hGlfxfZQpedCWzctzI934J92RSdTxNoJyJp1oAn8d9/7E2oYLLG9Tk6UdMdBRtnr8B8Vvj7HB+DFqjDA==",
+            "canonicalManifestSha256": "f8fb9af926e150b4f1dd1e7f1d06878f51a523ad06417ae523f90fef17ed5a85"
+          }
+        },
+        {
           "version": "1.1.4",
           "archive": "packages/ai/1.1.4/ai.M12LabsExtension",
           "sha256": "7e8df7076c06294aa7d1e678bedc19dc3d6061fd7414bad9044954a221c78dca",

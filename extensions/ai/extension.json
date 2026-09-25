@@ -2,7 +2,7 @@
   "manifestVersion": 3,
   "package": {
     "id": "ai",
-    "version": "1.1.4",
+    "version": "1.2.0",
     "publisher": "M12Labs",
     "license": "MIT",
     "homepage": "https://github.com/macery12/M12Labs-Extensions"
@@ -50,7 +50,7 @@
     }
   },
   "compatiblePanelVersions": [
-    ">=Alpha 4.2 <Alpha 5.0"
+    ">=Alpha 4.3 <Alpha 5.0"
   ],
   "capabilities": {
     "routes": {
