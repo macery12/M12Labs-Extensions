@@ -55,6 +55,14 @@ final class AiConfiguration
 {
     public const EXTENSION_ID = 'ai';
 
+    /**
+     * The admin permission the AI settings pages are gated by. Passed with
+     * every write made for an administrator, so the panel accepts it in place
+     * of core `extensions.update` — an operator can let someone configure the
+     * assistant without also letting them install and remove extensions.
+     */
+    public const SETTINGS_PERMISSION = 'ext.ai.admin.update';
+
     /** This package's own settings table, for what the flat schema cannot hold. */
     public const TABLE = 'ext_ai_settings';
 
@@ -290,10 +298,10 @@ final class AiConfiguration
      *   stopping half way with the first rejected field.
      * - A **credential** goes to the encrypted secret store on behalf of
      *   `$actor`, the administrator who typed it; the store requires them to
-     *   hold `extensions.update` and audits the write. An empty value removes
-     *   it, which is what the "remove key" button and a provider switch send.
-     *   With no actor it is refused: the package never writes a credential of
-     *   its own accord.
+     *   hold `extensions.update` or {@see SETTINGS_PERMISSION}, and audits the
+     *   write. An empty value removes it, which is what the "remove key"
+     *   button and a provider switch send. With no actor it is refused: the
+     *   package never writes a credential of its own accord.
      * - **Everything else** goes to this package's own table.
      *
      * @param array<string, mixed> $values dotted keys, as {@see get()} reads them
@@ -317,7 +325,11 @@ final class AiConfiguration
         // of a rejected page would leave the key for a provider that was
         // never saved.
         if ($declared !== []) {
-            PackageSettings::for(self::EXTENSION_ID)->save($declared);
+            PackageSettings::for(self::EXTENSION_ID)->save(
+                $declared,
+                $actor,
+                $actor === null ? null : self::SETTINGS_PERMISSION,
+            );
         }
 
         foreach ($values as $key => $value) {
@@ -352,12 +364,12 @@ final class AiConfiguration
         $secrets = PackageSecrets::for(self::EXTENSION_ID);
 
         if ($value === null || (is_string($value) && trim($value) === '')) {
-            $secrets->forget($actor, self::SECRETS[$key]);
+            $secrets->forget($actor, self::SECRETS[$key], self::SETTINGS_PERMISSION);
 
             return;
         }
 
-        $secrets->put($actor, self::SECRETS[$key], (string) $value);
+        $secrets->put($actor, self::SECRETS[$key], (string) $value, self::SETTINGS_PERMISSION);
     }
 
     /** The flat settings key for a dotted key: `agent.max_steps` -> `agent_max_steps`. */

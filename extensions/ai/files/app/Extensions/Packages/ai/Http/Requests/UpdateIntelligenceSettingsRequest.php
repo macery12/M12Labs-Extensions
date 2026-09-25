@@ -2,12 +2,13 @@
 
 namespace Everest\Extensions\Packages\ai\Http\Requests;
 
+use Everest\Extensions\Packages\ai\AiConfiguration;
 use Everest\Extensions\Packages\ai\ProviderFactory;
-use Everest\Extensions\Sdk\Services\PackageRedaction;
 use Everest\Extensions\Packages\ai\Agent\AgentRunner;
+use Everest\Extensions\Sdk\Services\PackageRedaction;
+use Everest\Extensions\Sdk\Http\ApplicationApiRequest;
 use Everest\Extensions\Packages\ai\Data\ProviderConfig;
 use Everest\Extensions\Packages\ai\Providers\OpenRouterProvider;
-use Everest\Extensions\Sdk\Http\ApplicationApiRequest;
 
 class UpdateIntelligenceSettingsRequest extends ApplicationApiRequest
 {
@@ -204,7 +205,9 @@ class UpdateIntelligenceSettingsRequest extends ApplicationApiRequest
 
     public function permission(): string
     {
-        return 'ext.ai.admin.update';
+        // The same permission the settings writes name, so whoever may open
+        // this page may save it.
+        return AiConfiguration::SETTINGS_PERMISSION;
     }
 
     /**

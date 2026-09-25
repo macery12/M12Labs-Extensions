@@ -6,7 +6,9 @@ use Everest\Extensions\Packages\ai\Models\AiMessage;
 use Everest\Extensions\Packages\ai\Models\AiConversation;
 use Everest\Extensions\Packages\ai\Models\AiPendingAction;
 use Everest\Extensions\Packages\ai\Tools\ToolResult;
+use Everest\Models\AdminRole;
 use Everest\Services\Access\DelegatedGrant;
+use Everest\Services\Access\DelegatedAccess;
 use Everest\Extensions\Packages\ai\Agent\AgentContext;
 use Everest\Extensions\Packages\ai\Agent\TurnRecorder;
 use Everest\Extensions\Packages\ai\Agent\ApprovalPreview;
@@ -291,6 +293,30 @@ class AgentTranscriptTest extends ClientApiIntegrationTestCase
             DelegatedGrant::WRITE_ABILITIES,
             $following?->abilities ?? [],
         )));
+    }
+
+    /**
+     * Core honours a delegated grant only while it is sealed to the
+     * customer-visible row that recorded it. The seal has to survive the
+     * conversation's banking, or every resumed turn would lose its access.
+     */
+    public function testABankedGrantKeepsTheSealCoreChecksBeforeUsingIt(): void
+    {
+        [$admin, $server] = $this->generateTestAccount();
+        $admin->forceFill(['admin_role_id' => AdminRole::query()->where('is_owner', true)->value('id')])->save();
+        $admin->refresh();
+        $conversation = $this->recorder->ensureConversation($admin, null, null, 'Investigate customer server');
+
+        $access = app(DelegatedAccess::class);
+        $opened = new AgentContext($admin, null, 'turn-open', $conversation->id);
+        $opened->bindAssist($access->open($admin, $server, 'Ticketed startup failure', 42), $server);
+        $this->recorder->touch($conversation, $opened);
+
+        $banked = $this->recorder->loadAssist($conversation->fresh());
+
+        $this->assertNotNull($banked?->auditId);
+        $this->assertSame($opened->assist?->auditId, $banked->auditId);
+        $this->assertSame('ran', $access->during($admin, $banked, fn () => 'ran'));
     }
 
     /**
