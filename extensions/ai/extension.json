@@ -73,7 +73,7 @@
       "admin": [
         {
           "slug": "settings",
-          "labelKey": "ext.ai.nav.admin",
+          "labelKey": "ext.ai.nav.adminSettings",
           "icon": "bot",
           "category": "modules",
           "order": 20,
@@ -81,7 +81,7 @@
         },
         {
           "slug": "assistant",
-          "labelKey": "ext.ai.nav.adminAssistant",
+          "labelKey": "ext.ai.nav.adminAssistantPage",
           "icon": "sparkles",
           "category": "management",
           "order": 20,
@@ -91,6 +91,13 @@
           ]
         }
       ]
+    },
+    "nav": {
+      "admin": {
+        "labelKey": "ext.ai.nav.group",
+        "icon": "bot",
+        "order": 10
+      }
     },
     "slots": [
       {
