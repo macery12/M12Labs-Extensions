@@ -127,7 +127,9 @@ export default function PrivacyPage() {
                 )}
             </SectionCard>
 
-            <SaveBar dirty={form.dirty} saving={form.saving} onDiscard={form.discard} />
+            {/* Every control is locked while redaction is forced, so there is
+                nothing to save; a Save/Discard pair there suggested otherwise. */}
+            {!forced && <SaveBar dirty={form.dirty} saving={form.saving} onDiscard={form.discard} />}
         </form>
     );
 }
