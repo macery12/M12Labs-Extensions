@@ -60,7 +60,7 @@ export default function AgentPage() {
                 form.submit();
             }}
         >
-            <SectionCard icon={Bot} title={t('admin.settings.agent', 'Agent')} desc={t('admin.pages.agentDesc', 'Which assistants exist. Each is gated separately — turning on chat must not hand anything the ability to act.')}>
+            <SectionCard icon={Bot} title={t('admin.settings.agent', 'Agent')} desc={t('admin.agent.help.section', 'Turn each assistant on or off. Chat on its own never lets the assistant change anything.')}>
                 <ToggleGroup>
                     <ToggleRow
                         label={t('admin.settings.agentEnabled', 'Enable the agent')}
@@ -70,14 +70,14 @@ export default function AgentPage() {
                     />
                     <ToggleRow
                         label={t('admin.settings.adminAgentEnabled', 'Admin assistant')}
-                        desc={t('admin.settings.adminAgentEnabledHint', 'Lets the assistant read and edit the panel itself — customers, servers, products and coupons — limited to what your own admin role allows. Off by default.')}
+                        desc={t('admin.agent.help.admin', 'Lets the assistant read and change panel records (customers, servers, products, coupons), limited to your own admin role.')}
                         checked={value.admin_enabled}
                         onChange={next => patch({ admin_enabled: next })}
                         disabled={!value.enabled}
                     />
                     <ToggleRow
                         label={t('admin.settings.agentReasoning', 'Show the model thinking')}
-                        desc={t('admin.settings.agentReasoningHint', 'Ask the model to reason before it acts, and show that reasoning in the transcript. Improves tool choice on long tasks; costs extra output tokens and a little latency. Models without a reasoning mode ignore it.')}
+                        desc={t('admin.agent.help.reasoning', 'Shows the model\'s reasoning in the chat. It picks tools better on long tasks but uses more tokens.')}
                         checked={value.reasoning}
                         onChange={next => patch({ reasoning: next })}
                         disabled={!value.enabled || !capabilities.reasoning}
@@ -87,9 +87,9 @@ export default function AgentPage() {
                 <IgnoredSettings items={ignored} />
             </SectionCard>
 
-            <SectionCard icon={Timer} title={t('admin.settings.turnLimits', 'Turn limits')} desc={t('admin.pages.turnLimitsDesc', 'A turn is bounded three ways, because any one of them alone can be escaped: a model can loop cheaply, stall expensively, or both.')}>
+            <SectionCard icon={Timer} title={t('admin.settings.turnLimits', 'Turn limits')} desc={t('admin.agent.help.limits', 'Stops a request that makes too many calls or runs too long.')}>
                 <FieldGrid>
-                    <FieldRow label={t('admin.settings.maxSteps', 'Max steps per turn')} desc={t('admin.settings.maxStepsHint', 'How many tool calls one request may chain.')}>
+                    <FieldRow label={t('admin.settings.maxSteps', 'Max steps per turn')} desc={t('admin.agent.help.maxSteps', 'Stops a request after this many tool calls.')}>
                         <Input
                             type="number"
                             min={1}
@@ -101,7 +101,7 @@ export default function AgentPage() {
                     {/* 30 and 900 are AgentRunner::MIN_WALL_SECONDS / MAX_WALL_SECONDS; the
                         request validates the same pair. A lower bound here than the runtime
                         clamps to is a value the operator can save and never get. */}
-                    <FieldRow label={t('admin.settings.maxWall', 'Max seconds per turn')} desc={t('admin.settings.maxWallHint', 'A turn is abandoned once it runs this long. Between 30 and 900 seconds; the browser waits this long plus a margin before treating a silent turn as lost.')}>
+                    <FieldRow label={t('admin.settings.maxWall', 'Max seconds per turn')} desc={t('admin.agent.help.maxWall', 'Stops a request after this many seconds (30 to 900).')}>
                         <Input
                             type="number"
                             min={30}
@@ -112,7 +112,7 @@ export default function AgentPage() {
                     </FieldRow>
                     <FieldRow
                         label={t('admin.settings.maxToolSeconds', 'Max seconds per tool call')}
-                        desc={t('admin.settings.maxToolSecondsHint', 'The turn limit above is only checked between steps, so this is what stops one stuck call. An overrun fails as a tool, not as the turn.')}
+                        desc={t('admin.agent.help.maxToolSeconds', 'Stops a single tool call that runs longer than this.')}
                     >
                         <Input
                             type="number"
@@ -136,7 +136,7 @@ export default function AgentPage() {
                                       ),
                                       reason: budget.reason,
                                   })
-                                : t('admin.settings.maxToolsHint', 'How many tool schemas the model chooses between each step. The rest stay reachable through search — lower this if the model keeps picking the wrong tool.')
+                                : t('admin.agent.help.maxTools', 'How many tools the model chooses from at each step. Lower it if the model keeps picking the wrong one.')
                         }
                     >
                         <div className="flex items-center gap-3">
@@ -174,7 +174,7 @@ export default function AgentPage() {
                             onChange={event => patch({ tool_result_bytes: Number(event.target.value) })}
                         />
                     </FieldRow>
-                    <FieldRow label={t('admin.settings.maxRepairs', 'Repair attempts')} desc={t('admin.settings.maxRepairsHint', 'When the model writes a malformed tool call, how many times to ask again under a strict schema. Each one is a second inference over the whole transcript; 0 turns repairs off.')}>
+                    <FieldRow label={t('admin.settings.maxRepairs', 'Repair attempts')} desc={t('admin.agent.help.maxRepairs', 'How many times to ask the model again when it writes a broken tool call. 0 turns this off.')}>
                         <Input
                             type="number"
                             min={0}
@@ -194,7 +194,7 @@ export default function AgentPage() {
                 <FieldGrid>
                     <FieldRow
                         label={t('admin.settings.maxBatchCalls', 'Max calls per batch')}
-                        desc={t('admin.settings.maxBatchCallsHint', 'How many changes the model may put in one approval. Every call is written in a single response, so lower it alongside the tool limit for a small model.')}
+                        desc={t('admin.agent.help.maxBatchCalls', 'The most changes the assistant can group into one approval. Lower it for small models.')}
                     >
                         <Input
                             type="number"
@@ -209,7 +209,7 @@ export default function AgentPage() {
                 <ToggleGroup>
                     <ToggleRow
                         label={t('admin.settings.allowDestructiveBatches', 'Allow destructive calls in a batch')}
-                        desc={t('admin.settings.allowDestructiveBatchesHint', 'Off means a batch containing one is refused and the model must ask for it on its own. The card still names every target and still asks for the typed confirmation once.')}
+                        desc={t('admin.agent.help.destructive', 'When off, deletions and other destructive changes are approved one at a time.')}
                         checked={value.allow_destructive_batches}
                         onChange={next => patch({ allow_destructive_batches: next })}
                         disabled={!value.enabled}
