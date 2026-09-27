@@ -50,7 +50,7 @@ export default function AiSection() {
             <div>
                 <header>
                     <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-ink)]">
-                        {t('admin.title', 'M12Labs-AI')}
+                        {t('admin.settingsTitle', 'AI Assistant settings')}
                     </h1>
                     <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{t('admin.subtitle', 'Provider health, usage analytics and configuration for the panel\'s AI assistant.')}</p>
                 </header>
@@ -71,7 +71,7 @@ export default function AiSection() {
         <div className="flex flex-col gap-6">
             <header>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-ink)]">
-                    {t('admin.title', 'M12Labs-AI')}
+                    {t('admin.settingsTitle', 'AI Assistant settings')}
                 </h1>
                 <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{t('admin.subtitle', 'Provider health, usage analytics and configuration for the panel\'s AI assistant.')}</p>
             </header>

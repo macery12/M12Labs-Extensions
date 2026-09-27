@@ -12,7 +12,7 @@ import {
 import { LogTable } from './LogTable';
 import { sourceChip, sourceLabel, sourceTone } from '../sources';
 import { AiLoadError } from '../LoadError';
-import { cn, Panel, Spinner, createTranslator } from '@/extensions-sdk';
+import { cn, Panel, Spinner, createTranslator, formatDuration, formatNumber } from '@/extensions-sdk';
 import { BASE } from '../AiNav';
 
 const t = createTranslator('ai');
@@ -129,7 +129,7 @@ function ConnectionCard() {
                             <span className="text-[var(--color-danger)]">{t('common.states.genericError', 'Something went wrong. Please try again.')}</span>
                         ) : conn?.status === 'ok' ? (
                             <span className="text-[var(--color-accent)]">
-                                {t('admin.overview.connected', 'Connected · {latency}ms', { latency: String(conn.latency_ms ?? '?') })}
+                                {t('admin.overview.connectedIn', 'Connected · {latency}', { latency: conn.latency_ms == null ? '?' : formatDuration(conn.latency_ms) })}
                             </span>
                         ) : conn ? (
                             <span className="text-[var(--color-danger)]">{conn.message ?? t('common.states.genericError', 'Something went wrong. Please try again.')}</span>
@@ -240,7 +240,7 @@ function InferenceCard() {
                             <div className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5">
                                 <p className="text-[var(--color-ink-faint)]">{t('admin.overview.avgTurn', 'Avg turn')}</p>
                                 <p className="font-mono tabular-nums text-[var(--color-ink)]">
-                                    {(data.average_turn_ms / 1000).toFixed(1)}s
+                                    {formatDuration(data.average_turn_ms)}
                                 </p>
                             </div>
                         </div>
@@ -283,8 +283,9 @@ export default function OverviewPage() {
 
     const { data: settings } = useQuery({ queryKey: ['admin', 'ai', 'settings'], queryFn: getAiSettings });
 
-    const fmt = (n: number | null | undefined) => (n ?? 0).toLocaleString();
-    const secs = (ms: number | null | undefined) => (ms == null ? '—' : `${(ms / 1000).toFixed(1)}s`);
+    // The SDK formatters: "146.4 sec" rather than "146401ms", and grouped digits.
+    const fmt = (n: number | null | undefined) => formatNumber(n ?? 0);
+    const secs = (ms: number | null | undefined) => (ms == null ? '—' : formatDuration(ms));
 
     const latency = stats?.latency;
     const latencyTotal = latency
@@ -434,7 +435,7 @@ export default function OverviewPage() {
                             to={`${BASE}/limits`}
                             className="mt-3 block text-[11px] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
                         >
-                            {t('admin.overview.budgetOff', 'No token budget is enforced — set one in Budget & access.')}
+                            {t('admin.overview.budgetNotEnforced', 'No token budget is enforced. Set one under Budget.')}
                         </Link>
                     )}
                 </Panel>
