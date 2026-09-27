@@ -15,7 +15,7 @@ import {
 } from '../../adminApi';
 import { DEFAULT_ENDPOINTS } from '../capabilities';
 import { AI_INFERENCE_KEY, AI_SETTINGS_KEY, useAiCapabilities, useAiSettingsForm } from '../useAiSettingsForm';
-import { cn, Button, Input, Select, Spinner, ConfirmDialog, FieldGrid, FieldRow, SaveBar, SectionCard, notify, extensionErrorMessage, createTranslator } from '@/extensions-sdk';
+import { cn, Button, Input, Select, Spinner, ConfirmDialog, FieldGrid, FieldRow, SaveBar, SectionCard, notify, extensionErrorMessage, createTranslator, formatDuration } from '@/extensions-sdk';
 
 const t = createTranslator('ai');
 
@@ -190,7 +190,7 @@ export default function ProviderPage() {
                                 )}
                             >
                                 {testResult.status === 'ok'
-                                    ? t('admin.overview.connected', 'Connected · {latency}ms', { latency: String(testResult.latency_ms ?? '?') })
+                                    ? t('admin.overview.connectedIn', 'Connected · {latency}', { latency: testResult.latency_ms == null ? '?' : formatDuration(testResult.latency_ms) })
                                     : testResult.message}
                             </span>
                         )}
@@ -290,12 +290,17 @@ export default function ProviderPage() {
                                     : t('admin.settings.endpointOpenaiHint', 'Must be HTTPS and end in /v1.')
                         }
                     >
-                        <Input
-                            value={value.endpoint}
-                            onChange={event => patch({ endpoint: event.target.value })}
-                            placeholder={DEFAULT_ENDPOINTS[value.provider] || 'https://…'}
-                            readOnly={value.provider === 'openrouter'}
-                        />
+                        {/* OpenRouter's endpoint and model are fixed. A read-only input
+                            looked editable but broken, so they print as plain values. */}
+                        {value.provider === 'openrouter' ? (
+                            <FixedValue>{value.endpoint}</FixedValue>
+                        ) : (
+                            <Input
+                                value={value.endpoint}
+                                onChange={event => patch({ endpoint: event.target.value })}
+                                placeholder={DEFAULT_ENDPOINTS[value.provider] || 'https://…'}
+                            />
+                        )}
                     </FieldRow>
 
                     {!probeOutdated && capabilities.shimmedOllama && (
@@ -325,8 +330,10 @@ export default function ProviderPage() {
                                 {settings.key && !providerChanged && (
                                     <Button
                                         type="button"
-                                        variant="danger"
+                                        variant="ghost"
                                         size="icon"
+                                        className="text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
+                                        aria-label={t('admin.settings.removeKey', 'Remove saved key')}
                                         title={t('admin.settings.removeKey', 'Remove saved key')}
                                         onClick={() => setConfirmKeyDelete(true)}
                                     >
@@ -381,12 +388,15 @@ export default function ProviderPage() {
                     }
                 >
                     <div className="flex items-center gap-2">
-                        <Input
-                            value={value.model}
-                            onChange={event => patch({ model: event.target.value })}
-                            className="font-mono"
-                            readOnly={value.provider === 'openrouter'}
-                        />
+                        {value.provider === 'openrouter' ? (
+                            <FixedValue>{value.model}</FixedValue>
+                        ) : (
+                            <Input
+                                value={value.model}
+                                onChange={event => patch({ model: event.target.value })}
+                                className="font-mono"
+                            />
+                        )}
                         {value.provider !== 'openrouter' && <Button
                             type="button"
                             variant="outline"
@@ -539,5 +549,15 @@ export default function ProviderPage() {
                 onConfirm={() => removeKey.mutate()}
             />
         </form>
+    );
+}
+
+// A value the admin can read but not change, on an input's row height so it
+// still lines up inside the field grid.
+function FixedValue({ children }: { children: React.ReactNode }) {
+    return (
+        <p className="flex min-h-10 min-w-0 flex-1 items-center truncate font-mono text-sm text-[var(--color-ink)]">
+            {children}
+        </p>
     );
 }
