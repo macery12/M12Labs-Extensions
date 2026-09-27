@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, RotateCcw, Search, ShieldAlert, Terminal, X } from 'lucide-react';
 import { getAiTools, updateAiTools, type AiRiskTier, type AiToolDefinition } from '../../adminApi';
 import { AiLoadError } from '../LoadError';
-import { cn, Button, Input, Panel, Select, Switch, Spinner, notify, extensionErrorMessage, createTranslator } from '@/extensions-sdk';
+import { toolLabel } from '../../components/toolMeta';
+import { cn, Button, Input, Panel, SaveBar, Select, Switch, Spinner, notify, extensionErrorMessage, createTranslator } from '@/extensions-sdk';
 
 const t = createTranslator('ai');
 
@@ -40,18 +41,24 @@ export default function ToolsPage() {
     const [search, setSearch] = useState('');
     const [dirty, setDirty] = useState(false);
 
+    // Also what Discard runs: back to the policy as loaded.
+    const seed = (loaded: NonNullable<typeof data>) => {
+        setOverrides(
+            Object.fromEntries(
+                loaded.data.filter(tool => tool.overridden).map(tool => [tool.name, tool.risk]),
+            ) as Record<string, AiRiskTier>,
+        );
+        setDisabled(loaded.data.filter(tool => !tool.enabled).map(tool => tool.name));
+        setCommands(loaded.console.extra);
+        setDirty(false);
+    };
+
     useEffect(() => {
         if (!data) return;
 
         // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect: seeds editable form state from the loaded policy
-        setOverrides(
-            Object.fromEntries(
-                data.data.filter(tool => tool.overridden).map(tool => [tool.name, tool.risk]),
-            ) as Record<string, AiRiskTier>,
-        );
-        setDisabled(data.data.filter(tool => !tool.enabled).map(tool => tool.name));
-        setCommands(data.console.extra);
-        setDirty(false);
+        seed(data);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- seed only closes over state setters
     }, [data]);
 
     const save = useMutation({
@@ -71,7 +78,10 @@ export default function ToolsPage() {
         const term = search.trim().toLowerCase();
         const matching = term
             ? data.data.filter(
-                  tool => tool.name.toLowerCase().includes(term) || tool.description.toLowerCase().includes(term),
+                  tool =>
+                      tool.name.toLowerCase().includes(term)
+                      || toolLabel(tool.name).toLowerCase().includes(term)
+                      || tool.description.toLowerCase().includes(term),
               )
             : data.data;
 
@@ -118,6 +128,22 @@ export default function ToolsPage() {
         setDisabled(current => (enabled ? current.filter(name => name !== tool.name) : [...current, tool.name]));
     };
 
+    // "Set all to…" for one group: a risk tier, or every tool on or off. Sixty
+    // rows with a dropdown each had no way to change a whole drawer at once.
+    const applyToGroup = (tools: AiToolDefinition[], choice: string) => {
+        if (choice === 'on' || choice === 'off') {
+            const names = tools.map(tool => tool.name);
+            setDirty(true);
+            setDisabled(current =>
+                choice === 'on'
+                    ? current.filter(name => !names.includes(name))
+                    : [...new Set([...current, ...names])],
+            );
+            return;
+        }
+        for (const tool of tools) setRisk(tool, choice as AiRiskTier);
+    };
+
     const addCommand = () => {
         const value = newCommand.trim().toLowerCase();
         if (!value || commands.includes(value) || data.console.defaults.includes(value)) {
@@ -141,9 +167,6 @@ export default function ToolsPage() {
                         className="pl-9"
                     />
                 </div>
-                <Button disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
-                    {save.isPending ? <Spinner className="h-4 w-4" /> : t('common.actions.save', 'Save')}
-                </Button>
             </div>
 
             {groups.map(([category, tools]) => (
@@ -151,11 +174,22 @@ export default function ToolsPage() {
                     key={category}
                     title={t(`admin.tools.category.${category}`, category)}
                     right={
-                        <span className="text-[11px] normal-case tracking-normal text-[var(--color-ink-faint)]">
-                            {data.categories[category] ?? ''}
-                        </span>
+                        <Select
+                            value=""
+                            placeholder={t('admin.tools.setAll', 'Set all to…')}
+                            onChange={choice => applyToGroup(tools, choice)}
+                            options={[
+                                ...data.risks.map(option => ({ value: option, label: riskLabel(option) })),
+                                { value: 'on', label: t('admin.tools.enableAll', 'Turn all on') },
+                                { value: 'off', label: t('admin.tools.disableAll', 'Turn all off') },
+                            ]}
+                            className="h-8 w-44 text-xs normal-case tracking-normal"
+                        />
                     }
                 >
+                    {data.categories[category] && (
+                        <p className="-mt-1 mb-1 text-xs text-[var(--color-ink-faint)]">{data.categories[category]}</p>
+                    )}
                     <div className="divide-y divide-[var(--color-border)]">
                         {tools.map(tool => {
                             const risk = overrides[tool.name] ?? tool.default_risk;
@@ -164,10 +198,13 @@ export default function ToolsPage() {
                             return (
                                 <div key={tool.name} className="flex items-center gap-3 py-2.5">
                                     <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-mono text-xs font-medium text-[var(--color-ink)]">
-                                                {tool.name}
+                                        {/* A readable name first, the raw id (what logs and the
+                                            model use) beside it in small type. */}
+                                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                            <span className="text-sm font-medium text-[var(--color-ink)] first-letter:uppercase">
+                                                {toolLabel(tool.name)}
                                             </span>
+                                            <span className="font-mono text-[11px] text-[var(--color-ink-faint)]">{tool.name}</span>
                                             {risk !== tool.default_risk && (
                                                 <button
                                                     type="button"
@@ -201,7 +238,7 @@ export default function ToolsPage() {
                                     <Switch
                                         checked={enabled}
                                         onChange={next => toggleEnabled(tool, next)}
-                                        label={tool.name}
+                                        label={toolLabel(tool.name)}
                                     />
                                 </div>
                             );
@@ -288,6 +325,10 @@ export default function ToolsPage() {
                     </div>
                 </div>
             </Panel>
+
+            {/* The same sticky bar the other settings tabs use; Save used to sit
+                at the top, a scroll away from most of the changes. */}
+            <SaveBar dirty={dirty} saving={save.isPending} onSave={() => save.mutate()} onDiscard={() => seed(data)} />
         </div>
     );
 }
