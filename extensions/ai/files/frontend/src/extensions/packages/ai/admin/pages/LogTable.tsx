@@ -1,5 +1,6 @@
-import { Ban, Check, LoaderCircle, Pause, X, Zap } from 'lucide-react';
-import { DataTable, type DataTableColumn, cn, createTranslator } from '@/extensions-sdk';
+import { useState } from 'react';
+import { Ban, Check, ChevronDown, LoaderCircle, Pause, X, Zap } from 'lucide-react';
+import { DataTable, type DataTableColumn, cn, createTranslator, formatDuration, formatNumber } from '@/extensions-sdk';
 import type { AiLogEntry } from '../../adminApi';
 import { sourceChip, sourceLabel, sourceTone } from '../sources';
 
@@ -9,6 +10,16 @@ const t = createTranslator('ai');
 // (filtered, up to 500). Cached responses carry a lightning badge — they cost
 // no tokens and return near-instantly.
 export function LogTable({ logs, loading }: { logs: AiLogEntry[]; loading: boolean }) {
+    // Failed rows open in place to show why. The reason used to live only in
+    // the status icon's tooltip, so a list of red crosses explained nothing.
+    const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+    const toggle = (id: number) =>
+        setOpen(current => {
+            const next = new Set(current);
+            if (!next.delete(id)) next.add(id);
+            return next;
+        });
+
     const columns: DataTableColumn<AiLogEntry>[] = [
         {
             id: 'time',
@@ -59,7 +70,7 @@ export function LogTable({ logs, loading }: { logs: AiLogEntry[]; loading: boole
             id: 'tokens',
             header: t('admin.logs.tokens', 'Tokens'),
             cellClassName: 'font-mono tabular-nums text-[var(--color-ink-muted)]',
-            cell: log => log.total_tokens ?? '—',
+            cell: log => (log.total_tokens == null ? '—' : formatNumber(log.total_tokens)),
         },
         {
             id: 'latency',
@@ -67,7 +78,7 @@ export function LogTable({ logs, loading }: { logs: AiLogEntry[]; loading: boole
             cellClassName: 'whitespace-nowrap font-mono tabular-nums text-[var(--color-ink-muted)]',
             cell: log => (
                 <>
-                    {log.latency_ms != null ? `${log.latency_ms}ms` : '—'}
+                    {log.latency_ms != null ? formatDuration(log.latency_ms) : '—'}
                     {log.cached && (
                         <span
                             title={t('admin.logs.cachedHint', 'Served from the response cache — no tokens used.')}
@@ -83,7 +94,31 @@ export function LogTable({ logs, loading }: { logs: AiLogEntry[]; loading: boole
         {
             id: 'status',
             header: t('admin.logs.status', 'Status'),
-            cell: log => <StatusIcon log={log} />,
+            cell: log => {
+                const failed = log.status === 'error' || log.status === 'cancelled' || log.status === 'suspended';
+                if (!failed) return <StatusIcon log={log} />;
+                const expanded = open.has(log.id);
+
+                return (
+                    <div className="flex max-w-[22rem] flex-col items-start gap-1">
+                        <button
+                            type="button"
+                            onClick={() => toggle(log.id)}
+                            aria-expanded={expanded}
+                            className="inline-flex items-center gap-1.5 rounded text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                        >
+                            <StatusIcon log={log} />
+                            {expanded ? t('admin.logs.hideWhy', 'Hide') : t('admin.logs.why', 'Why?')}
+                            <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
+                        </button>
+                        {expanded && (
+                            <p className="whitespace-normal break-words text-xs text-[var(--color-ink)]">
+                                {log.error_message || t('admin.logs.noReason', 'No reason was recorded for this request.')}
+                            </p>
+                        )}
+                    </div>
+                );
+            },
         },
     ];
 

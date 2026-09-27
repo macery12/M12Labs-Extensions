@@ -32,8 +32,10 @@
     "ext.ai.admin.logs.cached": "cached",
     "ext.ai.admin.logs.cachedHint": "Served from the response cache — no tokens used.",
     "ext.ai.admin.logs.empty": "No records match your filters.",
+    "ext.ai.admin.logs.hideWhy": "Hide",
     "ext.ai.admin.logs.latency": "Latency",
     "ext.ai.admin.logs.model": "Model",
+    "ext.ai.admin.logs.noReason": "No reason was recorded for this request.",
     "ext.ai.admin.logs.recordCount": [
         {
             "declarations": [
@@ -62,6 +64,7 @@
     "ext.ai.admin.logs.title": "Request log",
     "ext.ai.admin.logs.tokens": "Tokens",
     "ext.ai.admin.logs.user": "User",
+    "ext.ai.admin.logs.why": "Why?",
     "ext.ai.admin.nav.agent": "Agent",
     "ext.ai.admin.nav.budget": "Budget",
     "ext.ai.admin.nav.generation": "Generation",
