@@ -81,7 +81,7 @@ export default function LimitsPage() {
                         value={value.monthly_tokens}
                         onChange={event => patch({ monthly_tokens: Number(event.target.value) })}
                         disabled={!value.enforce}
-                        // The shared Input has no disabled style of its own.
+                        // Alpha 4.3 panels' shared Input has no disabled style of its own.
                         className="disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     {/* A number input can't group digits, and 2000000 is easy to
