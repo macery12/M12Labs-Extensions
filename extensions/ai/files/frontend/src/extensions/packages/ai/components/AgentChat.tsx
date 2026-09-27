@@ -57,12 +57,12 @@ export function AgentChat({ compact = false }: { compact?: boolean }) {
         {
             label: t('server.detail.groupServer', 'Server'),
             rows: [
+                // No "state" row: server.status is the install/suspension status,
+                // not whether it is running, so a healthy server read "unknown"
+                // under a header that said OFFLINE. The header shows the live
+                // state right above this column; the SDK has no power state to
+                // offer an extension.
                 { label: t('server.detail.server', 'server'), value: server.name },
-                {
-                    label: t('server.detail.state', 'state'),
-                    value: server.status ?? t('server.detail.unknown', 'unknown'),
-                    tone: server.status === 'running' ? 'good' : server.status ? 'warn' : 'default',
-                },
             ],
         },
         {
@@ -80,9 +80,9 @@ export function AgentChat({ compact = false }: { compact?: boolean }) {
         {
             label: t('server.detail.groupChat', 'This chat'),
             rows: [
-                { label: t('server.detail.turns', 'turns'), value: String(counters.turns) },
-                { label: t('server.detail.reads', 'reads'), value: String(counters.reads) },
-                { label: t('server.detail.changes', 'changes'), value: String(counters.changes) },
+                { label: t('server.detail.questions', 'questions'), value: String(counters.turns) },
+                { label: t('server.detail.lookups', 'lookups'), value: String(counters.reads) },
+                { label: t('server.detail.edits', 'changes'), value: String(counters.changes) },
             ],
         },
     ];

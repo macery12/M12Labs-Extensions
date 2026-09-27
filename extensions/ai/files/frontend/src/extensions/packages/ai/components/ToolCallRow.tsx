@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronRight } from 'lucide-react';
 import { restoreRedactionsDeep, type ChatEntry } from '../state/agentChat';
 import { ToolArgs } from './ToolArgs';
 import { ToolIcon, toolLifecycleLabel, toolTarget } from './toolMeta';
-import { cn, Spinner, createTranslator } from '@/extensions-sdk';
+import { cn, Spinner, createTranslator, formatDuration } from '@/extensions-sdk';
 
 const t = createTranslator('ai');
 
@@ -87,7 +87,7 @@ export function ToolCallRow({
                     {/* Only calls slow enough to be worth noticing are timed; a
                         millisecond count on every row is clutter. */}
                     {entry.durationMs !== undefined && entry.durationMs >= 1000 && (
-                        <span className="tabular-nums">{(entry.durationMs / 1000).toFixed(1)}s</span>
+                        <span className="tabular-nums">{formatDuration(entry.durationMs)}</span>
                     )}
                     {entry.summary && <span className="max-w-[14rem] truncate">{entry.summary}</span>}
                 </span>

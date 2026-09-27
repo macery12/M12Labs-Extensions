@@ -302,11 +302,12 @@ export function AgentChatView({
                                 </p>
                                 {/* The disclaimer is stated in full exactly
                                     once, here, where somebody starting a
-                                    conversation will actually read it. The
-                                    status line keeps it in view afterwards, but
-                                    a strip that truncates is not where a claim
-                                    about what the agent may do to your server
-                                    gets made for the first time. */}
+                                    conversation will actually read it. It used
+                                    to be repeated in the status line too, where
+                                    it sat under this copy on an empty chat and
+                                    truncated mid-word ("shown to you fir…")
+                                    everywhere else; the approval cards say what
+                                    is about to happen once a turn is running. */}
                                 <p className="mx-auto mt-3 max-w-md text-xs text-[var(--color-ink-faint)]">
                                     {disclaimer}
                                 </p>
@@ -406,7 +407,6 @@ export function AgentChatView({
                     step={step}
                     slowHint={slowHint}
                     pending={pendingApprovals.length}
-                    trailing={disclaimer}
                 />
 
                 {/* Below the breakpoint the same rows re-anchor as a sheet. A

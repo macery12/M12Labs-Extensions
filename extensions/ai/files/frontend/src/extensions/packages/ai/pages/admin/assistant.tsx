@@ -206,9 +206,9 @@ export default function AssistantPage() {
         {
             label: t('server.detail.groupSession', 'This session'),
             rows: [
-                { label: t('server.detail.turns', 'turns'), value: String(counters.turns) },
-                { label: t('server.detail.reads', 'reads'), value: String(counters.reads) },
-                { label: t('server.detail.changes', 'changes'), value: String(counters.changes) },
+                { label: t('server.detail.questions', 'questions'), value: String(counters.turns) },
+                { label: t('server.detail.lookups', 'lookups'), value: String(counters.reads) },
+                { label: t('server.detail.edits', 'changes'), value: String(counters.changes) },
             ],
         },
     ];
