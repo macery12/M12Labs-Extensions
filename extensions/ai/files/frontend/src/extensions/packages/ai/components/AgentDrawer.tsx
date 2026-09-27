@@ -64,14 +64,19 @@ export function AgentDrawer() {
 
     return (
         <>
+            {/* A slim tab on the right edge, half-way down, rather than a 48px
+                circle in the bottom-right corner: the circle sat on top of the
+                console's Server info card (and whatever else lives down there).
+                At this width it stays inside the page gutter. */}
             {!open && (
                 <button
                     type="button"
                     onClick={() => setDrawer(true)}
                     title={running ? t('server.drawer.running', 'The assistant is still working — open to watch, or check back shortly.') : t('server.drawer.open', 'Ask the assistant (Ctrl+K)')}
-                    className="fixed bottom-5 right-5 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand)] text-[var(--color-brand-ink)] shadow-lg shadow-black/20 transition-transform hover:scale-105"
+                    aria-label={running ? t('server.drawer.running', 'The assistant is still working — open to watch, or check back shortly.') : t('server.drawer.open', 'Ask the assistant (Ctrl+K)')}
+                    className="fixed right-0 top-1/2 z-30 flex h-12 w-7 -translate-y-1/2 items-center justify-center rounded-l-lg bg-[var(--brand)] text-[var(--color-brand-ink)] shadow-lg shadow-black/20 transition-[width] hover:w-9"
                 >
-                    <Bot className="h-5 w-5" />
+                    <Bot className="h-4 w-4" />
 
                     {/* The whole point of a durable turn, from the outside: a
                         turn carries on while you work elsewhere, and the only
@@ -80,7 +85,7 @@ export function AgentDrawer() {
                     {running && (
                         <span
                             aria-hidden
-                            className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center"
+                            className="absolute -left-1 -top-1 flex h-3.5 w-3.5 items-center justify-center"
                         >
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                             <span className="relative inline-flex h-2.5 w-2.5 rounded-full border-2 border-[var(--brand)] bg-[var(--color-success)]" />
