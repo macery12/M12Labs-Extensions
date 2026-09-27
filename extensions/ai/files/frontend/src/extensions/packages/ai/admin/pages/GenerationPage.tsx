@@ -123,7 +123,7 @@ export default function GenerationPage() {
                             discovered by a setting that appears to do nothing. */}
                         {capabilities.temperature === 'agent-pinned' && (
                             <p className="mt-1.5 text-xs text-[var(--color-ink-faint)]">
-                                {t('admin.settings.tempAgentPinned', 'Agent turns pin this to 0 while tools are on the table, so tool selection stays repeatable.')}
+                                {t('admin.settings.tempAgentIgnored', 'Ignored for agent tasks, which always use 0 so the assistant picks tools the same way every time.')}
                             </p>
                         )}
                     </div>

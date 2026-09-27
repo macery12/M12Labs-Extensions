@@ -252,7 +252,6 @@
     "ext.ai.admin.settings.slotsInUse": "{used} af {total} slots i brug",
     "ext.ai.admin.settings.systemPrompt": "Systemmeddelelse",
     "ext.ai.admin.settings.systemPromptHint": "Sendes sammen med hver anmodning om at definere AI’ens rolle og tone. Hold det kortfattet — det tæller med i tokenbudgettet.",
-    "ext.ai.admin.settings.tempAgentPinned": "Agentkørsler låser denne til 0, mens værktøjer er tilgængelige, så værktøjsvalget forbliver reproducerbart.",
     "ext.ai.admin.settings.tempBalanced": "Afbalanceret",
     "ext.ai.admin.settings.tempBalancedHint": "Mere varierede svar, men stadig sammenhængende.",
     "ext.ai.admin.settings.tempCreative": "Kreativt",

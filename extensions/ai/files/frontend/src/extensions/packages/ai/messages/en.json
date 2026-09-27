@@ -254,7 +254,7 @@
     "ext.ai.admin.settings.slotsInUse": "{used} of {total} slots in use",
     "ext.ai.admin.settings.systemPrompt": "System prompt",
     "ext.ai.admin.settings.systemPromptHint": "Sent with every request to define the AI's role and tone. Keep it concise — it counts toward the token budget.",
-    "ext.ai.admin.settings.tempAgentPinned": "Agent turns pin this to 0 while tools are on the table, so tool selection stays repeatable.",
+    "ext.ai.admin.settings.tempAgentIgnored": "Ignored for agent tasks, which always use 0 so the assistant picks tools the same way every time.",
     "ext.ai.admin.settings.tempBalanced": "Balanced",
     "ext.ai.admin.settings.tempBalancedHint": "More varied responses, still coherent.",
     "ext.ai.admin.settings.tempCreative": "Creative",

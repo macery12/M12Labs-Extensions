@@ -252,7 +252,6 @@
     "ext.ai.admin.settings.slotsInUse": "{used} из {total} используемых слотов",
     "ext.ai.admin.settings.systemPrompt": "Системная подсказка",
     "ext.ai.admin.settings.systemPromptHint": "Отправляется с каждым запросом для определения роли и стиля ИИ. Старайтесь быть лаконичными — это влияет на бюджет токенов.",
-    "ext.ai.admin.settings.tempAgentPinned": "Во время циклов агента это значение фиксируется на 0, пока доступны инструменты, чтобы их выбор оставался воспроизводимым.",
     "ext.ai.admin.settings.tempBalanced": "Сбалансированный",
     "ext.ai.admin.settings.tempBalancedHint": "Более разнообразные ответы, но при этом сохраняющие целостность.",
     "ext.ai.admin.settings.tempCreative": "Творчество",
