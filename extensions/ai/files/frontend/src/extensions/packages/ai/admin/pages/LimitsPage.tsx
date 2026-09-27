@@ -3,7 +3,7 @@ import { Wallet } from 'lucide-react';
 import { getAiStats } from '../../adminApi';
 import { useAiCapabilities, useAiSettingsForm } from '../useAiSettingsForm';
 import { AiLoadError } from '../LoadError';
-import { Input, Spinner, FieldRow, SaveBar, SectionCard, ToggleGroup, ToggleRow, createTranslator } from '@/extensions-sdk';
+import { Input, Spinner, FieldRow, SaveBar, SectionCard, ToggleGroup, ToggleRow, createTranslator, formatNumber } from '@/extensions-sdk';
 
 const t = createTranslator('ai');
 
@@ -55,7 +55,7 @@ export default function LimitsPage() {
                     stats ? (
                         <span className="text-xs text-[var(--color-ink-faint)] tabular-nums">
                             {t('admin.settings.tokensLast7d', '{tokens} tokens in the last 7 days', {
-                                tokens: (stats.last_7d?.tokens ?? 0).toLocaleString(),
+                                tokens: formatNumber(stats.last_7d?.tokens ?? 0),
                             })}
                         </span>
                     ) : undefined
@@ -80,7 +80,20 @@ export default function LimitsPage() {
                         step={100_000}
                         value={value.monthly_tokens}
                         onChange={event => patch({ monthly_tokens: Number(event.target.value) })}
+                        disabled={!value.enforce}
+                        // The shared Input has no disabled style of its own.
+                        className="disabled:cursor-not-allowed disabled:opacity-50"
                     />
+                    {/* A number input can't group digits, and 2000000 is easy to
+                        misread by a factor of ten; the grouped figure sits under
+                        it. Greyed while off, since the limit then does nothing. */}
+                    <p className="mt-1.5 text-xs tabular-nums text-[var(--color-ink-faint)]">
+                        {value.enforce
+                            ? t('admin.settings.monthlyTokensValue', '{tokens} tokens per user each month.', {
+                                  tokens: formatNumber(value.monthly_tokens),
+                              })
+                            : t('admin.settings.monthlyTokensOff', 'Not applied while enforcement is off.')}
+                    </p>
                 </FieldRow>
             </SectionCard>
 

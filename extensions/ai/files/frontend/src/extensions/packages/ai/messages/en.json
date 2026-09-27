@@ -192,6 +192,8 @@
     "ext.ai.admin.settings.modelsUnavailable": "Couldn't list models from the endpoint — check the connection, then refresh.",
     "ext.ai.admin.settings.monthlyTokens": "Tokens per user per month",
     "ext.ai.admin.settings.monthlyTokensHint": "Owners are exempt. Queue refusals are never charged. With enforcement on, 0 is an allowance of zero rather than unlimited — turn enforcement off instead.",
+    "ext.ai.admin.settings.monthlyTokensOff": "Not applied while enforcement is off.",
+    "ext.ai.admin.settings.monthlyTokensValue": "{tokens} tokens per user each month.",
     "ext.ai.admin.settings.noKeyNeeded": "Ollama doesn't need an API key — leave this section empty.",
     "ext.ai.admin.settings.noToolSupport": "This model does not report tool-calling support, so the agent cannot run on it.",
     "ext.ai.admin.settings.ollamaOnly": "Ollama only",
