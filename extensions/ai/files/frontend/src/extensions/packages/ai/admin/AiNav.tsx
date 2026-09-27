@@ -10,6 +10,7 @@ import {
     Wrench,
 } from 'lucide-react';
 import { SectionNavigation, type SectionNavigationGroup, createTranslator } from '@/extensions-sdk';
+import { useAiCapabilities } from './useAiSettingsForm';
 
 const t = createTranslator('ai');
 
@@ -20,7 +21,7 @@ const t = createTranslator('ai');
 // extension id or the slug changed.
 export const BASE = '/admin/extensions/ext/ai/settings';
 
-function groups(): SectionNavigationGroup[] {
+function groups(performanceApplies: boolean): SectionNavigationGroup[] {
     return [
         {
             id: 'connection',
@@ -44,8 +45,23 @@ function groups(): SectionNavigationGroup[] {
             id: 'operations',
             label: t('admin.nav.groups.operations', 'Operations'),
             items: [
-                { to: `${BASE}/performance`, icon: Gauge, label: t('admin.nav.performance', 'Performance') },
-                { to: `${BASE}/limits`, icon: Wallet, label: t('admin.nav.limits', 'Budget & access') },
+                performanceApplies
+                    ? { to: `${BASE}/performance`, icon: Gauge, label: t('admin.nav.performance', 'Performance') }
+                    : {
+                          to: `${BASE}/performance`,
+                          icon: Gauge,
+                          label: (
+                              <span className="opacity-60" title={t('admin.nav.performanceHosted', 'Only applies to models running on your own hardware.')}>
+                                  {t('admin.nav.performance', 'Performance')}
+                              </span>
+                          ),
+                          badge: (
+                              <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-ink-faint)]">
+                                  {t('admin.nav.notUsed', 'Not used')}
+                              </span>
+                          ),
+                      },
+                { to: `${BASE}/limits`, icon: Wallet, label: t('admin.nav.budget', 'Budget') },
                 { to: `${BASE}/logs`, icon: ListOrdered, label: t('admin.nav.logs', 'Logs') },
             ],
         },
@@ -56,9 +72,12 @@ function groups(): SectionNavigationGroup[] {
 // horizontal scroll strip on small screens. Mirrors EmailNav.
 //
 // Every item is always shown, including ones whose settings the configured
-// provider ignores. Those pages explain themselves instead; a rail that
-// reshuffles when you change a dropdown is worse than a page that says why it
-// is empty.
+// provider ignores; a rail that reshuffles when you change a dropdown is worse
+// than a page that says why it is empty. Performance, which a hosted provider
+// ignores entirely, is dimmed with a "Not used" tag so nobody clicks through to
+// a page that only says so.
 export function AiNav() {
-    return <SectionNavigation groups={groups()} />;
+    const capabilities = useAiCapabilities();
+
+    return <SectionNavigation groups={groups(capabilities.queue || capabilities.keepAlive)} />;
 }

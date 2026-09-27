@@ -72,7 +72,7 @@ export default function PerformancePage() {
                 title={t('admin.settings.queue', 'Inference queue')}
                 desc={t('admin.pages.performanceDesc', 'Keeping self-hosted inference busy without thrashing it.')}
             >
-                <p className="text-sm text-[var(--color-ink-muted)]">{t('admin.settings.queueHostedNote', 'Keep-alive, scheduled warm-up, and admission control apply only to inference running on your own hardware. This hosted provider does not need them; it is bounded by spend instead — see Budget & access.')}</p>
+                <p className="text-sm text-[var(--color-ink-muted)]">{t('admin.settings.queueHostedBudget', 'Keep-alive, scheduled warm-up and admission control only apply to models running on your own hardware. A hosted provider is limited by spend instead; see Budget.')}</p>
             </SectionCard>
         );
     }
